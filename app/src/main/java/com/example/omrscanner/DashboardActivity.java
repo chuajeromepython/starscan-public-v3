@@ -2,15 +2,24 @@ package com.example.omrscanner;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.net.Uri;
 import android.os.Bundle;
+import android.provider.MediaStore;
 import android.view.View;
 import android.widget.TextView;
+import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.cardview.widget.CardView;
 
 import com.example.omrscanner.camera.CameraActivity;
 import com.google.android.material.button.MaterialButton;
+
+import java.io.File;
+import java.io.FileOutputStream;
 
 public class DashboardActivity extends AppCompatActivity {
 
@@ -18,6 +27,9 @@ public class DashboardActivity extends AppCompatActivity {
     private TextView teacherInfo;
     private CardView cardUpload, cardScan;
     private View scanContent, csvContent, resultsContent;
+
+    // Activity Result Launcher for picking images from gallery
+    private ActivityResultLauncher<String> galleryLauncher;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -37,6 +49,9 @@ public class DashboardActivity extends AppCompatActivity {
         csvContent = findViewById(R.id.csvContent);
         resultsContent = findViewById(R.id.resultsContent);
 
+        // Initialize gallery launcher
+        initializeGalleryLauncher();
+
         // Load user info
         loadUserInfo();
 
@@ -51,6 +66,86 @@ public class DashboardActivity extends AppCompatActivity {
 
         // Show scan tab by default
         setActiveTab("scan");
+    }
+
+    private void initializeGalleryLauncher() {
+        galleryLauncher = registerForActivityResult(
+                new ActivityResultContracts.GetContent(),
+                uri -> {
+                    if (uri != null) {
+                        handleSelectedImage(uri);
+                    } else {
+                        Toast.makeText(this, "No image selected", Toast.LENGTH_SHORT).show();
+                    }
+                }
+        );
+    }
+
+    private void handleSelectedImage(Uri imageUri) {
+        Toast.makeText(this, "Processing selected image...", Toast.LENGTH_SHORT).show();
+
+        // Process image in background thread
+        new Thread(() -> {
+            try {
+                // Save the selected image to a temporary file
+                String savedPath = saveImageToFile(imageUri);
+
+                if (savedPath != null) {
+                    // Launch PreviewActivity with the saved image path
+                    runOnUiThread(() -> {
+                        Intent intent = new Intent(DashboardActivity.this,
+                                com.example.omrscanner.ui.PreviewActivity.class);
+                        intent.putExtra(com.example.omrscanner.ui.PreviewActivity.IMAGE_PATH, savedPath);
+                        intent.putExtra(com.example.omrscanner.ui.PreviewActivity.IMAGE_SOURCE,
+                                com.example.omrscanner.ui.PreviewActivity.SOURCE_GALLERY);
+                        startActivity(intent);
+                    });
+                } else {
+                    runOnUiThread(() -> {
+                        Toast.makeText(this, "Failed to process image", Toast.LENGTH_SHORT).show();
+                    });
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                });
+            }
+        }).start();
+    }
+
+    private String saveImageToFile(Uri imageUri) {
+        try {
+            // Read the image from URI
+            android.graphics.Bitmap bitmap = android.provider.MediaStore.Images.Media.getBitmap(
+                    getContentResolver(), imageUri);
+
+            if (bitmap == null) {
+                return null;
+            }
+
+            // Create a file in the app's cache directory
+            java.io.File outputDir = getCacheDir();
+            java.io.File outputFile = java.io.File.createTempFile(
+                    "omr_upload_",
+                    ".jpg",
+                    outputDir
+            );
+
+            // Save bitmap to file
+            java.io.FileOutputStream fos = new java.io.FileOutputStream(outputFile);
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, fos);
+            fos.close();
+
+            // Clean up bitmap
+            bitmap.recycle();
+
+            return outputFile.getAbsolutePath();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
     }
 
     private void loadUserInfo() {
@@ -121,10 +216,9 @@ public class DashboardActivity extends AppCompatActivity {
         }
     }
 
-
     private void openGallery() {
-        // TODO: Implement gallery picker
-        android.widget.Toast.makeText(this, "Opening gallery...", android.widget.Toast.LENGTH_SHORT).show();
+        // Launch the gallery picker with image MIME type
+        galleryLauncher.launch("image/*");
     }
 
     private void openCamera() {

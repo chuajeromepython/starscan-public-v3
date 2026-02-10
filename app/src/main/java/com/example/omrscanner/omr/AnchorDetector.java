@@ -26,19 +26,19 @@ public class AnchorDetector {
     private static final String TAG = "AnchorDetector";
 
     // Template matching threshold (0.0 to 1.0)
-    private static final double MATCH_THRESHOLD = 0.8;
+    private static final double MATCH_THRESHOLD = 0.75; // Lowered slightly for better detection
 
     // Template sizes to try (multi-scale)
-    private static final int[] TEMPLATE_SIZES = {30, 40, 50, 60, 70};
+    private static final int[] TEMPLATE_SIZES = {25, 30, 35, 40, 45, 50, 55, 60, 70}; // More sizes
 
     // Minimum distance between detected anchors
-    private static final double MIN_ANCHOR_DISTANCE_RATIO = 0.2;
+    private static final double MIN_ANCHOR_DISTANCE_RATIO = 0.15; // Adjusted for portrait
 
     /**
      * Detect anchors using template matching (better for printed marks)
      */
     public static Point[] detectAnchors(Bitmap bitmap) {
-        // Scale down if too large
+        // Scale down if too large, maintaining aspect ratio
         Bitmap scaledBitmap = ImageUtils.scaleBitmap(bitmap, 1500);
 
         Mat src = new Mat();
@@ -63,12 +63,16 @@ public class AnchorDetector {
         }
 
         Log.d(TAG, "Total matches found: " + allMatches.size());
+        Log.d(TAG, "Image dimensions: " + gray.width() + " x " + gray.height());
+
+        // Calculate minimum distance based on smaller dimension (works for both portrait and landscape)
+        double minDimension = Math.min(gray.width(), gray.height());
+        double clusterDistance = minDimension * MIN_ANCHOR_DISTANCE_RATIO;
+
+        Log.d(TAG, "Cluster distance: " + clusterDistance);
 
         // Cluster nearby matches (same anchor detected at different scales)
-        List<Point> clusteredMatches = clusterMatches(
-                allMatches,
-                gray.width() * MIN_ANCHOR_DISTANCE_RATIO
-        );
+        List<Point> clusteredMatches = clusterMatches(allMatches, clusterDistance);
 
         Log.d(TAG, "After clustering: " + clusteredMatches.size());
 
@@ -192,14 +196,25 @@ public class AnchorDetector {
             return null;
         }
 
-        // Validate minimum distance
-        double minDist = Math.min(imgWidth, imgHeight) * 0.3;
+        // Validate minimum distance - use smaller dimension for better portrait support
+        double minDimension = Math.min(imgWidth, imgHeight);
+        double minDist = minDimension * 0.25; // Reduced from 0.3 for better portrait detection
         Point[] corners = {topLeft, topRight, bottomLeft, bottomRight};
 
         if (!validateCornerDistances(corners, minDist)) {
             Log.e(TAG, "Corners too close - invalid detection");
+            Log.d(TAG, "Min distance required: " + minDist);
+            for (int i = 0; i < corners.length; i++) {
+                Log.d(TAG, "Corner " + i + ": (" + corners[i].x + ", " + corners[i].y + ")");
+            }
             return null;
         }
+
+        Log.d(TAG, "✓ Successfully detected 4 corners");
+        Log.d(TAG, "TopLeft: (" + topLeft.x + ", " + topLeft.y + ")");
+        Log.d(TAG, "TopRight: (" + topRight.x + ", " + topRight.y + ")");
+        Log.d(TAG, "BottomLeft: (" + bottomLeft.x + ", " + bottomLeft.y + ")");
+        Log.d(TAG, "BottomRight: (" + bottomRight.x + ", " + bottomRight.y + ")");
 
         return corners;
     }
@@ -207,7 +222,9 @@ public class AnchorDetector {
     private static boolean validateCornerDistances(Point[] corners, double minDist) {
         for (int i = 0; i < corners.length; i++) {
             for (int j = i + 1; j < corners.length; j++) {
-                if (distance(corners[i], corners[j]) < minDist) {
+                double dist = distance(corners[i], corners[j]);
+                if (dist < minDist) {
+                    Log.d(TAG, "Distance between corner " + i + " and " + j + ": " + dist + " (min: " + minDist + ")");
                     return false;
                 }
             }

@@ -144,6 +144,10 @@ public class CameraActivity extends AppCompatActivity {
                                     PreviewActivity.IMAGE_PATH,
                                     photoFile.getAbsolutePath()
                             );
+                            intent.putExtra(
+                                    PreviewActivity.IMAGE_SOURCE,
+                                    PreviewActivity.SOURCE_CAMERA
+                            );
                             startActivity(intent);
                             finish();
                         });

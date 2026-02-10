@@ -23,6 +23,11 @@ public class PreviewActivity extends AppCompatActivity {
 
     public static final String IMAGE_PATH = "image_path";
     public static final String ANCHOR_POINTS = "anchor_points";
+    public static final String IMAGE_SOURCE = "image_source";
+
+    // Source types
+    public static final String SOURCE_CAMERA = "camera";
+    public static final String SOURCE_GALLERY = "gallery";
 
     private ImageView imagePreview;
     private Button btnRetake;
@@ -30,6 +35,7 @@ public class PreviewActivity extends AppCompatActivity {
     private ProgressBar progressBar;
 
     private String imagePath;
+    private String imageSource;
     private Bitmap originalBitmap;
     private Point[] detectedAnchors;
 
@@ -51,8 +57,14 @@ public class PreviewActivity extends AppCompatActivity {
         btnScan = findViewById(R.id.btnScan);
         progressBar = findViewById(R.id.progressBar);
 
-        // Get image path from intent
+        // Get image path and source from intent
         imagePath = getIntent().getStringExtra(IMAGE_PATH);
+        imageSource = getIntent().getStringExtra(IMAGE_SOURCE);
+
+        // Default to camera if not specified (backward compatibility)
+        if (imageSource == null) {
+            imageSource = SOURCE_CAMERA;
+        }
 
         if (imagePath != null) {
             loadAndProcessImage();
@@ -135,9 +147,14 @@ public class PreviewActivity extends AppCompatActivity {
     }
 
     private void retakePhoto() {
-        // Go back to camera
-        startActivity(new Intent(this, CameraActivity.class));
-        finish();
+        if (SOURCE_GALLERY.equals(imageSource)) {
+            // Redirect to dashboard for gallery retake
+            finish();
+        } else {
+            // Go back to camera for retake
+            startActivity(new Intent(this, CameraActivity.class));
+            finish();
+        }
     }
 
     private void proceedToAlignment() {
