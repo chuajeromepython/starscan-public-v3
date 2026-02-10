@@ -1,361 +1,113 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- CSV File Manager Layout -->
-<androidx.coordinatorlayout.widget.CoordinatorLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FFFFFF" >
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:gravity="center"
+    android:background="#FAFAFA">
 
-    <!-- Main Content Container -->
-    <androidx.core.widget.NestedScrollView
-        android:id="@+id/scrollView"
+    <!-- Success Icon -->
+    <TextView
+        android:layout_width="80dp"
+        android:layout_height="80dp"
+        android:text="✓"
+        android:textSize="60sp"
+        android:textColor="#4CAF50"
+        android:gravity="center"
+        android:background="@android:drawable/dialog_holo_light_frame"
+        android:layout_marginBottom="24dp"/>
+
+    <!-- Title -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="CSV File Ready"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:textColor="#212121"
+        android:layout_marginBottom="8dp"/>
+
+    <!-- Subtitle -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Your OMR results have been exported"
+        android:textSize="14sp"
+        android:textColor="#757575"
+        android:layout_marginBottom="32dp"/>
+
+    <!-- File Info Card -->
+    <androidx.cardview.widget.CardView
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:fillViewport="true">
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="32dp"
+        app:cardCornerRadius="12dp"
+        app:cardElevation="2dp">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:padding="16dp"
+            android:background="#FFFFFF">
 
-            <!-- Explorer Header (Folder View) -->
-            <LinearLayout
-                android:id="@+id/explorerHeader"
+            <TextView
+                android:id="@+id/tvFilePath"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:paddingHorizontal="4dp"
-                android:paddingBottom="16dp"
-                android:visibility="visible">
+                android:text="File: OMR_Results_20240101.csv"
+                android:textSize="14sp"
+                android:textColor="#212121"
+                android:textStyle="bold"
+                android:layout_marginBottom="4dp"/>
 
-                <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:src="@drawable/ic_folder_open"
-                    app:tint="#0038A8"
-                    android:contentDescription="@string/folder_icon" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/my_folders"
-                    android:textSize="22sp"
-                    android:textStyle="bold"
-                    android:textColor="#1E293B"
-                    android:layout_marginStart="12dp"
-                    android:fontFamily="sans-serif-medium" />
-            </LinearLayout>
-
-            <!-- Breadcrumb Header (File View) -->
-            <LinearLayout
-                android:id="@+id/breadcrumbHeader"
+            <TextView
+                android:id="@+id/tvFileInfo"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:paddingVertical="12dp"
-                android:paddingHorizontal="4dp"
-                android:paddingBottom="16dp"
-                android:visibility="gone">
-
-                <!-- Back Button -->
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/backButton"
-                    style="@style/Widget.Material3.Button.IconButton"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    app:icon="@drawable/ic_arrow_back"
-                    app:iconTint="#0038A8"
-                    app:cornerRadius="20dp"
-                    android:backgroundTint="#F1F5F9" />
-
-                <!-- Breadcrumb Content -->
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:layout_marginStart="12dp">
-
-                    <ImageView
-                        android:layout_width="20dp"
-                        android:layout_height="20dp"
-                        android:src="@drawable/ic_folder"
-                        app:tint="#64748B"
-                        android:contentDescription="@string/folder_icon" />
-
-                    <TextView
-                        android:id="@+id/breadcrumbFolderName"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/folder_name"
-                        android:textSize="18sp"
-                        android:textStyle="bold"
-                        android:textColor="#1E293B"
-                        android:layout_marginStart="8dp"
-                        android:fontFamily="sans-serif-medium" />
-
-                    <TextView
-                        android:id="@+id/breadcrumbCount"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/item_count"
-                        android:textSize="16sp"
-                        android:textColor="#64748B"
-                        android:layout_marginStart="8dp" />
-                </LinearLayout>
-            </LinearLayout>
-
-            <!-- Stats Card -->
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/statsCard"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="20dp"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="2dp"
-                app:cardBackgroundColor="#FFFFFF">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:padding="16dp">
-
-                    <!-- Folders Stat -->
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical"
-                        android:gravity="center">
-
-                        <TextView
-                            android:id="@+id/statFoldersNumber"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="0"
-                            android:textSize="24sp"
-                            android:textStyle="bold"
-                            android:textColor="#0038A8"
-                            android:fontFamily="sans-serif-medium" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/folders"
-                            android:textSize="11sp"
-                            android:textColor="#64748B"
-                            android:layout_marginTop="4dp"
-                            android:fontFamily="sans-serif-medium" />
-                    </LinearLayout>
-
-                    <!-- Divider -->
-                    <View
-                        android:layout_width="1dp"
-                        android:layout_height="match_parent"
-                        android:background="#E2E8F0"
-                        android:layout_marginHorizontal="12dp" />
-
-                    <!-- Total Images Stat -->
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical"
-                        android:gravity="center">
-
-                        <TextView
-                            android:id="@+id/statImagesNumber"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="0"
-                            android:textSize="24sp"
-                            android:textStyle="bold"
-                            android:textColor="#0038A8"
-                            android:fontFamily="sans-serif-medium" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/total_images"
-                            android:textSize="11sp"
-                            android:textColor="#64748B"
-                            android:layout_marginTop="4dp"
-                            android:fontFamily="sans-serif-medium" />
-                    </LinearLayout>
-
-                    <!-- Divider -->
-                    <View
-                        android:layout_width="1dp"
-                        android:layout_height="match_parent"
-                        android:background="#E2E8F0"
-                        android:layout_marginHorizontal="12dp" />
-
-                    <!-- CSV Files Stat -->
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical"
-                        android:gravity="center">
-
-                        <TextView
-                            android:id="@+id/statCsvNumber"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="0"
-                            android:textSize="24sp"
-                            android:textStyle="bold"
-                            android:textColor="#0038A8"
-                            android:fontFamily="sans-serif-medium" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/csv_files"
-                            android:textSize="11sp"
-                            android:textColor="#64748B"
-                            android:layout_marginTop="4dp"
-                            android:fontFamily="sans-serif-medium" />
-                    </LinearLayout>
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- Folder Grid (RecyclerView) -->
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/folderRecyclerView"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:clipToPadding="false"
-                android:paddingBottom="20dp"
-                android:visibility="visible"
-                tools:listitem="@layout/item_folder_card" />
-
-            <!-- Image Grid (RecyclerView) -->
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/imageRecyclerView"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:clipToPadding="false"
-                android:paddingBottom="20dp"
-                android:visibility="gone"
-                tools:listitem="@layout/item_image_card" />
-
-            <!-- Empty State - No Images -->
-            <LinearLayout
-                android:id="@+id/emptyStateContainer"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:gravity="center"
-                android:padding="32dp"
-                android:visibility="gone">
-
-                <ImageView
-                    android:layout_width="80dp"
-                    android:layout_height="80dp"
-                    android:src="@drawable/ic_folder_open_outline"
-                    app:tint="#94A3B8"
-                    android:contentDescription="@string/empty_folder" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/no_saved_exam_papers"
-                    android:textSize="20sp"
-                    android:textStyle="bold"
-                    android:textColor="#1E293B"
-                    android:layout_marginTop="24dp"
-                    android:layout_marginBottom="8dp"
-                    android:fontFamily="sans-serif-medium" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/empty_state_description"
-                    android:textSize="15sp"
-                    android:textColor="#64748B"
-                    android:textAlignment="center"
-                    android:gravity="center" />
-            </LinearLayout>
-
-            <!-- Empty Folder State -->
-            <LinearLayout
-                android:id="@+id/emptyFolderContainer"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:gravity="center"
-                android:padding="32dp"
-                android:visibility="gone">
-
-                <ImageView
-                    android:layout_width="80dp"
-                    android:layout_height="80dp"
-                    android:src="@drawable/ic_images_outline"
-                    app:tint="#94A3B8"
-                    android:contentDescription="@string/empty_folder" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/no_images_in_folder"
-                    android:textSize="20sp"
-                    android:textStyle="bold"
-                    android:textColor="#1E293B"
-                    android:layout_marginTop="20dp"
-                    android:layout_marginBottom="8dp"
-                    android:fontFamily="sans-serif-medium" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/empty_folder_description"
-                    android:textSize="15sp"
-                    android:textColor="#64748B"
-                    android:textAlignment="center"
-                    android:layout_marginBottom="24dp"
-                    android:gravity="center" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/emptyFolderBackButton"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/back_to_folders"
-                    android:textColor="#0038A8"
-                    app:icon="@drawable/ic_arrow_back"
-                    app:iconTint="#0038A8"
-                    app:strokeColor="#0038A8"
-                    app:cornerRadius="10dp" />
-            </LinearLayout>
+                android:text="Size: 2.5 KB"
+                android:textSize="12sp"
+                android:textColor="#757575"/>
 
         </LinearLayout>
-    </androidx.core.widget.NestedScrollView>
 
-    <!-- Processing Overlay -->
-    <FrameLayout
-        android:id="@+id/processingOverlay"
+    </androidx.cardview.widget.CardView>
+
+    <!-- Share Button -->
+    <Button
+        android:id="@+id/btnShare"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="#80000000"
-        android:visibility="gone"
-        android:clickable="true"
-        android:focusable="true">
+        android:layout_height="56dp"
+        android:text="Share CSV File"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:backgroundTint="#2196F3"
+        android:layout_marginBottom="12dp"/>
 
-        <ProgressBar
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:indeterminateTint="#FFFFFF" />
-    </FrameLayout>
+    <!-- Save to Downloads Button -->
+    <Button
+        android:id="@+id/btnSaveToDownloads"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="Save to Downloads"
+        android:textColor="#2196F3"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        style="?android:attr/borderlessButtonStyle"
+        android:layout_marginBottom="12dp"/>
 
-</androidx.coordinatorlayout.widget.CoordinatorLayout>
+    <!-- Done Button -->
+    <Button
+        android:id="@+id/btnDone"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="Done"
+        android:textColor="#757575"
+        android:textSize="16sp"
+        style="?android:attr/borderlessButtonStyle"
+        android:layout_marginTop="8dp"/>
+
+</LinearLayout>

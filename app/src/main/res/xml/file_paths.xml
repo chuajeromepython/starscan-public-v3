@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <files-path name="csv_files" path="csv/" />
-    <files-path name="images" path="images/" />
-    <external-files-path name="external_files" path="." />
+    <!-- Cache directory for temporary CSV files -->
+    <cache-path name="csv_cache" path="." />
+
+    <!-- Downloads directory -->
+    <external-path name="downloads" path="Download/" />
+
+    <!-- External storage root -->
+    <external-path name="external_files" path="." />
+
+    <!-- App-specific external storage -->
+    <external-files-path name="app_files" path="." />
 </paths>

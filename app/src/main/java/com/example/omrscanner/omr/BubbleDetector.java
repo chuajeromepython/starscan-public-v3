@@ -35,6 +35,9 @@ public class BubbleDetector {
     private static final double SHADING_THRESHOLD = 127;
     private static final double FILLED_RATIO_THRESHOLD = 0.35;
 
+    // Number of expected columns for answer choices (A, B, C, D)
+    private static final int ANSWER_COLUMNS = 4;
+
     /**
      * OMR Answer result
      */
@@ -56,8 +59,8 @@ public class BubbleDetector {
         Rect rect;
         Point center;
         double fillPercentage;
-        int row;
-        int col;
+        int questionNumber;
+        int choice;
         boolean isShaded;
 
         Bubble(Rect rect) {
@@ -66,6 +69,34 @@ public class BubbleDetector {
                     rect.x + rect.width / 2.0,
                     rect.y + rect.height / 2.0
             );
+            this.questionNumber = -1;
+            this.choice = -1;
+        }
+    }
+
+    /**
+     * Question group (one row of 4 bubbles for answers A, B, C, D)
+     */
+    private static class QuestionGroup {
+        List<Bubble> bubbles;
+        double centerY;
+        double centerX;
+        int questionNumber;
+
+        QuestionGroup() {
+            bubbles = new ArrayList<>();
+            questionNumber = -1;
+        }
+
+        void calculateCenter() {
+            if (bubbles.isEmpty()) return;
+            double sumX = 0, sumY = 0;
+            for (Bubble b : bubbles) {
+                sumX += b.center.x;
+                sumY += b.center.y;
+            }
+            centerX = sumX / bubbles.size();
+            centerY = sumY / bubbles.size();
         }
     }
 
@@ -120,14 +151,18 @@ public class BubbleDetector {
             detectShading(gray, bubble);
         }
 
-        // Organize into grid
-        organizeBubblesIntoGrid(bubbles);
+        // Group bubbles into questions (ONLY 4-column groups)
+        List<QuestionGroup> questions = groupBubblesIntoQuestions(bubbles);
+        Log.d(TAG, "Detected " + questions.size() + " answer questions (4-column groups only)");
+
+        // Assign question numbers
+        assignQuestionNumbers(questions);
 
         // Extract answers
-        extractAnswers(bubbles, result);
+        extractAnswers(questions, result);
 
         // Draw visualization
-        result.annotatedImage = drawBubbles(src, bubbles);
+        result.annotatedImage = drawBubbles(src, questions);
 
         // Cleanup
         src.release();
@@ -222,98 +257,208 @@ public class BubbleDetector {
     }
 
     /**
-     * Organize bubbles into grid
+     * Group bubbles into questions - ONLY groups with exactly 4 bubbles (A, B, C, D)
+     * This excludes the LNR number section which has 12 columns
      */
-    private static void organizeBubblesIntoGrid(List<Bubble> bubbles) {
-        if (bubbles.isEmpty()) return;
+    private static List<QuestionGroup> groupBubblesIntoQuestions(List<Bubble> bubbles) {
+        if (bubbles.isEmpty()) return new ArrayList<>();
 
-        // Sort by Y
-        Collections.sort(bubbles, Comparator.comparingDouble(b -> b.center.y));
-
-        // Calculate median height
+        // Calculate median bubble dimensions
+        List<Integer> widths = new ArrayList<>();
         List<Integer> heights = new ArrayList<>();
         for (Bubble b : bubbles) {
+            widths.add(b.rect.width);
             heights.add(b.rect.height);
         }
+        Collections.sort(widths);
         Collections.sort(heights);
-        int medianHeight = heights.isEmpty() ? 20 : heights.get(heights.size() / 2);
+        int medianWidth = widths.get(widths.size() / 2);
+        int medianHeight = heights.get(heights.size() / 2);
 
-        double rowTolerance = medianHeight * 0.7;
+        // More relaxed tolerance for grouping bubbles
+        double yTolerance = medianHeight * 0.8;      // More relaxed Y tolerance
+        double minXSpacing = medianWidth * 0.3;      // Minimum spacing (not too close)
+        double maxXSpacing = medianWidth * 3.5;      // Maximum spacing (not too far)
 
-        // Group into rows
+        Log.d(TAG, String.format("Median bubble: %dx%d, Y tolerance: %.1f, X spacing: %.1f-%.1f",
+                medianWidth, medianHeight, yTolerance, minXSpacing, maxXSpacing));
+
+        // Sort bubbles by Y then X
+        List<Bubble> sortedBubbles = new ArrayList<>(bubbles);
+        Collections.sort(sortedBubbles, (b1, b2) -> {
+            int yCompare = Double.compare(b1.center.y, b2.center.y);
+            if (yCompare != 0) return yCompare;
+            return Double.compare(b1.center.x, b2.center.x);
+        });
+
+        // Group bubbles into rows first
         List<List<Bubble>> rows = new ArrayList<>();
         List<Bubble> currentRow = new ArrayList<>();
-        currentRow.add(bubbles.get(0));
 
-        for (int i = 1; i < bubbles.size(); i++) {
-            Bubble current = bubbles.get(i);
-            Bubble previous = bubbles.get(i - 1);
-
-            if (Math.abs(current.center.y - previous.center.y) < rowTolerance) {
-                currentRow.add(current);
+        for (Bubble bubble : sortedBubbles) {
+            if (currentRow.isEmpty()) {
+                currentRow.add(bubble);
             } else {
-                if (currentRow.size() >= 4) {
-                    rows.add(new ArrayList<>(currentRow));
+                Bubble lastInRow = currentRow.get(currentRow.size() - 1);
+                double yDiff = Math.abs(bubble.center.y - lastInRow.center.y);
+
+                if (yDiff < yTolerance) {
+                    currentRow.add(bubble);
+                } else {
+                    if (!currentRow.isEmpty()) {
+                        rows.add(new ArrayList<>(currentRow));
+                    }
+                    currentRow.clear();
+                    currentRow.add(bubble);
                 }
-                currentRow.clear();
-                currentRow.add(current);
             }
         }
-        if (currentRow.size() >= 4) {
+        if (!currentRow.isEmpty()) {
             rows.add(currentRow);
         }
 
-        // Assign row and column
-        for (int r = 0; r < rows.size(); r++) {
-            List<Bubble> row = rows.get(r);
+        Log.d(TAG, "Grouped bubbles into " + rows.size() + " rows");
+
+        // Now split each row into question groups of 4
+        List<QuestionGroup> allGroups = new ArrayList<>();
+
+        for (List<Bubble> row : rows) {
+            // Sort row by X position
             Collections.sort(row, Comparator.comparingDouble(b -> b.center.x));
 
-            for (int c = 0; c < row.size(); c++) {
-                row.get(c).row = r;
-                row.get(c).col = c;
+            List<QuestionGroup> rowGroups = splitRowIntoGroups(row, minXSpacing, maxXSpacing);
+            allGroups.addAll(rowGroups);
+        }
+
+        Log.d(TAG, "Split into " + allGroups.size() + " total groups");
+
+        // Filter to keep ONLY groups with exactly 4 bubbles
+        List<QuestionGroup> answerQuestions = new ArrayList<>();
+
+        for (QuestionGroup group : allGroups) {
+            if (group.bubbles.size() == ANSWER_COLUMNS) {
+                // Sort bubbles left to right and assign choices
+                Collections.sort(group.bubbles, Comparator.comparingDouble(b -> b.center.x));
+                for (int i = 0; i < group.bubbles.size(); i++) {
+                    group.bubbles.get(i).choice = i;
+                }
+                group.calculateCenter();
+                answerQuestions.add(group);
+
+                Log.d(TAG, String.format("Valid 4-bubble group at Y=%.0f, X=%.0f-%.0f",
+                        group.centerY,
+                        group.bubbles.get(0).center.x,
+                        group.bubbles.get(3).center.x));
+            } else {
+                Log.d(TAG, String.format("Filtered out %d-bubble group at Y=%.0f",
+                        group.bubbles.size(),
+                        group.bubbles.isEmpty() ? 0 : group.bubbles.get(0).center.y));
             }
         }
 
-        Log.d(TAG, "Organized into " + rows.size() + " rows");
+        Log.d(TAG, "Final: " + answerQuestions.size() + " valid 4-column answer questions");
+        return answerQuestions;
+    }
+
+    /**
+     * Split a row of bubbles into groups based on X-spacing gaps
+     */
+    private static List<QuestionGroup> splitRowIntoGroups(List<Bubble> row, double minSpacing, double maxSpacing) {
+        List<QuestionGroup> groups = new ArrayList<>();
+        if (row.isEmpty()) return groups;
+
+        QuestionGroup currentGroup = new QuestionGroup();
+        currentGroup.bubbles.add(row.get(0));
+
+        for (int i = 1; i < row.size(); i++) {
+            Bubble current = row.get(i);
+            Bubble previous = row.get(i - 1);
+            double spacing = current.center.x - previous.center.x;
+
+            // If spacing is within normal range, add to current group
+            if (spacing >= minSpacing && spacing <= maxSpacing) {
+                currentGroup.bubbles.add(current);
+            } else {
+                // Large gap detected - start new group
+                if (!currentGroup.bubbles.isEmpty()) {
+                    groups.add(currentGroup);
+                }
+                currentGroup = new QuestionGroup();
+                currentGroup.bubbles.add(current);
+            }
+        }
+
+        // Don't forget last group
+        if (!currentGroup.bubbles.isEmpty()) {
+            groups.add(currentGroup);
+        }
+
+        return groups;
+    }
+
+    /**
+     * Assign question numbers based on position
+     */
+    private static void assignQuestionNumbers(List<QuestionGroup> questions) {
+        if (questions.isEmpty()) return;
+
+        // Sort by Y (top to bottom), then X (left to right) for questions on same row
+        Collections.sort(questions, (q1, q2) -> {
+            double yDiff = Math.abs(q1.centerY - q2.centerY);
+            if (yDiff < 30) { // Same row of questions
+                return Double.compare(q1.centerX, q2.centerX);
+            }
+            return Double.compare(q1.centerY, q2.centerY);
+        });
+
+        // Assign sequential question numbers
+        for (int i = 0; i < questions.size(); i++) {
+            questions.get(i).questionNumber = i + 1;
+            for (Bubble b : questions.get(i).bubbles) {
+                b.questionNumber = i + 1;
+            }
+        }
+
+        // Log first few questions for debugging
+        for (int i = 0; i < Math.min(10, questions.size()); i++) {
+            QuestionGroup q = questions.get(i);
+            StringBuilder sb = new StringBuilder(String.format("Q%d at (%.0f, %.0f): ",
+                    q.questionNumber, q.centerX, q.centerY));
+            for (Bubble b : q.bubbles) {
+                char letter = (char) ('A' + b.choice);
+                sb.append(letter);
+                if (b.isShaded) sb.append("*");
+                sb.append(" ");
+            }
+            Log.d(TAG, sb.toString());
+        }
     }
 
     /**
      * Extract answers from shaded bubbles
      */
-    private static void extractAnswers(List<Bubble> bubbles, OMRResult result) {
-        Map<Integer, List<Bubble>> questionMap = new HashMap<>();
+    private static void extractAnswers(List<QuestionGroup> questions, OMRResult result) {
+        result.totalQuestions = questions.size();
 
-        for (Bubble bubble : bubbles) {
-            if (!questionMap.containsKey(bubble.row)) {
-                questionMap.put(bubble.row, new ArrayList<>());
-            }
-            questionMap.get(bubble.row).add(bubble);
-        }
-
-        result.totalQuestions = questionMap.size();
-
-        for (Map.Entry<Integer, List<Bubble>> entry : questionMap.entrySet()) {
-            int questionNum = entry.getKey() + 1;
-            List<Bubble> choices = entry.getValue();
-
+        for (QuestionGroup question : questions) {
             // Find most filled bubble
             Bubble mostFilled = null;
             double maxFill = FILLED_RATIO_THRESHOLD;
 
-            for (Bubble bubble : choices) {
+            for (Bubble bubble : question.bubbles) {
                 if (bubble.fillPercentage > maxFill) {
                     maxFill = bubble.fillPercentage;
                     mostFilled = bubble;
                 }
             }
 
-            if (mostFilled != null && mostFilled.col < 4) {
-                char answer = (char) ('A' + mostFilled.col);
-                result.answers.put(questionNum, answer);
+            if (mostFilled != null && mostFilled.choice >= 0 && mostFilled.choice < ANSWER_COLUMNS) {
+                char answer = (char) ('A' + mostFilled.choice);
+                result.answers.put(question.questionNumber, answer);
                 result.answeredQuestions++;
 
                 Log.d(TAG, String.format("Q%d: %c (fill: %.1f%%)",
-                        questionNum, answer,
+                        question.questionNumber, answer,
                         mostFilled.fillPercentage * 100));
             }
         }
@@ -322,35 +467,63 @@ public class BubbleDetector {
     /**
      * Draw visualization
      */
-    private static Bitmap drawBubbles(Mat src, List<Bubble> bubbles) {
+    private static Bitmap drawBubbles(Mat src, List<QuestionGroup> questions) {
         Mat output = src.clone();
 
         Scalar greenCircle = new Scalar(0, 255, 0);
         Scalar blueCircle = new Scalar(255, 100, 0);
+        Scalar redCircle = new Scalar(0, 0, 255);
 
-        for (Bubble bubble : bubbles) {
-            Scalar color = bubble.isShaded ? greenCircle : blueCircle;
-            int thickness = bubble.isShaded ? 3 : 1;
+        for (QuestionGroup question : questions) {
+            for (Bubble bubble : question.bubbles) {
+                Scalar color;
+                int thickness;
 
-            Imgproc.circle(
-                    output,
-                    bubble.center,
-                    Math.max(bubble.rect.width, bubble.rect.height) / 2,
-                    color,
-                    thickness
-            );
+                if (bubble.isShaded && bubble.choice >= 0 && bubble.choice < ANSWER_COLUMNS) {
+                    color = greenCircle;
+                    thickness = 3;
+                } else if (bubble.isShaded) {
+                    color = redCircle; // Invalid shaded bubble
+                    thickness = 2;
+                } else {
+                    color = blueCircle;
+                    thickness = 1;
+                }
 
-            if (bubble.isShaded && bubble.col < 4) {
-                char answer = (char) ('A' + bubble.col);
-                Imgproc.putText(
+                Imgproc.circle(
                         output,
-                        String.valueOf(answer),
-                        new Point(bubble.center.x - 8, bubble.center.y + 6),
-                        Imgproc.FONT_HERSHEY_SIMPLEX,
-                        0.6,
-                        new Scalar(0, 255, 0),
-                        2
+                        bubble.center,
+                        Math.max(bubble.rect.width, bubble.rect.height) / 2,
+                        color,
+                        thickness
                 );
+
+                // Draw letter on shaded bubbles
+                if (bubble.isShaded && bubble.choice >= 0 && bubble.choice < ANSWER_COLUMNS) {
+                    char answer = (char) ('A' + bubble.choice);
+                    Imgproc.putText(
+                            output,
+                            String.valueOf(answer),
+                            new Point(bubble.center.x - 8, bubble.center.y + 6),
+                            Imgproc.FONT_HERSHEY_SIMPLEX,
+                            0.6,
+                            new Scalar(0, 255, 0),
+                            2
+                    );
+                }
+
+                // Draw question number near first bubble (choice A)
+                if (bubble.choice == 0) {
+                    Imgproc.putText(
+                            output,
+                            String.valueOf(bubble.questionNumber),
+                            new Point(bubble.center.x - 20, bubble.center.y - 15),
+                            Imgproc.FONT_HERSHEY_SIMPLEX,
+                            0.4,
+                            new Scalar(255, 0, 0),
+                            1
+                    );
+                }
             }
         }
 

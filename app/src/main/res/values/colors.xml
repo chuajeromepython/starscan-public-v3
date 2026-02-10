@@ -19,4 +19,17 @@
     <!-- Red Accent Colors -->
     <color name="red_accent">#CE1126</color>
     <color name="red_light_bg">#FEF2F2</color>
+
+    <!-- Primary Colors -->
+    <color name="primary_blue_dark">#1976D2</color>
+    <color name="primary_blue_light">#BBDEFB</color>
+
+    <!-- Success Colors -->
+    <color name="success_green">#4CAF50</color>
+    <color name="success_green_light">#E8F5E9</color>
+
+    <!-- Error Colors -->
+    <color name="error_red">#F44336</color>
+    <color name="error_red_light">#FFEBEE</color>
+
 </resources>

@@ -1,152 +1,171 @@
 package com.example.omrscanner.utils;
 
 import android.content.Context;
-import android.os.Environment;
+import android.util.Log;
 
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Date;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.TreeMap;
 
-/**
- * Utility class for exporting OMR results to CSV format
- */
 public class CSVExporter {
+
+    private static final String TAG = "CSVExporter";
 
     /**
      * Export OMR results to CSV file
-     *
      * @param context Application context
-     * @param answers Map of question number to answer (A, B, C, D)
-     * @param totalQuestions Total number of questions
+     * @param answers Map of question number to answer letter (e.g., 1->A, 2->B, etc.)
+     * @param totalQuestions Total number of questions detected
      * @return File path of generated CSV, or null if failed
      */
     public static String exportToCSV(Context context, Map<Integer, Character> answers, int totalQuestions) {
         try {
-            // Create CSV directory if it doesn't exist
-            File csvDir = new File(context.getFilesDir(), "csv");
-            if (!csvDir.exists()) {
-                csvDir.mkdirs();
+            // Create timestamp for filename
+            String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
+                    .format(new Date());
+            String fileName = "OMR_Results_" + timestamp + ".csv";
+
+            // Use cache directory for temporary file
+            File cacheDir = context.getCacheDir();
+            File csvFile = new File(cacheDir, fileName);
+
+            // Write CSV content
+            FileWriter writer = new FileWriter(csvFile);
+
+            // Write header
+            writer.append("Question Number,Answer\n");
+
+            // Sort answers by question number using TreeMap
+            TreeMap<Integer, Character> sortedAnswers = new TreeMap<>(answers);
+
+            // Write all questions (1 to totalQuestions)
+            for (int i = 1; i <= totalQuestions; i++) {
+                writer.append(String.valueOf(i));
+                writer.append(",");
+
+                // Write answer if detected, otherwise leave blank
+                if (sortedAnswers.containsKey(i)) {
+                    writer.append(String.valueOf(sortedAnswers.get(i)));
+                } else {
+                    writer.append(""); // No answer detected
+                }
+
+                writer.append("\n");
             }
 
-            // Generate filename with timestamp
-            String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
-                    .format(new Date());
-            String filename = "omr_results_" + timestamp + ".csv";
-            File csvFile = new File(csvDir, filename);
-
-            // Generate CSV content
-            String csvContent = generateCSVContent(answers, totalQuestions);
-
-            // Write to file
-            FileWriter writer = new FileWriter(csvFile);
-            writer.write(csvContent);
+            writer.flush();
             writer.close();
+
+            Log.d(TAG, "CSV file created: " + csvFile.getAbsolutePath());
+            Log.d(TAG, "Total questions: " + totalQuestions);
+            Log.d(TAG, "Answered questions: " + answers.size());
 
             return csvFile.getAbsolutePath();
 
         } catch (IOException e) {
-            e.printStackTrace();
+            Log.e(TAG, "Error creating CSV file", e);
             return null;
         }
     }
 
     /**
-     * Generate CSV content in the required format
-     * Format:
-     * Row 1: Question Number,1,2,3,4,...
-     * Row 2: Answer,A,B,C,D,...
-     *
-     * @param answers Map of question number to answer
-     * @param totalQuestions Total number of questions (default 50 if not specified)
-     * @return CSV content as string
+     * Export OMR results to CSV with additional statistics
+     * @param context Application context
+     * @param answers Map of question number to answer letter
+     * @param totalQuestions Total number of questions detected
+     * @param includeStats Whether to include statistics at the end
+     * @return File path of generated CSV, or null if failed
      */
-    private static String generateCSVContent(Map<Integer, Character> answers, int totalQuestions) {
-        StringBuilder csv = new StringBuilder();
+    public static String exportToCSVWithStats(Context context, Map<Integer, Character> answers,
+                                              int totalQuestions, boolean includeStats) {
+        try {
+            // Create timestamp for filename
+            String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
+                    .format(new Date());
+            String fileName = "OMR_Results_" + timestamp + ".csv";
 
-        // Determine question range
-        int maxQuestions = totalQuestions > 0 ? totalQuestions : 50;
+            // Use cache directory for temporary file
+            File cacheDir = context.getCacheDir();
+            File csvFile = new File(cacheDir, fileName);
 
-        // Sort question numbers
-        List<Integer> questionNumbers = new ArrayList<>();
-        for (int i = 1; i <= maxQuestions; i++) {
-            questionNumbers.add(i);
-        }
-        Collections.sort(questionNumbers);
+            // Write CSV content
+            FileWriter writer = new FileWriter(csvFile);
 
-        // Build header row (Question Number)
-        csv.append("Question Number");
-        for (Integer qNum : questionNumbers) {
-            csv.append(",").append(qNum);
-        }
-        csv.append("\n");
+            // Write header with timestamp
+            writer.append("OMR Scan Results - Generated: ").append(timestamp).append("\n");
+            writer.append("\n");
+            writer.append("Question Number,Answer\n");
 
-        // Build answer row
-        csv.append("Answer");
-        for (Integer qNum : questionNumbers) {
-            csv.append(",");
-            if (answers.containsKey(qNum)) {
-                csv.append(answers.get(qNum));
-            } else {
-                // Empty cell for unanswered questions
-                csv.append("");
+            // Sort answers by question number
+            TreeMap<Integer, Character> sortedAnswers = new TreeMap<>(answers);
+
+            // Write all questions
+            for (int i = 1; i <= totalQuestions; i++) {
+                writer.append(String.valueOf(i));
+                writer.append(",");
+
+                if (sortedAnswers.containsKey(i)) {
+                    writer.append(String.valueOf(sortedAnswers.get(i)));
+                }
+
+                writer.append("\n");
             }
+
+            // Add statistics if requested
+            if (includeStats) {
+                writer.append("\n");
+                writer.append("Statistics\n");
+                writer.append("Total Questions,").append(String.valueOf(totalQuestions)).append("\n");
+                writer.append("Answered Questions,").append(String.valueOf(answers.size())).append("\n");
+                writer.append("Unanswered Questions,")
+                        .append(String.valueOf(totalQuestions - answers.size())).append("\n");
+
+                // Count answers by letter
+                int countA = 0, countB = 0, countC = 0, countD = 0;
+                for (Character answer : answers.values()) {
+                    switch (answer) {
+                        case 'A': countA++; break;
+                        case 'B': countB++; break;
+                        case 'C': countC++; break;
+                        case 'D': countD++; break;
+                    }
+                }
+
+                writer.append("\n");
+                writer.append("Answer Distribution\n");
+                writer.append("A,").append(String.valueOf(countA)).append("\n");
+                writer.append("B,").append(String.valueOf(countB)).append("\n");
+                writer.append("C,").append(String.valueOf(countC)).append("\n");
+                writer.append("D,").append(String.valueOf(countD)).append("\n");
+            }
+
+            writer.flush();
+            writer.close();
+
+            Log.d(TAG, "CSV file with stats created: " + csvFile.getAbsolutePath());
+
+            return csvFile.getAbsolutePath();
+
+        } catch (IOException e) {
+            Log.e(TAG, "Error creating CSV file with stats", e);
+            return null;
         }
-        csv.append("\n");
-
-        return csv.toString();
     }
 
     /**
-     * Generate CSV content with custom format (vertical layout)
-     * Format:
-     * Question,Answer
-     * 1,A
-     * 2,B
-     * ...
+     * Get a formatted summary of the results
      */
-    public static String generateVerticalCSV(Map<Integer, Character> answers) {
-        StringBuilder csv = new StringBuilder();
+    public static String getResultSummary(Map<Integer, Character> answers, int totalQuestions) {
+        int answered = answers.size();
+        int unanswered = totalQuestions - answered;
 
-        // Header
-        csv.append("Question,Answer\n");
-
-        // Sort question numbers
-        List<Integer> questionNumbers = new ArrayList<>(answers.keySet());
-        Collections.sort(questionNumbers);
-
-        // Data rows
-        for (Integer qNum : questionNumbers) {
-            csv.append(qNum).append(",").append(answers.get(qNum)).append("\n");
-        }
-
-        return csv.toString();
-    }
-
-    /**
-     * Get CSV file extension
-     */
-    public static String getCSVExtension() {
-        return ".csv";
-    }
-
-    /**
-     * Validate CSV filename
-     */
-    public static boolean isValidCSVFilename(String filename) {
-        return filename != null && filename.toLowerCase().endsWith(".csv");
-    }
-
-    /**
-     * Get MIME type for CSV files
-     */
-    public static String getCSVMimeType() {
-        return "text/csv";
+        return String.format(Locale.getDefault(),
+                "Total Questions: %d\nAnswered: %d\nUnanswered: %d",
+                totalQuestions, answered, unanswered);
     }
 }
