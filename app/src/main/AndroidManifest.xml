@@ -21,6 +21,8 @@
         <activity android:name=".ui.ResultActivity"/>
         <activity android:name=".ui.PreviewActivity"/>
         <activity android:name=".camera.CameraActivity"/>
+        <activity android:name=".DashboardActivity"/>
+        <activity android:name=".Login"/>
         <activity
             android:name=".MainActivity"
             android:exported="true">

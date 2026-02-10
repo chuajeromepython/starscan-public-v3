@@ -4,22 +4,25 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FFFFFF">
+    android:background="#FFFFFF"
+    android:fitsSystemWindows="true">
 
-    <!-- Blue Header -->
+    <!-- Header with Status Bar Padding -->
     <TextView
-        android:id="@+id/tvTitle"
+        android:id="@+id/tvHeader"
         android:layout_width="0dp"
-        android:layout_height="60dp"
-        android:background="#0D47A1"
+        android:layout_height="70dp"
+        android:background="#0038A8"
+        android:fontFamily="sans-serif-medium"
+        android:gravity="center"
+        android:paddingTop="8dp"
         android:text="Camera Capture"
         android:textColor="#FFFFFF"
-        android:textSize="18sp"
+        android:textSize="20sp"
         android:textStyle="bold"
-        android:gravity="center"
-        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"/>
+        app:layout_constraintTop_toTopOf="parent" />
 
     <!-- Camera Preview -->
     <androidx.camera.view.PreviewView
@@ -28,23 +31,37 @@
         android:layout_height="0dp"
         android:layout_margin="12dp"
         android:background="#E3F2FD"
-        app:layout_constraintTop_toBottomOf="@id/tvTitle"
-        app:layout_constraintBottom_toTopOf="@id/btnCapture"
+        app:layout_constraintBottom_toTopOf="@id/linearLayout"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"/>
+        app:layout_constraintTop_toBottomOf="@id/tvHeader" />
 
-    <!-- Red Capture Button -->
-    <Button
-        android:id="@+id/btnCapture"
-        android:layout_width="200dp"
-        android:layout_height="48dp"
-        android:text="CAPTURE"
-        android:textStyle="bold"
-        android:textColor="#FFFFFF"
-        android:backgroundTint="#B71C1C"
-        android:layout_marginBottom="24dp"
+    <!-- Capture Button Container with Navigation Bar Padding -->
+    <LinearLayout
+        android:id="@+id/linearLayout"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="#FFFFFF"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:paddingTop="16dp"
+        android:paddingBottom="32dp"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"/>
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <Button
+            android:id="@+id/btnCapture"
+            android:layout_width="200dp"
+            android:layout_height="56dp"
+            android:backgroundTint="#B71C1C"
+            android:elevation="4dp"
+            android:text="CAPTURE"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            app:cornerRadius="28dp" />
+
+    </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

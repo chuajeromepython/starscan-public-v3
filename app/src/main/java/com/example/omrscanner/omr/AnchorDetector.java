@@ -26,7 +26,7 @@ public class AnchorDetector {
     private static final String TAG = "AnchorDetector";
 
     // Template matching threshold (0.0 to 1.0)
-    private static final double MATCH_THRESHOLD = 0.6;
+    private static final double MATCH_THRESHOLD = 0.8;
 
     // Template sizes to try (multi-scale)
     private static final int[] TEMPLATE_SIZES = {30, 40, 50, 60, 70};
