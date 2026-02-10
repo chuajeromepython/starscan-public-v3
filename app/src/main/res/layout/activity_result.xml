@@ -25,47 +25,49 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <!-- Image Result Preview -->
-    <ImageView
-        android:id="@+id/imageResult"
+    <!-- ScrollView to handle any image size without stretching -->
+    <ScrollView
+        android:id="@+id/scrollView"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_margin="12dp"
+        android:fillViewport="false"
         android:background="#E3F2FD"
-        android:padding="8dp"
-        android:scaleType="fitCenter"
-        android:contentDescription="Result Image"
         app:layout_constraintBottom_toTopOf="@id/bottomPanel"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tvHeader" />
+        app:layout_constraintTop_toBottomOf="@id/tvHeader">
 
-    <!-- Progress Bar -->
-    <ProgressBar
-        android:id="@+id/progressBar"
-        android:layout_width="56dp"
-        android:layout_height="56dp"
-        android:indeterminateTint="#0038A8"
-        android:visibility="gone"
-        app:layout_constraintBottom_toBottomOf="@id/imageResult"
-        app:layout_constraintEnd_toEndOf="@id/imageResult"
-        app:layout_constraintStart_toStartOf="@id/imageResult"
-        app:layout_constraintTop_toTopOf="@id/imageResult" />
+        <!-- Container for image - centers content and maintains aspect ratio -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="12dp"
+            android:layout_gravity="center">
 
-    <!-- Loading Text -->
-    <TextView
-        android:id="@+id/tvLoading"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:fontFamily="sans-serif-medium"
-        android:text="Processing OMR sheet..."
-        android:textColor="#0038A8"
-        android:textSize="15sp"
-        android:visibility="gone"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/progressBar" />
+            <!-- Image Result Preview
+                 adjustViewBounds="true" - maintains aspect ratio
+                 scaleType="fitCenter" - scales down if needed but never stretches
+            -->
+            <ImageView
+                android:id="@+id/imageResult"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:adjustViewBounds="true"
+                android:contentDescription="Result Image"
+                android:scaleType="fitCenter" />
+
+            <!-- Progress Bar overlay -->
+            <ProgressBar
+                android:id="@+id/progressBar"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:layout_gravity="center"
+                android:indeterminateTint="#0038A8"
+                android:visibility="gone" />
+
+        </FrameLayout>
+
+    </ScrollView>
 
     <!-- Bottom Action Panel with Navigation Bar Padding -->
     <LinearLayout

@@ -1,5 +1,6 @@
 package com.example.omrscanner.ui;
 
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
@@ -8,12 +9,15 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.Toast;
+import android.view.Window;
+import androidx.core.content.ContextCompat;
 
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.omrscanner.R;
 import com.example.omrscanner.omr.BubbleDetector;
 import com.example.omrscanner.omr.PerspectiveAligner;
+import com.example.omrscanner.utils.CSVExporter;
 
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Point;
@@ -26,12 +30,17 @@ public class ResultActivity extends AppCompatActivity {
     private ProgressBar progressBar;
 
     private Bitmap alignedBitmap;
-    private BubbleDetector.OMRResult omrResult; // Store detection result
+    private BubbleDetector.OMRResult omrResult;
+    private String originalImagePath;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_result);
+
+        // Set status bar color to blue
+        Window window = getWindow();
+        window.setStatusBarColor(ContextCompat.getColor(this, R.color.primary_blue));
 
         // Initialize OpenCV
         if (!OpenCVLoader.initDebug()) {
@@ -47,10 +56,10 @@ public class ResultActivity extends AppCompatActivity {
         progressBar = findViewById(R.id.progressBar);
 
         // Get data from intent
-        String imagePath = getIntent().getStringExtra(PreviewActivity.IMAGE_PATH);
+        originalImagePath = getIntent().getStringExtra(PreviewActivity.IMAGE_PATH);
         double[] anchorData = getIntent().getDoubleArrayExtra(PreviewActivity.ANCHOR_POINTS);
 
-        if (imagePath == null || anchorData == null) {
+        if (originalImagePath == null || anchorData == null) {
             Toast.makeText(this, "Missing image data", Toast.LENGTH_SHORT).show();
             finish();
             return;
@@ -66,16 +75,11 @@ public class ResultActivity extends AppCompatActivity {
         }
 
         // Process image
-        processImage(imagePath, anchors);
+        processImage(originalImagePath, anchors);
 
         // Button listeners
-        btnRetry.setOnClickListener(v -> {
-            finish(); // Go back to preview
-        });
-
-        btnExport.setOnClickListener(v -> {
-            exportResults();
-        });
+        btnRetry.setOnClickListener(v -> finish());
+        btnExport.setOnClickListener(v -> exportResults());
     }
 
     private void processImage(String imagePath, Point[] anchors) {
@@ -107,7 +111,7 @@ public class ResultActivity extends AppCompatActivity {
                     return;
                 }
 
-                // STEP 1: Apply perspective alignment
+                // STEP 1: Apply perspective alignment (now maintains correct aspect ratio!)
                 alignedBitmap = PerspectiveAligner.alignPerspective(original, anchors);
 
                 if (alignedBitmap == null) {
@@ -177,38 +181,58 @@ public class ResultActivity extends AppCompatActivity {
             return;
         }
 
-        // TODO: Next step - CSV export
-        // For now, just show the results
-        showResultsSummary();
-    }
+        showLoading(true);
 
-    private void showResultsSummary() {
-        StringBuilder summary = new StringBuilder();
-        summary.append("OMR Results:\n\n");
+        new Thread(() -> {
+            try {
+                // Generate CSV file in temp directory
+                String csvFilePath = CSVExporter.exportToCSV(
+                        this,
+                        omrResult.answers,
+                        omrResult.totalQuestions
+                );
 
-        // Sort question numbers
-        java.util.List<Integer> questionNumbers = new java.util.ArrayList<>(omrResult.answers.keySet());
-        java.util.Collections.sort(questionNumbers);
+                if (csvFilePath != null) {
+                    runOnUiThread(() -> {
+                        showLoading(false);
 
-        for (Integer qNum : questionNumbers) {
-            Character answer = omrResult.answers.get(qNum);
-            summary.append(String.format("Q%d: %s\n", qNum, answer));
-        }
+                        Toast.makeText(
+                                this,
+                                "Opening file manager to save...",
+                                Toast.LENGTH_SHORT
+                        ).show();
 
-        summary.append("\nTotal: ")
-                .append(omrResult.answeredQuestions)
-                .append(" / ")
-                .append(omrResult.totalQuestions);
+                        // Navigate to CSVFileActivity to save the files properly
+                        Intent intent = new Intent(this, CSVFileActivity.class);
+                        intent.putExtra(CSVFileActivity.EXTRA_CSV_FILEPATH, csvFilePath);
+                        intent.putExtra(CSVFileActivity.EXTRA_IMAGE_FILEPATH, originalImagePath);
+                        startActivity(intent);
 
-        // Show in a simple dialog
-        new androidx.appcompat.app.AlertDialog.Builder(this)
-                .setTitle("OMR Detection Results")
-                .setMessage(summary.toString())
-                .setPositiveButton("OK", null)
-                .setNegativeButton("Export CSV", (dialog, which) -> {
-                    Toast.makeText(this, "CSV export coming next!", Toast.LENGTH_SHORT).show();
-                })
-                .show();
+                        // Finish this activity so user goes back to dashboard
+                        finish();
+                    });
+                } else {
+                    runOnUiThread(() -> {
+                        showLoading(false);
+                        Toast.makeText(
+                                this,
+                                "Failed to generate CSV",
+                                Toast.LENGTH_SHORT
+                        ).show();
+                    });
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                runOnUiThread(() -> {
+                    showLoading(false);
+                    Toast.makeText(
+                            this,
+                            "Error exporting CSV: " + e.getMessage(),
+                            Toast.LENGTH_SHORT
+                    ).show();
+                });
+            }
+        }).start();
     }
 
     private void showLoading(boolean show) {

@@ -9,6 +9,8 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.Toast;
+import android.view.Window;
+import androidx.core.content.ContextCompat;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -43,6 +45,10 @@ public class PreviewActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_preview);
+
+        // Set status bar color to blue
+        Window window = getWindow();
+        window.setStatusBarColor(ContextCompat.getColor(this, R.color.primary_blue));
 
         // Initialize OpenCV
         if (!OpenCVLoader.initDebug()) {

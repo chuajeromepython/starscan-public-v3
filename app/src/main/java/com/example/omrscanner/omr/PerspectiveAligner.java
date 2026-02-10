@@ -14,20 +14,16 @@ public class PerspectiveAligner {
 
     private static final String TAG = "PerspectiveAligner";
 
-    // Standard A4 aspect ratio (portrait)
-    // Pwede mo i-adjust based sa actual OMR sheet size
-    private static final double PAPER_ASPECT_RATIO = 297.0 / 210.0; // A4 height/width
-
-    // Target output dimensions (pixels)
-    private static final int OUTPUT_WIDTH = 1200;
-    private static final int OUTPUT_HEIGHT = (int) (OUTPUT_WIDTH * PAPER_ASPECT_RATIO);
+    // Target output width (height will be calculated based on actual aspect ratio)
+    private static final int TARGET_WIDTH = 1200;
 
     /**
      * Apply perspective transformation to align OMR sheet
+     * Uses ACTUAL dimensions from anchors to prevent stretching
      *
      * @param bitmap Original captured image
      * @param anchors 4 corner points [TopLeft, TopRight, BottomLeft, BottomRight]
-     * @return Aligned/warped bitmap in standard orientation
+     * @return Aligned/warped bitmap WITHOUT distortion
      */
     public static Bitmap alignPerspective(Bitmap bitmap, Point[] anchors) {
         if (anchors == null || anchors.length != 4) {
@@ -38,19 +34,40 @@ public class PerspectiveAligner {
         Mat src = new Mat();
         Utils.bitmapToMat(bitmap, src);
 
-        // Source points (detected anchors)
+        // Calculate ACTUAL dimensions from the detected anchors
+        double topWidth = distance(anchors[0], anchors[1]);
+        double bottomWidth = distance(anchors[2], anchors[3]);
+        double leftHeight = distance(anchors[0], anchors[2]);
+        double rightHeight = distance(anchors[1], anchors[3]);
+
+        // Use maximum values to avoid cutting off content
+        double actualWidth = Math.max(topWidth, bottomWidth);
+        double actualHeight = Math.max(leftHeight, rightHeight);
+
+        // Calculate aspect ratio from ACTUAL paper dimensions
+        double aspectRatio = actualHeight / actualWidth;
+
+        // Scale to target width while maintaining aspect ratio
+        int outputWidth = TARGET_WIDTH;
+        int outputHeight = (int) (TARGET_WIDTH * aspectRatio);
+
+        Log.d(TAG, "Actual dimensions - Width: " + actualWidth + ", Height: " + actualHeight);
+        Log.d(TAG, "Aspect ratio: " + aspectRatio);
+        Log.d(TAG, "Output size: " + outputWidth + "x" + outputHeight);
+
+        // Source points (detected anchors in original image)
         Point[] srcPoints = new Point[4];
         srcPoints[0] = anchors[0]; // Top-Left
         srcPoints[1] = anchors[1]; // Top-Right
         srcPoints[2] = anchors[2]; // Bottom-Left
         srcPoints[3] = anchors[3]; // Bottom-Right
 
-        // Destination points (perfect rectangle)
+        // Destination points (perfect rectangle with correct aspect ratio)
         Point[] dstPoints = new Point[4];
-        dstPoints[0] = new Point(0, 0);                           // Top-Left
-        dstPoints[1] = new Point(OUTPUT_WIDTH - 1, 0);            // Top-Right
-        dstPoints[2] = new Point(0, OUTPUT_HEIGHT - 1);           // Bottom-Left
-        dstPoints[3] = new Point(OUTPUT_WIDTH - 1, OUTPUT_HEIGHT - 1); // Bottom-Right
+        dstPoints[0] = new Point(0, 0);                              // Top-Left
+        dstPoints[1] = new Point(outputWidth - 1, 0);                // Top-Right
+        dstPoints[2] = new Point(0, outputHeight - 1);               // Bottom-Left
+        dstPoints[3] = new Point(outputWidth - 1, outputHeight - 1); // Bottom-Right
 
         // Convert to MatOfPoint2f
         MatOfPoint2f srcMat = new MatOfPoint2f(srcPoints);
@@ -65,81 +82,10 @@ public class PerspectiveAligner {
                 src,
                 warped,
                 transformMatrix,
-                new Size(OUTPUT_WIDTH, OUTPUT_HEIGHT)
-        );
-
-        // Convert back to Bitmap
-        Bitmap result = Bitmap.createBitmap(
-                OUTPUT_WIDTH,
-                OUTPUT_HEIGHT,
-                Bitmap.Config.ARGB_8888
-        );
-        Utils.matToBitmap(warped, result);
-
-        // Cleanup
-        src.release();
-        warped.release();
-        transformMatrix.release();
-        srcMat.release();
-        dstMat.release();
-
-        Log.d(TAG, "Perspective alignment successful");
-        return result;
-    }
-
-    /**
-     * Advanced version: Auto-calculate output size based on actual paper dimensions
-     */
-    public static Bitmap alignPerspectiveAuto(Bitmap bitmap, Point[] anchors) {
-        if (anchors == null || anchors.length != 4) {
-            Log.e(TAG, "Invalid anchors - need exactly 4 points");
-            return null;
-        }
-
-        // Calculate actual dimensions from anchors
-        double widthTop = distance(anchors[0], anchors[1]);
-        double widthBottom = distance(anchors[2], anchors[3]);
-        double heightLeft = distance(anchors[0], anchors[2]);
-        double heightRight = distance(anchors[1], anchors[3]);
-
-        // Use average dimensions
-        int outputWidth = (int) Math.max(widthTop, widthBottom);
-        int outputHeight = (int) Math.max(heightLeft, heightRight);
-
-        Log.d(TAG, "Auto-calculated size: " + outputWidth + "x" + outputHeight);
-
-        Mat src = new Mat();
-        Utils.bitmapToMat(bitmap, src);
-
-        // Source points
-        MatOfPoint2f srcMat = new MatOfPoint2f(
-                anchors[0],  // Top-Left
-                anchors[1],  // Top-Right
-                anchors[2],  // Bottom-Left
-                anchors[3]   // Bottom-Right
-        );
-
-        // Destination points
-        MatOfPoint2f dstMat = new MatOfPoint2f(
-                new Point(0, 0),
-                new Point(outputWidth - 1, 0),
-                new Point(0, outputHeight - 1),
-                new Point(outputWidth - 1, outputHeight - 1)
-        );
-
-        // Get transform matrix
-        Mat transformMatrix = Imgproc.getPerspectiveTransform(srcMat, dstMat);
-
-        // Warp
-        Mat warped = new Mat();
-        Imgproc.warpPerspective(
-                src,
-                warped,
-                transformMatrix,
                 new Size(outputWidth, outputHeight)
         );
 
-        // Convert to bitmap
+        // Convert back to Bitmap
         Bitmap result = Bitmap.createBitmap(
                 outputWidth,
                 outputHeight,
@@ -154,6 +100,7 @@ public class PerspectiveAligner {
         srcMat.release();
         dstMat.release();
 
+        Log.d(TAG, "Perspective alignment successful - NO stretching!");
         return result;
     }
 
@@ -168,7 +115,6 @@ public class PerspectiveAligner {
 
     /**
      * Validate if anchors form a valid quadrilateral
-     * (Optional quality check)
      */
     public static boolean validateAnchors(Point[] anchors) {
         if (anchors == null || anchors.length != 4) {

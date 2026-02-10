@@ -15,8 +15,11 @@
         android:layout_height="100dp"
         app:cardBackgroundColor="#0038A8"
         app:cardCornerRadius="0dp"
-        app:cardElevation="8dp"
+        app:cardElevation="0dp"
+        app:strokeWidth="0dp"
+        app:strokeColor="@android:color/transparent"
         app:layout_constraintTop_toTopOf="parent">
+
 
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"

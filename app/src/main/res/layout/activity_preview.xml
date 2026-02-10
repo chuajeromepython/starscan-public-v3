@@ -25,31 +25,49 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <!-- Image Preview -->
-    <ImageView
-        android:id="@+id/imagePreview"
+    <!-- ScrollView to handle any image size without stretching -->
+    <ScrollView
+        android:id="@+id/scrollView"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_margin="12dp"
+        android:fillViewport="false"
         android:background="#E3F2FD"
-        android:scaleType="fitCenter"
-        android:contentDescription="Preview Image"
         app:layout_constraintBottom_toTopOf="@id/bottomPanel"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tvHeader" />
+        app:layout_constraintTop_toBottomOf="@id/tvHeader">
 
-    <!-- Loading Progress -->
-    <ProgressBar
-        android:id="@+id/progressBar"
-        android:layout_width="56dp"
-        android:layout_height="56dp"
-        android:indeterminateTint="#0038A8"
-        android:visibility="gone"
-        app:layout_constraintBottom_toBottomOf="@id/imagePreview"
-        app:layout_constraintEnd_toEndOf="@id/imagePreview"
-        app:layout_constraintStart_toStartOf="@id/imagePreview"
-        app:layout_constraintTop_toTopOf="@id/imagePreview" />
+        <!-- Container for image - centers content and maintains aspect ratio -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="12dp"
+            android:layout_gravity="center">
+
+            <!-- Image Preview
+                 adjustViewBounds="true" - maintains aspect ratio
+                 scaleType="fitCenter" - scales down if needed but never stretches
+            -->
+            <ImageView
+                android:id="@+id/imagePreview"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:adjustViewBounds="true"
+                android:contentDescription="Preview Image"
+                android:scaleType="fitCenter" />
+
+            <!-- Loading Progress -->
+            <ProgressBar
+                android:id="@+id/progressBar"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:layout_gravity="center"
+                android:indeterminateTint="#0038A8"
+                android:visibility="gone" />
+
+        </FrameLayout>
+
+    </ScrollView>
 
     <!-- Bottom Control Panel with Navigation Bar Padding -->
     <LinearLayout
