@@ -25,20 +25,22 @@ public class BubbleDetector {
     private static final String TAG = "BubbleDetector";
 
     // Bubble detection parameters
-    private static final double MIN_BUBBLE_AREA_RATIO = 0.00005; // 0.005% of image
-    private static final double MAX_BUBBLE_AREA_RATIO = 0.001;   // 0.1% of image
-    private static final double BUBBLE_CIRCULARITY_THRESHOLD = 0.7; // How round (0-1)
+    private static final double MIN_BUBBLE_AREA_RATIO = 0.00005;
+    private static final double MAX_BUBBLE_AREA_RATIO = 0.002;
+    private static final double BUBBLE_CIRCULARITY_THRESHOLD = 0.65;
+    private static final double MIN_ASPECT_RATIO = 0.7;
+    private static final double MAX_ASPECT_RATIO = 1.3;
 
-    // Shading detection threshold (0-255, lower = darker)
+    // Shading detection thresholds
     private static final double SHADING_THRESHOLD = 127;
-    private static final double FILLED_RATIO_THRESHOLD = 0.3; // 30% filled = shaded
+    private static final double FILLED_RATIO_THRESHOLD = 0.35;
 
     /**
      * OMR Answer result
      */
     public static class OMRResult {
-        public Map<Integer, Character> answers; // Question number -> Answer (A/B/C/D)
-        public Bitmap annotatedImage; // Image with highlighted bubbles
+        public Map<Integer, Character> answers;
+        public Bitmap annotatedImage;
         public int totalQuestions;
         public int answeredQuestions;
 
@@ -54,8 +56,8 @@ public class BubbleDetector {
         Rect rect;
         Point center;
         double fillPercentage;
-        int row; // Question number
-        int col; // Choice index (0=A, 1=B, 2=C, 3=D)
+        int row;
+        int col;
         boolean isShaded;
 
         Bubble(Rect rect) {
@@ -80,19 +82,23 @@ public class BubbleDetector {
         Mat gray = new Mat();
         Imgproc.cvtColor(src, gray, Imgproc.COLOR_BGR2GRAY);
 
-        // Apply adaptive threshold (invert: bubbles = white, background = black)
+        // Apply bilateral filter to reduce noise while keeping edges
+        Mat filtered = new Mat();
+        Imgproc.bilateralFilter(gray, filtered, 9, 75, 75);
+
+        // Use adaptive thresholding
         Mat thresh = new Mat();
         Imgproc.adaptiveThreshold(
-                gray,
+                filtered,
                 thresh,
                 255,
                 Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C,
                 Imgproc.THRESH_BINARY_INV,
-                15,
-                3
+                21,
+                5
         );
 
-        // Find all contours (potential bubbles)
+        // Find contours
         List<MatOfPoint> contours = new ArrayList<>();
         Mat hierarchy = new Mat();
         Imgproc.findContours(
@@ -105,29 +111,28 @@ public class BubbleDetector {
 
         Log.d(TAG, "Total contours found: " + contours.size());
 
-        // Filter circular contours (bubbles)
+        // Filter bubbles
         List<Bubble> bubbles = filterBubbles(contours, src.width(), src.height());
-
         Log.d(TAG, "Filtered bubbles: " + bubbles.size());
 
-        // Check which bubbles are shaded
+        // Detect shading
         for (Bubble bubble : bubbles) {
-            bubble.fillPercentage = calculateFillPercentage(gray, bubble.rect);
-            bubble.isShaded = bubble.fillPercentage >= FILLED_RATIO_THRESHOLD;
+            detectShading(gray, bubble);
         }
 
-        // Organize bubbles into rows and columns
+        // Organize into grid
         organizeBubblesIntoGrid(bubbles);
 
         // Extract answers
         extractAnswers(bubbles, result);
 
-        // Create annotated image
+        // Draw visualization
         result.annotatedImage = drawBubbles(src, bubbles);
 
         // Cleanup
         src.release();
         gray.release();
+        filtered.release();
         thresh.release();
         hierarchy.release();
 
@@ -135,7 +140,7 @@ public class BubbleDetector {
     }
 
     /**
-     * Filter contours to find circular bubbles
+     * Filter contours to find bubbles
      */
     private static List<Bubble> filterBubbles(
             List<MatOfPoint> contours,
@@ -148,7 +153,7 @@ public class BubbleDetector {
         for (MatOfPoint contour : contours) {
             Rect rect = Imgproc.boundingRect(contour);
 
-            // Check area
+            // Area check
             double area = rect.area();
             double areaRatio = area / imageArea;
 
@@ -156,17 +161,20 @@ public class BubbleDetector {
                 continue;
             }
 
-            // Check circularity (aspect ratio close to 1)
+            // Aspect ratio check
             double aspectRatio = (double) rect.width / rect.height;
-            if (aspectRatio < 0.7 || aspectRatio > 1.3) {
+            if (aspectRatio < MIN_ASPECT_RATIO || aspectRatio > MAX_ASPECT_RATIO) {
                 continue;
             }
 
-            // Calculate actual circularity
+            // Circularity check
             double perimeter = Imgproc.arcLength(
                     new org.opencv.core.MatOfPoint2f(contour.toArray()),
                     true
             );
+
+            if (perimeter == 0) continue;
+
             double circularity = 4 * Math.PI * area / (perimeter * perimeter);
 
             if (circularity < BUBBLE_CIRCULARITY_THRESHOLD) {
@@ -180,41 +188,62 @@ public class BubbleDetector {
     }
 
     /**
-     * Calculate how filled/shaded a bubble is (0.0 to 1.0)
+     * Detect if bubble is shaded
      */
-    private static double calculateFillPercentage(Mat gray, Rect bubbleRect) {
-        Mat roi = gray.submat(bubbleRect);
+    private static void detectShading(Mat gray, Bubble bubble) {
+        // Use center region of bubble to avoid circle edges
+        int padding = Math.max(2, bubble.rect.width / 4);
+        int x = Math.max(0, bubble.rect.x + padding);
+        int y = Math.max(0, bubble.rect.y + padding);
+        int width = Math.max(1, Math.min(bubble.rect.width - 2 * padding, gray.cols() - x));
+        int height = Math.max(1, Math.min(bubble.rect.height - 2 * padding, gray.rows() - y));
+
+        if (width <= 0 || height <= 0) {
+            bubble.fillPercentage = 0;
+            bubble.isShaded = false;
+            return;
+        }
+
+        Rect innerRect = new Rect(x, y, width, height);
+        Mat roi = gray.submat(innerRect);
 
         // Count dark pixels
         Mat threshROI = new Mat();
         Imgproc.threshold(roi, threshROI, SHADING_THRESHOLD, 255, Imgproc.THRESH_BINARY_INV);
 
         int darkPixels = Core.countNonZero(threshROI);
-        int totalPixels = bubbleRect.width * bubbleRect.height;
+        int totalPixels = innerRect.width * innerRect.height;
+        bubble.fillPercentage = (double) darkPixels / totalPixels;
 
-        double fillRatio = (double) darkPixels / totalPixels;
+        bubble.isShaded = bubble.fillPercentage >= FILLED_RATIO_THRESHOLD;
 
         threshROI.release();
         roi.release();
-
-        return fillRatio;
     }
 
     /**
-     * Organize bubbles into grid (rows = questions, cols = choices)
+     * Organize bubbles into grid
      */
     private static void organizeBubblesIntoGrid(List<Bubble> bubbles) {
         if (bubbles.isEmpty()) return;
 
-        // Sort by Y position (top to bottom)
+        // Sort by Y
         Collections.sort(bubbles, Comparator.comparingDouble(b -> b.center.y));
 
-        // Group into rows (tolerance for slight misalignment)
+        // Calculate median height
+        List<Integer> heights = new ArrayList<>();
+        for (Bubble b : bubbles) {
+            heights.add(b.rect.height);
+        }
+        Collections.sort(heights);
+        int medianHeight = heights.isEmpty() ? 20 : heights.get(heights.size() / 2);
+
+        double rowTolerance = medianHeight * 0.7;
+
+        // Group into rows
         List<List<Bubble>> rows = new ArrayList<>();
         List<Bubble> currentRow = new ArrayList<>();
         currentRow.add(bubbles.get(0));
-
-        double rowTolerance = bubbles.get(0).rect.height * 1.5;
 
         for (int i = 1; i < bubbles.size(); i++) {
             Bubble current = bubbles.get(i);
@@ -223,23 +252,22 @@ public class BubbleDetector {
             if (Math.abs(current.center.y - previous.center.y) < rowTolerance) {
                 currentRow.add(current);
             } else {
-                rows.add(new ArrayList<>(currentRow));
+                if (currentRow.size() >= 4) {
+                    rows.add(new ArrayList<>(currentRow));
+                }
                 currentRow.clear();
                 currentRow.add(current);
             }
         }
-        if (!currentRow.isEmpty()) {
+        if (currentRow.size() >= 4) {
             rows.add(currentRow);
         }
 
-        // Assign row numbers
+        // Assign row and column
         for (int r = 0; r < rows.size(); r++) {
             List<Bubble> row = rows.get(r);
-
-            // Sort row by X position (left to right)
             Collections.sort(row, Comparator.comparingDouble(b -> b.center.x));
 
-            // Assign column indices
             for (int c = 0; c < row.size(); c++) {
                 row.get(c).row = r;
                 row.get(c).col = c;
@@ -255,7 +283,6 @@ public class BubbleDetector {
     private static void extractAnswers(List<Bubble> bubbles, OMRResult result) {
         Map<Integer, List<Bubble>> questionMap = new HashMap<>();
 
-        // Group by question number
         for (Bubble bubble : bubbles) {
             if (!questionMap.containsKey(bubble.row)) {
                 questionMap.put(bubble.row, new ArrayList<>());
@@ -265,75 +292,63 @@ public class BubbleDetector {
 
         result.totalQuestions = questionMap.size();
 
-        // Find shaded bubble for each question
         for (Map.Entry<Integer, List<Bubble>> entry : questionMap.entrySet()) {
-            int questionNum = entry.getKey() + 1; // 1-indexed
+            int questionNum = entry.getKey() + 1;
             List<Bubble> choices = entry.getValue();
 
-            // Find most shaded bubble
-            Bubble mostShaded = null;
+            // Find most filled bubble
+            Bubble mostFilled = null;
             double maxFill = FILLED_RATIO_THRESHOLD;
 
             for (Bubble bubble : choices) {
                 if (bubble.fillPercentage > maxFill) {
                     maxFill = bubble.fillPercentage;
-                    mostShaded = bubble;
+                    mostFilled = bubble;
                 }
             }
 
-            if (mostShaded != null) {
-                char answer = (char) ('A' + mostShaded.col);
+            if (mostFilled != null && mostFilled.col < 4) {
+                char answer = (char) ('A' + mostFilled.col);
                 result.answers.put(questionNum, answer);
                 result.answeredQuestions++;
 
-                Log.d(TAG, "Q" + questionNum + ": " + answer +
-                        " (fill: " + String.format("%.2f", mostShaded.fillPercentage * 100) + "%)");
+                Log.d(TAG, String.format("Q%d: %c (fill: %.1f%%)",
+                        questionNum, answer,
+                        mostFilled.fillPercentage * 100));
             }
         }
     }
 
     /**
-     * Draw visualization on image
+     * Draw visualization
      */
     private static Bitmap drawBubbles(Mat src, List<Bubble> bubbles) {
         Mat output = src.clone();
 
-        Scalar greenCircle = new Scalar(0, 255, 0);   // Shaded bubbles
-        Scalar blueCircle = new Scalar(255, 0, 0);    // Unshaded bubbles
-        Scalar greenFill = new Scalar(0, 255, 0, 80); // Semi-transparent
+        Scalar greenCircle = new Scalar(0, 255, 0);
+        Scalar blueCircle = new Scalar(255, 100, 0);
 
         for (Bubble bubble : bubbles) {
             Scalar color = bubble.isShaded ? greenCircle : blueCircle;
             int thickness = bubble.isShaded ? 3 : 1;
 
-            // Draw circle
             Imgproc.circle(
                     output,
                     bubble.center,
-                    bubble.rect.width / 2,
+                    Math.max(bubble.rect.width, bubble.rect.height) / 2,
                     color,
                     thickness
             );
 
-            // Highlight shaded bubbles
-            if (bubble.isShaded) {
-                Imgproc.rectangle(
-                        output,
-                        bubble.rect.tl(),
-                        bubble.rect.br(),
-                        greenFill,
-                        -1 // Fill
-                );
-
-                // Draw answer letter
+            if (bubble.isShaded && bubble.col < 4) {
                 char answer = (char) ('A' + bubble.col);
                 Imgproc.putText(
                         output,
                         String.valueOf(answer),
-                        new Point(bubble.center.x - 15, bubble.center.y + 10),
+                        new Point(bubble.center.x - 8, bubble.center.y + 6),
                         Imgproc.FONT_HERSHEY_SIMPLEX,
-                        0.8,
-                        new Scalar(255, 255, 255),
+                        0.6,
+                        new Scalar(0, 255, 0),
                         2
                 );
             }
