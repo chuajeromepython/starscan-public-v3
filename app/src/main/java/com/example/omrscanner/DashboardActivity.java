@@ -6,6 +6,7 @@ import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
+import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -24,6 +25,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 
 public class DashboardActivity extends AppCompatActivity {
+
+    private static final String TAG = "DashboardActivity";
 
     private MaterialButton tabScan, tabCSV, tabResults;
     private TextView teacherInfo;
@@ -223,12 +226,33 @@ public class DashboardActivity extends AppCompatActivity {
     }
 
     private void openGallery() {
-        // Launch the gallery picker with image MIME type
-        galleryLauncher.launch("image/*");
+        Log.d(TAG, "Opening gallery...");
+        try {
+            // Launch the gallery picker with image MIME type
+            galleryLauncher.launch("image/*");
+        } catch (Exception e) {
+            Log.e(TAG, "Error opening gallery", e);
+            Toast.makeText(this, "Error opening gallery: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void openCamera() {
-        Intent intent = new Intent(DashboardActivity.this, CameraActivity.class);
-        startActivity(intent);
+        Log.d(TAG, "Opening camera...");
+        try {
+            Intent intent = new Intent(DashboardActivity.this, CameraActivity.class);
+            Log.d(TAG, "Starting CameraActivity...");
+            startActivity(intent);
+            Log.d(TAG, "CameraActivity started successfully");
+        } catch (Exception e) {
+            Log.e(TAG, "Error opening camera", e);
+            Toast.makeText(this, "Error opening camera: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        Log.d(TAG, "DashboardActivity resumed");
     }
 }
