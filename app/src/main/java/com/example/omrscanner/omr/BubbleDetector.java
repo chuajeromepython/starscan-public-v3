@@ -397,29 +397,73 @@ public class BubbleDetector {
     }
 
     /**
-     * Assign question numbers based on position
+     * Assign question numbers based on position - numbering goes DOWN columns, not across rows
      */
     private static void assignQuestionNumbers(List<QuestionGroup> questions) {
         if (questions.isEmpty()) return;
 
-        // Sort by Y (top to bottom), then X (left to right) for questions on same row
-        Collections.sort(questions, (q1, q2) -> {
-            double yDiff = Math.abs(q1.centerY - q2.centerY);
-            if (yDiff < 30) { // Same row of questions
-                return Double.compare(q1.centerX, q2.centerX);
+        // First, sort all questions by Y position (top to bottom)
+        Collections.sort(questions, Comparator.comparingDouble(q -> q.centerY));
+
+        // Group questions into columns based on X position
+        List<List<QuestionGroup>> columns = new ArrayList<>();
+
+        for (QuestionGroup question : questions) {
+            boolean addedToColumn = false;
+
+            // Try to add to existing column
+            for (List<QuestionGroup> column : columns) {
+                if (!column.isEmpty()) {
+                    QuestionGroup firstInColumn = column.get(0);
+                    double xDiff = Math.abs(question.centerX - firstInColumn.centerX);
+
+                    // If X positions are close (within reasonable range), same column
+                    if (xDiff < 80) { // Adjust this threshold if needed
+                        column.add(question);
+                        addedToColumn = true;
+                        break;
+                    }
+                }
             }
-            return Double.compare(q1.centerY, q2.centerY);
+
+            // Create new column if not added
+            if (!addedToColumn) {
+                List<QuestionGroup> newColumn = new ArrayList<>();
+                newColumn.add(question);
+                columns.add(newColumn);
+            }
+        }
+
+        // Sort columns by X position (left to right)
+        Collections.sort(columns, (c1, c2) -> {
+            if (c1.isEmpty() || c2.isEmpty()) return 0;
+            return Double.compare(c1.get(0).centerX, c2.get(0).centerX);
         });
 
-        // Assign sequential question numbers
-        for (int i = 0; i < questions.size(); i++) {
-            questions.get(i).questionNumber = i + 1;
-            for (Bubble b : questions.get(i).bubbles) {
-                b.questionNumber = i + 1;
+        // Sort each column by Y position (top to bottom)
+        for (List<QuestionGroup> column : columns) {
+            Collections.sort(column, Comparator.comparingDouble(q -> q.centerY));
+        }
+
+        // Assign question numbers: go down each column, then move to next column
+        int questionNumber = 1;
+
+        for (List<QuestionGroup> column : columns) {
+            for (QuestionGroup question : column) {
+                question.questionNumber = questionNumber;
+                for (Bubble b : question.bubbles) {
+                    b.questionNumber = questionNumber;
+                }
+                questionNumber++;
             }
         }
 
         // Log first few questions for debugging
+        Log.d(TAG, String.format("Organized into %d columns", columns.size()));
+        for (int col = 0; col < Math.min(columns.size(), 5); col++) {
+            Log.d(TAG, String.format("Column %d has %d questions", col + 1, columns.get(col).size()));
+        }
+
         for (int i = 0; i < Math.min(10, questions.size()); i++) {
             QuestionGroup q = questions.get(i);
             StringBuilder sb = new StringBuilder(String.format("Q%d at (%.0f, %.0f): ",
