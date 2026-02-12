@@ -15,9 +15,12 @@ import androidx.core.content.ContextCompat;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.omrscanner.R;
-import com.example.omrscanner.omr.BubbleDetector;
+import com.example.omrscanner.omr.BubbleScanner;
+import com.example.omrscanner.omr.OmrTemplate;
 import com.example.omrscanner.omr.PerspectiveAligner;
-import com.example.omrscanner.utils.CSVExporter;
+import com.example.omrscanner.omr.ScanResult;
+import com.example.omrscanner.omr.TemplateManager;
+import com.example.omrscanner.utils.CsvHelper;
 
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Point;
@@ -30,7 +33,7 @@ public class ResultActivity extends AppCompatActivity {
     private ProgressBar progressBar;
 
     private Bitmap alignedBitmap;
-    private BubbleDetector.OMRResult omrResult;
+    private ScanResult scanResult;
     private String originalImagePath;
 
     @Override
@@ -122,22 +125,28 @@ public class ResultActivity extends AppCompatActivity {
                     return;
                 }
 
-                // STEP 2: Detect bubbles and extract answers
-                omrResult = BubbleDetector.detectBubbles(alignedBitmap);
+                // STEP 2: Detect sheet type, then scan bubbles with pixel-density
+                TemplateManager tm = new TemplateManager(ResultActivity.this);
+                String sheetType = tm.detectSheetType(alignedBitmap);
+                OmrTemplate template = tm.getTemplate(sheetType);
+                BubbleScanner scanner = new BubbleScanner();
+                scanResult = scanner.scan(alignedBitmap, template, tm);
 
                 // Update UI
                 runOnUiThread(() -> {
                     showLoading(false);
 
-                    if (omrResult != null && omrResult.annotatedImage != null) {
+                    if (scanResult != null && scanResult.overlayBitmap != null) {
                         // Show image with highlighted bubbles
-                        imageResult.setImageBitmap(omrResult.annotatedImage);
+                        imageResult.setImageBitmap(scanResult.overlayBitmap);
 
                         // Show detection summary
                         String summary = String.format(
-                                "✓ Detected %d / %d answers",
-                                omrResult.answeredQuestions,
-                                omrResult.totalQuestions
+                                "✓ %s | LNR: %s | %d / %d answers",
+                                scanResult.templateId,
+                                scanResult.lnr,
+                                scanResult.getAnsweredCount(),
+                                scanResult.getQuestionCount()
                         );
 
                         Toast.makeText(this, summary, Toast.LENGTH_LONG).show();
@@ -176,7 +185,7 @@ public class ResultActivity extends AppCompatActivity {
     }
 
     private void exportResults() {
-        if (omrResult == null || omrResult.answers.isEmpty()) {
+        if (scanResult == null || scanResult.answers.isEmpty()) {
             Toast.makeText(this, "No answers to export", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -186,10 +195,9 @@ public class ResultActivity extends AppCompatActivity {
         new Thread(() -> {
             try {
                 // Generate CSV file in temp directory
-                String csvFilePath = CSVExporter.exportToCSV(
+                String csvFilePath = CsvHelper.exportToCSV(
                         this,
-                        omrResult.answers,
-                        omrResult.totalQuestions
+                        scanResult
                 );
 
                 if (csvFilePath != null) {
@@ -247,9 +255,9 @@ public class ResultActivity extends AppCompatActivity {
         if (alignedBitmap != null && !alignedBitmap.isRecycled()) {
             alignedBitmap.recycle();
         }
-        if (omrResult != null && omrResult.annotatedImage != null &&
-                !omrResult.annotatedImage.isRecycled()) {
-            omrResult.annotatedImage.recycle();
+        if (scanResult != null && scanResult.overlayBitmap != null &&
+                !scanResult.overlayBitmap.isRecycled()) {
+            scanResult.overlayBitmap.recycle();
         }
     }
 }
