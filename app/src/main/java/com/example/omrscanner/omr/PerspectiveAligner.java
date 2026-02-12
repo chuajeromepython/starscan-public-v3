@@ -10,20 +10,33 @@ import org.opencv.core.Point;
 import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 
+/**
+ * Applies perspective warp to transform the photographed OMR sheet
+ * into a fixed canonical rectangle (1000 x 1414 pixels, A4 ratio).
+ *
+ * Using a FIXED output size is critical for the grid-masking approach:
+ * it guarantees that bubble coordinates are always at the same pixel
+ * positions on the warped image, regardless of camera distance, angle,
+ * or original photo resolution.
+ */
 public class PerspectiveAligner {
 
     private static final String TAG = "PerspectiveAligner";
 
-    // Target output width (height will be calculated based on actual aspect ratio)
-    private static final int TARGET_WIDTH = 1200;
+    // Fixed canonical output size (A4 aspect ratio: 1 : sqrt(2) = 1 : 1.414)
+    // This is the EXACT size the grid templates map coordinates against.
+    public static final int CANONICAL_WIDTH = 1000;
+    public static final int CANONICAL_HEIGHT = 1414;
 
     /**
-     * Apply perspective transformation to align OMR sheet
-     * Uses ACTUAL dimensions from anchors to prevent stretching
+     * Apply perspective transformation to flatten the OMR sheet.
      *
-     * @param bitmap Original captured image
+     * Takes the 4 detected anchor points and warps the image so
+     * the sheet fills a perfect 1000x1414 rectangle.
+     *
+     * @param bitmap  Original captured image
      * @param anchors 4 corner points [TopLeft, TopRight, BottomLeft, BottomRight]
-     * @return Aligned/warped bitmap WITHOUT distortion
+     * @return Warped/flattened bitmap at exactly 1000x1414, or null on failure
      */
     public static Bitmap alignPerspective(Bitmap bitmap, Point[] anchors) {
         if (anchors == null || anchors.length != 4) {
@@ -34,61 +47,39 @@ public class PerspectiveAligner {
         Mat src = new Mat();
         Utils.bitmapToMat(bitmap, src);
 
-        // Calculate ACTUAL dimensions from the detected anchors
-        double topWidth = distance(anchors[0], anchors[1]);
-        double bottomWidth = distance(anchors[2], anchors[3]);
-        double leftHeight = distance(anchors[0], anchors[2]);
-        double rightHeight = distance(anchors[1], anchors[3]);
+        // Source points: the 4 detected anchor positions in the original image
+        // Order: TL, TR, BL, BR
+        MatOfPoint2f srcMat = new MatOfPoint2f(
+                anchors[0],  // Top-Left
+                anchors[1],  // Top-Right
+                anchors[2],  // Bottom-Left
+                anchors[3]   // Bottom-Right
+        );
 
-        // Use maximum values to avoid cutting off content
-        double actualWidth = Math.max(topWidth, bottomWidth);
-        double actualHeight = Math.max(leftHeight, rightHeight);
+        // Destination points: the 4 corners of a perfect rectangle
+        MatOfPoint2f dstMat = new MatOfPoint2f(
+                new Point(0, 0),                                    // Top-Left
+                new Point(CANONICAL_WIDTH, 0),                      // Top-Right
+                new Point(0, CANONICAL_HEIGHT),                     // Bottom-Left
+                new Point(CANONICAL_WIDTH, CANONICAL_HEIGHT)        // Bottom-Right
+        );
 
-        // Calculate aspect ratio from ACTUAL paper dimensions
-        double aspectRatio = actualHeight / actualWidth;
-
-        // Scale to target width while maintaining aspect ratio
-        int outputWidth = TARGET_WIDTH;
-        int outputHeight = (int) (TARGET_WIDTH * aspectRatio);
-
-        Log.d(TAG, "Actual dimensions - Width: " + actualWidth + ", Height: " + actualHeight);
-        Log.d(TAG, "Aspect ratio: " + aspectRatio);
-        Log.d(TAG, "Output size: " + outputWidth + "x" + outputHeight);
-
-        // Source points (detected anchors in original image)
-        Point[] srcPoints = new Point[4];
-        srcPoints[0] = anchors[0]; // Top-Left
-        srcPoints[1] = anchors[1]; // Top-Right
-        srcPoints[2] = anchors[2]; // Bottom-Left
-        srcPoints[3] = anchors[3]; // Bottom-Right
-
-        // Destination points (perfect rectangle with correct aspect ratio)
-        Point[] dstPoints = new Point[4];
-        dstPoints[0] = new Point(0, 0);                              // Top-Left
-        dstPoints[1] = new Point(outputWidth - 1, 0);                // Top-Right
-        dstPoints[2] = new Point(0, outputHeight - 1);               // Bottom-Left
-        dstPoints[3] = new Point(outputWidth - 1, outputHeight - 1); // Bottom-Right
-
-        // Convert to MatOfPoint2f
-        MatOfPoint2f srcMat = new MatOfPoint2f(srcPoints);
-        MatOfPoint2f dstMat = new MatOfPoint2f(dstPoints);
-
-        // Calculate perspective transform matrix
+        // Calculate the 3x3 perspective transform matrix
         Mat transformMatrix = Imgproc.getPerspectiveTransform(srcMat, dstMat);
 
-        // Apply warp perspective
+        // Apply the warp to produce a flat top-down view
         Mat warped = new Mat();
         Imgproc.warpPerspective(
                 src,
                 warped,
                 transformMatrix,
-                new Size(outputWidth, outputHeight)
+                new Size(CANONICAL_WIDTH, CANONICAL_HEIGHT)
         );
 
         // Convert back to Bitmap
         Bitmap result = Bitmap.createBitmap(
-                outputWidth,
-                outputHeight,
+                CANONICAL_WIDTH,
+                CANONICAL_HEIGHT,
                 Bitmap.Config.ARGB_8888
         );
         Utils.matToBitmap(warped, result);
@@ -100,42 +91,35 @@ public class PerspectiveAligner {
         srcMat.release();
         dstMat.release();
 
-        Log.d(TAG, "Perspective alignment successful - NO stretching!");
+        Log.d(TAG, "Perspective alignment successful -> " +
+                CANONICAL_WIDTH + "x" + CANONICAL_HEIGHT);
         return result;
     }
 
     /**
-     * Calculate Euclidean distance between two points
-     */
-    private static double distance(Point p1, Point p2) {
-        double dx = p1.x - p2.x;
-        double dy = p1.y - p2.y;
-        return Math.sqrt(dx * dx + dy * dy);
-    }
-
-    /**
-     * Validate if anchors form a valid quadrilateral
+     * Validate if anchors form a reasonable quadrilateral.
+     *
+     * @param anchors 4 corner points [TL, TR, BL, BR]
+     * @return true if the anchors are geometrically valid
      */
     public static boolean validateAnchors(Point[] anchors) {
         if (anchors == null || anchors.length != 4) {
             return false;
         }
 
-        // Check if points are not null
         for (Point p : anchors) {
             if (p == null) return false;
         }
 
-        // Check if points form a convex quadrilateral
-        // Top-Left should be top-left of all points
+        // Basic sanity: TL should be left of TR and above BL
         if (anchors[0].x > anchors[1].x || anchors[0].y > anchors[2].y) {
             Log.w(TAG, "Anchor ordering may be incorrect");
             return false;
         }
 
-        // Minimum area check (prevent degenerate cases)
+        // Minimum area check (Shoelace formula)
         double area = calculateQuadrilateralArea(anchors);
-        if (area < 10000) { // Arbitrary minimum
+        if (area < 10000) {
             Log.w(TAG, "Anchor area too small: " + area);
             return false;
         }
@@ -144,7 +128,7 @@ public class PerspectiveAligner {
     }
 
     /**
-     * Calculate area of quadrilateral using Shoelace formula
+     * Calculate area of quadrilateral using the Shoelace formula.
      */
     private static double calculateQuadrilateralArea(Point[] points) {
         double area = 0;
