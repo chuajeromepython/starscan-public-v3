@@ -125,10 +125,22 @@ public class ResultActivity extends AppCompatActivity {
                     return;
                 }
 
-                // STEP 2: Detect sheet type, then scan bubbles with pixel-density
+                // STEP 2: Detect orientation + sheet type, then scan bubbles
                 TemplateManager tm = new TemplateManager(ResultActivity.this);
-                String sheetType = tm.detectSheetType(alignedBitmap);
+                TemplateManager.OrientationResult orient = tm.detectAndOrient(alignedBitmap);
+
+                // Use the correctly-oriented bitmap from here on
+                Bitmap scanBitmap = orient.orientedBitmap;
+                String sheetType = orient.templateId;
                 OmrTemplate template = tm.getTemplate(sheetType);
+
+                // If the oriented bitmap is different from the original, update
+                // alignedBitmap so the overlay displays correctly
+                if (scanBitmap != alignedBitmap) {
+                    alignedBitmap.recycle();
+                    alignedBitmap = scanBitmap;
+                }
+
                 BubbleScanner scanner = new BubbleScanner();
                 scanResult = scanner.scan(alignedBitmap, template, tm);
 

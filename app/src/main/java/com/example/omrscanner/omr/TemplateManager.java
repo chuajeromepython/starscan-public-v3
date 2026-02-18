@@ -8,6 +8,7 @@ import android.util.Log;
 import com.google.gson.Gson;
 
 import org.opencv.android.Utils;
+import org.opencv.core.Core;
 import org.opencv.core.Mat;
 import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
@@ -202,6 +203,175 @@ public class TemplateManager {
 
         Log.i(TAG, String.format("Detected sheet type: %s (score=%.3f)", bestId, bestScore));
         return bestId;
+    }
+
+    // =====================================================================
+    //  Orientation detection & correction
+    // =====================================================================
+
+    /**
+     * Bundles the result of {@link #detectAndOrient}: the correctly oriented
+     * bitmap, the detected template ID, and the best alignment score.
+     */
+    public static class OrientationResult {
+        /** The bitmap rotated to match the template's coordinate system. */
+        public final Bitmap orientedBitmap;
+        /** The detected template ID (e.g. "ZPH30"). */
+        public final String templateId;
+        /** The alignment score that won the detection. */
+        public final double score;
+
+        public OrientationResult(Bitmap orientedBitmap, String templateId, double score) {
+            this.orientedBitmap = orientedBitmap;
+            this.templateId = templateId;
+            this.score = score;
+        }
+    }
+
+    /**
+     * Detect the correct orientation and sheet type in one pass.
+     *
+     * <p>The {@link PerspectiveAligner} always outputs a <b>portrait</b>
+     * rectangle (1000×1414), but every template JSON defines coordinates in
+     * <b>landscape</b> (width &gt; height, ~1609×1134).  When the sheet
+     * content is landscape, the warped image needs a 90° rotation before the
+     * template grid can be overlaid.</p>
+     *
+     * <h3>Algorithm</h3>
+     * <ol>
+     *   <li>If the image is already landscape (w &gt; h), try it as-is.</li>
+     *   <li>If the image is portrait (h &gt; w), try rotating 90° CW and
+     *       90° CCW.</li>
+     *   <li>For each candidate orientation, run alignment scoring against
+     *       every template.</li>
+     *   <li>The orientation + template pair with the highest score wins.</li>
+     * </ol>
+     *
+     * @param warpedBitmap the perspective-aligned bitmap from
+     *                     {@link PerspectiveAligner} (typically 1000×1414)
+     * @return an {@link OrientationResult} with the correctly rotated bitmap,
+     *         the detected template ID, and the winning score
+     */
+    public OrientationResult detectAndOrient(Bitmap warpedBitmap) {
+        if (warpedBitmap == null) {
+            Log.e(TAG, "detectAndOrient: bitmap is null");
+            return new OrientationResult(warpedBitmap, "ZPH50", 0.0);
+        }
+
+        int w = warpedBitmap.getWidth();
+        int h = warpedBitmap.getHeight();
+        boolean isPortrait = h > w;
+
+        Log.d(TAG, String.format("detectAndOrient: input %dx%d, portrait=%b", w, h, isPortrait));
+
+        // ── Build candidate orientations ────────────────────────────────
+        // Each candidate: Mat in grayscale + the rotation code used to
+        // produce it (or -1 for "as-is").
+        // Rotation codes: Core.ROTATE_90_CLOCKWISE,
+        //                 Core.ROTATE_90_COUNTERCLOCKWISE
+
+        Mat srcColour = new Mat();
+        Utils.bitmapToMat(warpedBitmap, srcColour);
+        Mat srcGray = new Mat();
+        Imgproc.cvtColor(srcColour, srcGray, Imgproc.COLOR_BGR2GRAY);
+        srcColour.release();
+
+        // We'll test up to 3 orientations. For each one, track:
+        //   - the grayscale Mat
+        //   - the rotation code (-1 = none)
+        //   - whether we need to release the Mat afterwards
+        int[][] rotations;
+        if (isPortrait) {
+            // Portrait input → only try CW and CCW rotations
+            rotations = new int[][] {
+                { Core.ROTATE_90_CLOCKWISE },
+                { Core.ROTATE_90_COUNTERCLOCKWISE }
+            };
+        } else {
+            // Already landscape → try as-is first, but also try rotations
+            // in case the aligner warped oddly
+            rotations = new int[][] {
+                { -1 },  // as-is
+                { Core.ROTATE_90_CLOCKWISE },
+                { Core.ROTATE_90_COUNTERCLOCKWISE }
+            };
+        }
+
+        String bestTemplateId = "ZPH50";
+        double bestScore = -1.0;
+        int bestRotation = -1;  // -1 = no rotation
+
+        GridAligner aligner = new GridAligner();
+
+        for (int[] rot : rotations) {
+            int rotCode = rot[0];
+            Mat candidate;
+            if (rotCode == -1) {
+                candidate = srcGray; // use directly, don't release
+            } else {
+                candidate = new Mat();
+                Core.rotate(srcGray, candidate, rotCode);
+            }
+
+            int cw = candidate.cols();
+            int ch = candidate.rows();
+
+            // Score each template against this orientation
+            for (Map.Entry<String, OmrTemplate> entry : templates.entrySet()) {
+                OmrTemplate tpl = entry.getValue();
+                double scaleX = (double) cw / tpl.width;
+                double scaleY = (double) ch / tpl.height;
+
+                double score = aligner.getAlignmentScore(candidate, tpl, scaleX, scaleY);
+
+                Log.d(TAG, String.format(
+                        "  rot=%d, template=%s, score=%.3f (img %dx%d → tpl %dx%d)",
+                        rotCode, tpl.templateId, score, cw, ch, tpl.width, tpl.height));
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestTemplateId = tpl.templateId;
+                    bestRotation = rotCode;
+                }
+            }
+
+            // Release rotated Mat (but not the original srcGray)
+            if (rotCode != -1) {
+                candidate.release();
+            }
+        }
+
+        aligner.release();
+        srcGray.release();
+
+        Log.i(TAG, String.format(
+                "detectAndOrient: winner template=%s rot=%d score=%.3f",
+                bestTemplateId, bestRotation, bestScore));
+
+        // ── Produce the correctly-oriented bitmap ───────────────────────
+        Bitmap orientedBitmap;
+        if (bestRotation == -1) {
+            // No rotation needed — use the input as-is
+            orientedBitmap = warpedBitmap;
+        } else {
+            // Rotate the full-colour bitmap via OpenCV
+            Mat colourSrc = new Mat();
+            Utils.bitmapToMat(warpedBitmap, colourSrc);
+
+            Mat rotated = new Mat();
+            Core.rotate(colourSrc, rotated, bestRotation);
+            colourSrc.release();
+
+            orientedBitmap = Bitmap.createBitmap(
+                    rotated.cols(), rotated.rows(), Bitmap.Config.ARGB_8888);
+            Utils.matToBitmap(rotated, orientedBitmap);
+            rotated.release();
+
+            Log.d(TAG, String.format("Rotated bitmap to %dx%d",
+                    orientedBitmap.getWidth(), orientedBitmap.getHeight()));
+        }
+
+        return new OrientationResult(orientedBitmap, bestTemplateId, bestScore);
     }
 
     // =====================================================================
