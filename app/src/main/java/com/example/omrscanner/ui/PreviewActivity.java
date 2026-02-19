@@ -9,9 +9,12 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.Toast;
+import android.view.Window;
+import androidx.core.content.ContextCompat;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.example.omrscanner.DashboardActivity;
 import com.example.omrscanner.R;
 import com.example.omrscanner.camera.CameraActivity;
 import com.example.omrscanner.omr.AnchorDetector;
@@ -23,6 +26,11 @@ public class PreviewActivity extends AppCompatActivity {
 
     public static final String IMAGE_PATH = "image_path";
     public static final String ANCHOR_POINTS = "anchor_points";
+    public static final String IMAGE_SOURCE = "image_source";
+
+    // Source types
+    public static final String SOURCE_CAMERA = "camera";
+    public static final String SOURCE_GALLERY = "gallery";
 
     private ImageView imagePreview;
     private Button btnRetake;
@@ -30,6 +38,8 @@ public class PreviewActivity extends AppCompatActivity {
     private ProgressBar progressBar;
 
     private String imagePath;
+    private String imageSource;
+    private String selectedSheetType;
     private Bitmap originalBitmap;
     private Point[] detectedAnchors;
 
@@ -37,6 +47,10 @@ public class PreviewActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_preview);
+
+        // Set status bar color to blue
+        Window window = getWindow();
+        window.setStatusBarColor(ContextCompat.getColor(this, R.color.primary_blue));
 
         // Initialize OpenCV
         if (!OpenCVLoader.initDebug()) {
@@ -51,8 +65,17 @@ public class PreviewActivity extends AppCompatActivity {
         btnScan = findViewById(R.id.btnScan);
         progressBar = findViewById(R.id.progressBar);
 
-        // Get image path from intent
+        // Get image path and source from intent
         imagePath = getIntent().getStringExtra(IMAGE_PATH);
+        imageSource = getIntent().getStringExtra(IMAGE_SOURCE);
+
+        // Default to camera if not specified (backward compatibility)
+        if (imageSource == null) {
+            imageSource = SOURCE_CAMERA;
+        }
+
+        // Get sheet type from intent
+        selectedSheetType = getIntent().getStringExtra(DashboardActivity.EXTRA_SHEET_TYPE);
 
         if (imagePath != null) {
             loadAndProcessImage();
@@ -135,9 +158,14 @@ public class PreviewActivity extends AppCompatActivity {
     }
 
     private void retakePhoto() {
-        // Go back to camera
-        startActivity(new Intent(this, CameraActivity.class));
-        finish();
+        if (SOURCE_GALLERY.equals(imageSource)) {
+            // Redirect to dashboard for gallery retake
+            finish();
+        } else {
+            // Go back to camera for retake
+            startActivity(new Intent(this, CameraActivity.class));
+            finish();
+        }
     }
 
     private void proceedToAlignment() {
@@ -161,6 +189,11 @@ public class PreviewActivity extends AppCompatActivity {
             anchorData[i * 2 + 1] = detectedAnchors[i].y;
         }
         intent.putExtra(ANCHOR_POINTS, anchorData);
+
+        // Pass the selected sheet type
+        if (selectedSheetType != null) {
+            intent.putExtra(DashboardActivity.EXTRA_SHEET_TYPE, selectedSheetType);
+        }
 
         startActivity(intent);
         finish();

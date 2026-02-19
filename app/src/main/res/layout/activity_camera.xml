@@ -3,25 +3,376 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="#000000"
+    android:fitsSystemWindows="true">
 
+    <!-- Header with Status Bar Padding -->
+    <LinearLayout
+        android:id="@+id/tvHeader"
+        android:layout_width="0dp"
+        android:layout_height="70dp"
+        android:orientation="vertical"
+        android:paddingTop="15dp"
+        android:paddingBottom="8dp"
+        android:elevation="8dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:text="Camera Capture"
+            android:textColor="#FFFFFF"
+            android:textSize="25sp"
+            android:textStyle="bold"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp" />
+
+    </LinearLayout>
+
+    <!-- Camera Preview -->
     <androidx.camera.view.PreviewView
         android:id="@+id/previewView"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"
+        android:background="#000000"
+        app:layout_constraintBottom_toTopOf="@id/controlsContainer"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"/>
+        app:layout_constraintTop_toBottomOf="@id/tvHeader"
+        app:scaleType="fillCenter" />
 
-    <Button
-        android:id="@+id/btnCapture"
+    <!-- Top Camera Controls (Flash, Timer, Grid) -->
+    <LinearLayout
+        android:id="@+id/topControls"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="20dp"
+        android:gravity="center_vertical"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tvHeader">
+
+        <!-- Flash Button with Background (UPDATED TO FLASHLIGHT ICON) -->
+        <FrameLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+
+            <View
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="@drawable/control_button_bg"
+                android:alpha="0.9" />
+
+            <ImageButton
+                android:id="@+id/btnFlash"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_flashlight"
+                android:contentDescription="Toggle flashlight"
+                android:padding="12dp"
+                android:scaleType="fitCenter"
+                app:tint="#FFFFFF" />
+        </FrameLayout>
+
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <!-- Timer Button with Background -->
+        <FrameLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+
+            <View
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="@drawable/control_button_bg"
+                android:alpha="0.9" />
+
+            <ImageButton
+                android:id="@+id/btnTimer"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@android:drawable/ic_menu_recent_history"
+                android:contentDescription="Set timer"
+                android:padding="12dp"
+                android:scaleType="fitCenter"
+                app:tint="#FFFFFF" />
+        </FrameLayout>
+
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <!-- Grid Button with Background -->
+        <FrameLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+
+            <View
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="@drawable/control_button_bg"
+                android:alpha="0.9" />
+
+            <ImageButton
+                android:id="@+id/btnRatio"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@android:drawable/ic_menu_crop"
+                android:contentDescription="Toggle grid"
+                android:padding="12dp"
+                android:scaleType="fitCenter"
+                app:tint="#FFFFFF" />
+        </FrameLayout>
+
+    </LinearLayout>
+
+    <!-- Zoom Slider with improved styling - FIXED TO USE MaterialCardView -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/zoomContainer"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Capture"
-        android:layout_marginBottom="24dp"
-        app:layout_constraintBottom_toBottomOf="parent"
+        android:visibility="gone"
+        app:cardBackgroundColor="#CC000000"
+        app:cardCornerRadius="25dp"
+        app:cardElevation="8dp"
+        app:layout_constraintBottom_toTopOf="@id/controlsContainer"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"/>
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginBottom="24dp">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="16dp"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/tvZoomValue"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="1.0x"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif-medium"
+                android:minWidth="55dp"
+                android:gravity="center" />
+
+            <SeekBar
+                android:id="@+id/zoomSeekBar"
+                android:layout_width="220dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_marginEnd="12dp"
+                android:max="100"
+                android:progress="0"
+                android:progressTint="#FFFFFF"
+                android:thumbTint="#FFFFFF"
+                android:progressBackgroundTint="#60FFFFFF"
+                android:contentDescription="Zoom level" />
+
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- Bottom Controls Container -->
+    <LinearLayout
+        android:id="@+id/controlsContainer"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bottom_controls_gradient"
+        android:orientation="vertical"
+        android:paddingTop="20dp"
+        android:paddingBottom="36dp"
+        android:elevation="4dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <!-- Quick Zoom Buttons -->
+        <LinearLayout
+            android:id="@+id/quickZoomButtons"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginBottom="20dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnZoom1x"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="52dp"
+                android:minHeight="52dp"
+                android:text="1x"
+                android:textSize="15sp"
+                android:textColor="#FFFFFF"
+                android:fontFamily="sans-serif-medium"
+                app:backgroundTint="#33FFFFFF"
+                android:contentDescription="Zoom 1x"
+                app:cornerRadius="26dp"
+                app:strokeColor="#66FFFFFF"
+                app:strokeWidth="1dp"
+                android:layout_marginEnd="10dp"
+                android:paddingStart="18dp"
+                android:paddingEnd="18dp"
+                android:elevation="2dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnZoom2x"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="52dp"
+                android:minHeight="52dp"
+                android:text="2x"
+                android:textSize="15sp"
+                android:textColor="#FFFFFF"
+                android:fontFamily="sans-serif-medium"
+                app:backgroundTint="#33FFFFFF"
+                android:contentDescription="Zoom 2x"
+                app:cornerRadius="26dp"
+                app:strokeColor="#66FFFFFF"
+                app:strokeWidth="1dp"
+                android:layout_marginEnd="10dp"
+                android:paddingStart="18dp"
+                android:paddingEnd="18dp"
+                android:elevation="2dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnZoom5x"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="52dp"
+                android:minHeight="52dp"
+                android:text="5x"
+                android:textSize="15sp"
+                android:textColor="#FFFFFF"
+                android:fontFamily="sans-serif-medium"
+                app:backgroundTint="#33FFFFFF"
+                android:contentDescription="Zoom 5x"
+                app:cornerRadius="26dp"
+                app:strokeColor="#66FFFFFF"
+                app:strokeWidth="1dp"
+                android:paddingStart="18dp"
+                android:paddingEnd="18dp"
+                android:elevation="2dp" />
+
+        </LinearLayout>
+
+        <!-- Main Control Row -->
+        <LinearLayout
+            android:id="@+id/linearLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="28dp"
+            android:paddingEnd="28dp">
+
+            <!-- Back Button (UPDATED FROM GALLERY) -->
+            <FrameLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content">
+
+                <View
+                    android:layout_width="60dp"
+                    android:layout_height="60dp"
+                    android:background="@drawable/secondary_button_bg" />
+
+                <ImageButton
+                    android:id="@+id/btnGallery"
+                    android:layout_width="60dp"
+                    android:layout_height="60dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@android:drawable/ic_menu_revert"
+                    android:contentDescription="Back"
+                    android:padding="14dp"
+                    android:scaleType="fitCenter"
+                    app:tint="#FFFFFF" />
+            </FrameLayout>
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <!-- Capture Button with beautiful ring -->
+            <FrameLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content">
+
+                <!-- Outer Glow Ring -->
+                <View
+                    android:layout_width="90dp"
+                    android:layout_height="90dp"
+                    android:layout_gravity="center"
+                    android:background="@drawable/capture_outer_ring"
+                    android:alpha="0.3" />
+
+                <!-- White Ring -->
+                <View
+                    android:layout_width="82dp"
+                    android:layout_height="82dp"
+                    android:layout_gravity="center"
+                    android:background="@drawable/capture_ring" />
+
+                <!-- Inner Red Button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnCapture"
+                    android:layout_width="72dp"
+                    android:layout_height="78dp"
+                    android:layout_gravity="center"
+                    app:backgroundTint="#D32F2F"
+                    android:elevation="6dp"
+                    android:text=""
+                    android:contentDescription="Capture photo"
+                    app:cornerRadius="36dp"
+                    app:rippleColor="#FFFFFF" />
+
+            </FrameLayout>
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <!-- Flip Camera Button -->
+            <FrameLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content">
+
+                <View
+                    android:layout_width="60dp"
+                    android:layout_height="60dp"
+                    android:background="@drawable/secondary_button_bg" />
+
+                <ImageButton
+                    android:id="@+id/btnFlipCamera"
+                    android:layout_width="60dp"
+                    android:layout_height="60dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@android:drawable/ic_menu_rotate"
+                    android:contentDescription="Flip Camera"
+                    android:padding="14dp"
+                    android:scaleType="fitCenter"
+                    app:tint="#FFFFFF" />
+            </FrameLayout>
+
+        </LinearLayout>
+
+    </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -1,0 +1,51 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+
+    <!-- Background -->
+    <path
+        android:fillColor="#E5E7EB"
+        android:pathData="M20,10h120l40,40v140a10,10 0 0 1 -10,10H20a10,10 0 0 1 -10,-10V20a10,10 0 0 1 10,-10z"/>
+
+    <!-- Folded corner -->
+    <path
+        android:fillColor="#CBD5E1"
+        android:pathData="M140,10v40h40z"/>
+
+    <!-- Header line -->
+    <path
+        android:strokeColor="#94A3B8"
+        android:strokeWidth="6"
+        android:pathData="M40,70h120"/>
+
+    <!-- Text lines -->
+    <path
+        android:strokeColor="#94A3B8"
+        android:strokeWidth="5"
+        android:pathData="M40,95h110"/>
+
+    <path
+        android:strokeColor="#94A3B8"
+        android:strokeWidth="5"
+        android:pathData="M40,115h100"/>
+
+    <path
+        android:strokeColor="#94A3B8"
+        android:strokeWidth="5"
+        android:pathData="M40,135h90"/>
+
+    <!-- Answer bubbles -->
+    <path
+        android:fillColor="#94A3B8"
+        android:pathData="M45,155a5,5 0 1,0 0.1,0"/>
+
+    <path
+        android:fillColor="#94A3B8"
+        android:pathData="M65,155a5,5 0 1,0 0.1,0"/>
+
+    <path
+        android:fillColor="#94A3B8"
+        android:pathData="M85,155a5,5 0 1,0 0.1,0"/>
+</vector>

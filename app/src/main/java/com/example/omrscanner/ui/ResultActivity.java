@@ -1,24 +1,35 @@
 package com.example.omrscanner.ui;
 
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.Toast;
+import android.view.Window;
+import androidx.core.content.ContextCompat;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.example.omrscanner.DashboardActivity;
 import com.example.omrscanner.R;
-import com.example.omrscanner.omr.BubbleDetector;
+import com.example.omrscanner.omr.BubbleScanner;
+import com.example.omrscanner.omr.OmrTemplate;
 import com.example.omrscanner.omr.PerspectiveAligner;
+import com.example.omrscanner.omr.ScanResult;
+import com.example.omrscanner.omr.TemplateManager;
+import com.example.omrscanner.utils.CsvHelper;
 
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Point;
 
 public class ResultActivity extends AppCompatActivity {
+
+    private static final String TAG = "ResultActivity";
 
     private ImageView imageResult;
     private Button btnExport;
@@ -26,12 +37,18 @@ public class ResultActivity extends AppCompatActivity {
     private ProgressBar progressBar;
 
     private Bitmap alignedBitmap;
-    private BubbleDetector.OMRResult omrResult; // Store detection result
+    private ScanResult scanResult;
+    private String originalImagePath;
+    private String selectedSheetType;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_result);
+
+        // Set status bar color to blue
+        Window window = getWindow();
+        window.setStatusBarColor(ContextCompat.getColor(this, R.color.primary_blue));
 
         // Initialize OpenCV
         if (!OpenCVLoader.initDebug()) {
@@ -47,10 +64,13 @@ public class ResultActivity extends AppCompatActivity {
         progressBar = findViewById(R.id.progressBar);
 
         // Get data from intent
-        String imagePath = getIntent().getStringExtra(PreviewActivity.IMAGE_PATH);
+        originalImagePath = getIntent().getStringExtra(PreviewActivity.IMAGE_PATH);
         double[] anchorData = getIntent().getDoubleArrayExtra(PreviewActivity.ANCHOR_POINTS);
+        selectedSheetType = getIntent().getStringExtra(DashboardActivity.EXTRA_SHEET_TYPE);
 
-        if (imagePath == null || anchorData == null) {
+        Log.d(TAG, "Received sheet type: " + selectedSheetType);
+
+        if (originalImagePath == null || anchorData == null) {
             Toast.makeText(this, "Missing image data", Toast.LENGTH_SHORT).show();
             finish();
             return;
@@ -66,16 +86,11 @@ public class ResultActivity extends AppCompatActivity {
         }
 
         // Process image
-        processImage(imagePath, anchors);
+        processImage(originalImagePath, anchors);
 
         // Button listeners
-        btnRetry.setOnClickListener(v -> {
-            finish(); // Go back to preview
-        });
-
-        btnExport.setOnClickListener(v -> {
-            exportResults();
-        });
+        btnRetry.setOnClickListener(v -> finish());
+        btnExport.setOnClickListener(v -> exportResults());
     }
 
     private void processImage(String imagePath, Point[] anchors) {
@@ -107,7 +122,7 @@ public class ResultActivity extends AppCompatActivity {
                     return;
                 }
 
-                // STEP 1: Apply perspective alignment
+                // STEP 1: Apply perspective alignment (now maintains correct aspect ratio!)
                 alignedBitmap = PerspectiveAligner.alignPerspective(original, anchors);
 
                 if (alignedBitmap == null) {
@@ -118,22 +133,56 @@ public class ResultActivity extends AppCompatActivity {
                     return;
                 }
 
-                // STEP 2: Detect bubbles and extract answers
-                omrResult = BubbleDetector.detectBubbles(alignedBitmap);
+                // STEP 2: Detect orientation + sheet type, then scan bubbles
+                TemplateManager tm = new TemplateManager(ResultActivity.this);
+
+                Bitmap scanBitmap;
+                String sheetType;
+                OmrTemplate template;
+
+                if (selectedSheetType != null) {
+                    // User pre-selected the sheet type — use it directly
+                    // Still need orientation detection
+                    Log.d(TAG, "Using user-selected sheet type: " + selectedSheetType);
+                    TemplateManager.OrientationResult orient =
+                            tm.detectAndOrientWithTemplate(alignedBitmap, selectedSheetType);
+                    scanBitmap = orient.orientedBitmap;
+                    sheetType = orient.templateId;
+                    template = tm.getTemplate(sheetType);
+                } else {
+                    // No pre-selection — auto-detect sheet type
+                    Log.d(TAG, "Auto-detecting sheet type...");
+                    TemplateManager.OrientationResult orient = tm.detectAndOrient(alignedBitmap);
+                    scanBitmap = orient.orientedBitmap;
+                    sheetType = orient.templateId;
+                    template = tm.getTemplate(sheetType);
+                }
+
+                // If the oriented bitmap is different from the original, update
+                // alignedBitmap so the overlay displays correctly
+                if (scanBitmap != alignedBitmap) {
+                    alignedBitmap.recycle();
+                    alignedBitmap = scanBitmap;
+                }
+
+                BubbleScanner scanner = new BubbleScanner();
+                scanResult = scanner.scan(alignedBitmap, template, tm);
 
                 // Update UI
                 runOnUiThread(() -> {
                     showLoading(false);
 
-                    if (omrResult != null && omrResult.annotatedImage != null) {
+                    if (scanResult != null && scanResult.overlayBitmap != null) {
                         // Show image with highlighted bubbles
-                        imageResult.setImageBitmap(omrResult.annotatedImage);
+                        imageResult.setImageBitmap(scanResult.overlayBitmap);
 
                         // Show detection summary
                         String summary = String.format(
-                                "✓ Detected %d / %d answers",
-                                omrResult.answeredQuestions,
-                                omrResult.totalQuestions
+                                "✓ %s | LNR: %s | %d / %d answers",
+                                scanResult.templateId,
+                                scanResult.lnr,
+                                scanResult.getAnsweredCount(),
+                                scanResult.getQuestionCount()
                         );
 
                         Toast.makeText(this, summary, Toast.LENGTH_LONG).show();
@@ -172,43 +221,62 @@ public class ResultActivity extends AppCompatActivity {
     }
 
     private void exportResults() {
-        if (omrResult == null || omrResult.answers.isEmpty()) {
+        if (scanResult == null || scanResult.answers.isEmpty()) {
             Toast.makeText(this, "No answers to export", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // TODO: Next step - CSV export
-        // For now, just show the results
-        showResultsSummary();
-    }
+        showLoading(true);
 
-    private void showResultsSummary() {
-        StringBuilder summary = new StringBuilder();
-        summary.append("OMR Results:\n\n");
+        new Thread(() -> {
+            try {
+                // Generate CSV file in temp directory
+                String csvFilePath = CsvHelper.exportToCSV(
+                        this,
+                        scanResult
+                );
 
-        // Sort question numbers
-        java.util.List<Integer> questionNumbers = new java.util.ArrayList<>(omrResult.answers.keySet());
-        java.util.Collections.sort(questionNumbers);
+                if (csvFilePath != null) {
+                    runOnUiThread(() -> {
+                        showLoading(false);
 
-        for (Integer qNum : questionNumbers) {
-            Character answer = omrResult.answers.get(qNum);
-            summary.append(String.format("Q%d: %s\n", qNum, answer));
-        }
+                        Toast.makeText(
+                                this,
+                                "Opening file manager to save...",
+                                Toast.LENGTH_SHORT
+                        ).show();
 
-        summary.append("\nTotal: ")
-                .append(omrResult.answeredQuestions)
-                .append(" / ")
-                .append(omrResult.totalQuestions);
+                        // Navigate to CSVFileActivity to save the files properly
+                        Intent intent = new Intent(this, CSVFileActivity.class);
+                        intent.putExtra(CSVFileActivity.EXTRA_CSV_FILEPATH, csvFilePath);
+                        intent.putExtra(CSVFileActivity.EXTRA_IMAGE_FILEPATH, originalImagePath);
+                        startActivity(intent);
 
-        // Show in a simple dialog
-        new androidx.appcompat.app.AlertDialog.Builder(this)
-                .setTitle("OMR Detection Results")
-                .setMessage(summary.toString())
-                .setPositiveButton("OK", null)
-                .setNegativeButton("Export CSV", (dialog, which) -> {
-                    Toast.makeText(this, "CSV export coming next!", Toast.LENGTH_SHORT).show();
-                })
-                .show();
+                        // Finish this activity so user goes back to dashboard
+                        finish();
+                    });
+                } else {
+                    runOnUiThread(() -> {
+                        showLoading(false);
+                        Toast.makeText(
+                                this,
+                                "Failed to generate CSV",
+                                Toast.LENGTH_SHORT
+                        ).show();
+                    });
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                runOnUiThread(() -> {
+                    showLoading(false);
+                    Toast.makeText(
+                            this,
+                            "Error exporting CSV: " + e.getMessage(),
+                            Toast.LENGTH_SHORT
+                    ).show();
+                });
+            }
+        }).start();
     }
 
     private void showLoading(boolean show) {
@@ -223,9 +291,9 @@ public class ResultActivity extends AppCompatActivity {
         if (alignedBitmap != null && !alignedBitmap.isRecycled()) {
             alignedBitmap.recycle();
         }
-        if (omrResult != null && omrResult.annotatedImage != null &&
-                !omrResult.annotatedImage.isRecycled()) {
-            omrResult.annotatedImage.recycle();
+        if (scanResult != null && scanResult.overlayBitmap != null &&
+                !scanResult.overlayBitmap.isRecycled()) {
+            scanResult.overlayBitmap.recycle();
         }
     }
 }

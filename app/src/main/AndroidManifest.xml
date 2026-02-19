@@ -21,6 +21,8 @@
         <activity android:name=".ui.ResultActivity"/>
         <activity android:name=".ui.PreviewActivity"/>
         <activity android:name=".camera.CameraActivity"/>
+        <activity android:name=".DashboardActivity"/>
+        <activity android:name=".Login"/>
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -30,6 +32,28 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- CSV File Manager -->
+        <activity
+            android:name=".ui.CSVFileActivity"
+            android:label="My Files"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
+
+        <!-- Full Image Viewer -->
+        <activity
+            android:name=".ui.FullImageViewerActivity"
+            android:label="View Image"
+            android:theme="@style/Theme.AppCompat.NoActionBar" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

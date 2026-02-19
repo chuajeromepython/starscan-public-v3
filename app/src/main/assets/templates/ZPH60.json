@@ -1,0 +1,77 @@
+{
+  "template_id": "ZPH60",
+  "width": 1609,
+  "height": 1134,
+  "blocks": [
+    {
+      "label": "Questions_1_10",
+      "rows": 10,
+      "cols": 4,
+      "start_x": 66,
+      "start_y": 647,
+      "dx": 43.33,
+      "dy": 45.56,
+      "radius": 14
+    },
+    {
+      "label": "Questions_11_20",
+      "rows": 10,
+      "cols": 4,
+      "start_x": 336,
+      "start_y": 647,
+      "dx": 43.33,
+      "dy": 45.56,
+      "radius": 14
+    },
+    {
+      "label": "Questions_21_30",
+      "rows": 10,
+      "cols": 4,
+      "start_x": 604,
+      "start_y": 648,
+      "dx": 43.0,
+      "dy": 45.56,
+      "radius": 14
+    },
+    {
+      "label": "Questions_31_40",
+      "rows": 10,
+      "cols": 4,
+      "start_x": 871,
+      "start_y": 650,
+      "dx": 43.0,
+      "dy": 45.22,
+      "radius": 14
+    },
+    {
+      "label": "Questions_41_50",
+      "rows": 10,
+      "cols": 4,
+      "start_x": 1140,
+      "start_y": 647,
+      "dx": 42.33,
+      "dy": 45.67,
+      "radius": 14
+    },
+    {
+      "label": "Questions_51_60",
+      "rows": 10,
+      "cols": 4,
+      "start_x": 1409,
+      "start_y": 648,
+      "dx": 42.67,
+      "dy": 45.56,
+      "radius": 14
+    },
+    {
+      "label": "LNR",
+      "rows": 10,
+      "cols": 12,
+      "start_x": 1067,
+      "start_y": 78,
+      "dx": 42.82,
+      "dy": 45.44,
+      "radius": 14
+    }
+  ]
+}
