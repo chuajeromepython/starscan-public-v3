@@ -14,6 +14,7 @@ import androidx.core.content.ContextCompat;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.example.omrscanner.DashboardActivity;
 import com.example.omrscanner.R;
 import com.example.omrscanner.camera.CameraActivity;
 import com.example.omrscanner.omr.AnchorDetector;
@@ -38,6 +39,7 @@ public class PreviewActivity extends AppCompatActivity {
 
     private String imagePath;
     private String imageSource;
+    private String selectedSheetType;
     private Bitmap originalBitmap;
     private Point[] detectedAnchors;
 
@@ -71,6 +73,9 @@ public class PreviewActivity extends AppCompatActivity {
         if (imageSource == null) {
             imageSource = SOURCE_CAMERA;
         }
+
+        // Get sheet type from intent
+        selectedSheetType = getIntent().getStringExtra(DashboardActivity.EXTRA_SHEET_TYPE);
 
         if (imagePath != null) {
             loadAndProcessImage();
@@ -184,6 +189,11 @@ public class PreviewActivity extends AppCompatActivity {
             anchorData[i * 2 + 1] = detectedAnchors[i].y;
         }
         intent.putExtra(ANCHOR_POINTS, anchorData);
+
+        // Pass the selected sheet type
+        if (selectedSheetType != null) {
+            intent.putExtra(DashboardActivity.EXTRA_SHEET_TYPE, selectedSheetType);
+        }
 
         startActivity(intent);
         finish();

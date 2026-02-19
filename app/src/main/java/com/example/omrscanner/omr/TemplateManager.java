@@ -374,6 +374,119 @@ public class TemplateManager {
         return new OrientationResult(orientedBitmap, bestTemplateId, bestScore);
     }
 
+    /**
+     * Orient the warped bitmap using a specific, user-selected template only.
+     *
+     * <p>This is similar to {@link #detectAndOrient(Bitmap)} but skips the
+     * cross-template detection step.  Only the given template is used for
+     * orientation scoring so that the user's choice is respected.</p>
+     *
+     * @param warpedBitmap the perspective-aligned bitmap
+     * @param templateId   the template ID pre-selected by the user
+     *                     (e.g. "ZPH30")
+     * @return an {@link OrientationResult} with the correctly rotated bitmap
+     */
+    public OrientationResult detectAndOrientWithTemplate(Bitmap warpedBitmap, String templateId) {
+        if (warpedBitmap == null) {
+            Log.e(TAG, "detectAndOrientWithTemplate: bitmap is null");
+            return new OrientationResult(warpedBitmap, templateId, 0.0);
+        }
+
+        OmrTemplate tpl = templates.get(templateId);
+        if (tpl == null) {
+            Log.e(TAG, "detectAndOrientWithTemplate: template '" + templateId + "' not found, falling back to detectAndOrient");
+            return detectAndOrient(warpedBitmap);
+        }
+
+        int w = warpedBitmap.getWidth();
+        int h = warpedBitmap.getHeight();
+        boolean isPortrait = h > w;
+
+        Log.d(TAG, String.format("detectAndOrientWithTemplate(%s): input %dx%d, portrait=%b",
+                templateId, w, h, isPortrait));
+
+        Mat srcColour = new Mat();
+        Utils.bitmapToMat(warpedBitmap, srcColour);
+        Mat srcGray = new Mat();
+        Imgproc.cvtColor(srcColour, srcGray, Imgproc.COLOR_BGR2GRAY);
+        srcColour.release();
+
+        int[][] rotations;
+        if (isPortrait) {
+            rotations = new int[][] {
+                { Core.ROTATE_90_CLOCKWISE },
+                { Core.ROTATE_90_COUNTERCLOCKWISE }
+            };
+        } else {
+            rotations = new int[][] {
+                { -1 },
+                { Core.ROTATE_90_CLOCKWISE },
+                { Core.ROTATE_90_COUNTERCLOCKWISE }
+            };
+        }
+
+        double bestScore = -1.0;
+        int bestRotation = -1;
+
+        GridAligner aligner = new GridAligner();
+
+        for (int[] rot : rotations) {
+            int rotCode = rot[0];
+            Mat candidate;
+            if (rotCode == -1) {
+                candidate = srcGray;
+            } else {
+                candidate = new Mat();
+                Core.rotate(srcGray, candidate, rotCode);
+            }
+
+            int cw = candidate.cols();
+            int ch = candidate.rows();
+            double scaleX = (double) cw / tpl.width;
+            double scaleY = (double) ch / tpl.height;
+
+            double score = aligner.getAlignmentScore(candidate, tpl, scaleX, scaleY);
+
+            Log.d(TAG, String.format("  rot=%d, template=%s, score=%.3f",
+                    rotCode, templateId, score));
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestRotation = rotCode;
+            }
+
+            if (rotCode != -1) {
+                candidate.release();
+            }
+        }
+
+        aligner.release();
+        srcGray.release();
+
+        Log.i(TAG, String.format("detectAndOrientWithTemplate: template=%s rot=%d score=%.3f",
+                templateId, bestRotation, bestScore));
+
+        // Produce the correctly-oriented bitmap
+        Bitmap orientedBitmap;
+        if (bestRotation == -1) {
+            orientedBitmap = warpedBitmap;
+        } else {
+            Mat colourSrc = new Mat();
+            Utils.bitmapToMat(warpedBitmap, colourSrc);
+
+            Mat rotated = new Mat();
+            Core.rotate(colourSrc, rotated, bestRotation);
+            colourSrc.release();
+
+            orientedBitmap = Bitmap.createBitmap(
+                    rotated.cols(), rotated.rows(), Bitmap.Config.ARGB_8888);
+            Utils.matToBitmap(rotated, orientedBitmap);
+            rotated.release();
+        }
+
+        return new OrientationResult(orientedBitmap, templateId, bestScore);
+    }
+
     // =====================================================================
     //  Coordinate generation
     // =====================================================================

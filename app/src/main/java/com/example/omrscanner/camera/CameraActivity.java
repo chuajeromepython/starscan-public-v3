@@ -27,6 +27,7 @@ import androidx.camera.view.PreviewView;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import com.example.omrscanner.DashboardActivity;
 import com.example.omrscanner.R;
 import com.example.omrscanner.ui.PreviewActivity;
 import com.google.android.material.button.MaterialButton;
@@ -63,6 +64,9 @@ public class CameraActivity extends AppCompatActivity {
     private float maxZoomRatio = 1.0f;
     private float minZoomRatio = 1.0f;
 
+    // Sheet type passed from DashboardActivity
+    private String selectedSheetType = null;
+
     private ScaleGestureDetector scaleGestureDetector;
 
     @Override
@@ -73,6 +77,10 @@ public class CameraActivity extends AppCompatActivity {
         try {
             setContentView(R.layout.activity_camera);
             Log.d(TAG, "Layout inflated successfully");
+
+            // Get sheet type from intent
+            selectedSheetType = getIntent().getStringExtra(DashboardActivity.EXTRA_SHEET_TYPE);
+            Log.d(TAG, "Received sheet type: " + selectedSheetType);
 
             // Set status bar color to blue
             Window window = getWindow();
@@ -413,6 +421,10 @@ public class CameraActivity extends AppCompatActivity {
                                     PreviewActivity.IMAGE_SOURCE,
                                     PreviewActivity.SOURCE_CAMERA
                             );
+                            // Pass selected sheet type to PreviewActivity
+                            if (selectedSheetType != null) {
+                                intent.putExtra(DashboardActivity.EXTRA_SHEET_TYPE, selectedSheetType);
+                            }
                             startActivity(intent);
                             // Don't call finish() here - keep CameraActivity in back stack
                         });

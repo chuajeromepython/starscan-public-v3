@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
@@ -14,6 +15,7 @@ import androidx.core.content.ContextCompat;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.example.omrscanner.DashboardActivity;
 import com.example.omrscanner.R;
 import com.example.omrscanner.omr.BubbleScanner;
 import com.example.omrscanner.omr.OmrTemplate;
@@ -27,6 +29,8 @@ import org.opencv.core.Point;
 
 public class ResultActivity extends AppCompatActivity {
 
+    private static final String TAG = "ResultActivity";
+
     private ImageView imageResult;
     private Button btnExport;
     private Button btnRetry;
@@ -35,6 +39,7 @@ public class ResultActivity extends AppCompatActivity {
     private Bitmap alignedBitmap;
     private ScanResult scanResult;
     private String originalImagePath;
+    private String selectedSheetType;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -61,6 +66,9 @@ public class ResultActivity extends AppCompatActivity {
         // Get data from intent
         originalImagePath = getIntent().getStringExtra(PreviewActivity.IMAGE_PATH);
         double[] anchorData = getIntent().getDoubleArrayExtra(PreviewActivity.ANCHOR_POINTS);
+        selectedSheetType = getIntent().getStringExtra(DashboardActivity.EXTRA_SHEET_TYPE);
+
+        Log.d(TAG, "Received sheet type: " + selectedSheetType);
 
         if (originalImagePath == null || anchorData == null) {
             Toast.makeText(this, "Missing image data", Toast.LENGTH_SHORT).show();
@@ -127,12 +135,28 @@ public class ResultActivity extends AppCompatActivity {
 
                 // STEP 2: Detect orientation + sheet type, then scan bubbles
                 TemplateManager tm = new TemplateManager(ResultActivity.this);
-                TemplateManager.OrientationResult orient = tm.detectAndOrient(alignedBitmap);
 
-                // Use the correctly-oriented bitmap from here on
-                Bitmap scanBitmap = orient.orientedBitmap;
-                String sheetType = orient.templateId;
-                OmrTemplate template = tm.getTemplate(sheetType);
+                Bitmap scanBitmap;
+                String sheetType;
+                OmrTemplate template;
+
+                if (selectedSheetType != null) {
+                    // User pre-selected the sheet type — use it directly
+                    // Still need orientation detection
+                    Log.d(TAG, "Using user-selected sheet type: " + selectedSheetType);
+                    TemplateManager.OrientationResult orient =
+                            tm.detectAndOrientWithTemplate(alignedBitmap, selectedSheetType);
+                    scanBitmap = orient.orientedBitmap;
+                    sheetType = orient.templateId;
+                    template = tm.getTemplate(sheetType);
+                } else {
+                    // No pre-selection — auto-detect sheet type
+                    Log.d(TAG, "Auto-detecting sheet type...");
+                    TemplateManager.OrientationResult orient = tm.detectAndOrient(alignedBitmap);
+                    scanBitmap = orient.orientedBitmap;
+                    sheetType = orient.templateId;
+                    template = tm.getTemplate(sheetType);
+                }
 
                 // If the oriented bitmap is different from the original, update
                 // alignedBitmap so the overlay displays correctly
