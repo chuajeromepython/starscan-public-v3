@@ -66,6 +66,8 @@ public class CameraActivity extends AppCompatActivity {
 
     // Sheet type passed from DashboardActivity
     private String selectedSheetType = null;
+    private String classId = null;
+    private String activityId = null;
 
     private ScaleGestureDetector scaleGestureDetector;
 
@@ -78,9 +80,11 @@ public class CameraActivity extends AppCompatActivity {
             setContentView(R.layout.activity_camera);
             Log.d(TAG, "Layout inflated successfully");
 
-            // Get sheet type from intent
+            // Get sheet type and folder IDs from intent
             selectedSheetType = getIntent().getStringExtra(DashboardActivity.EXTRA_SHEET_TYPE);
-            Log.d(TAG, "Received sheet type: " + selectedSheetType);
+            classId = getIntent().getStringExtra(DashboardActivity.EXTRA_CLASS_ID);
+            activityId = getIntent().getStringExtra(DashboardActivity.EXTRA_ACTIVITY_ID);
+            Log.d(TAG, "Received sheet type: " + selectedSheetType + ", classId: " + classId);
 
             // Set status bar color to blue
             Window window = getWindow();
@@ -424,6 +428,13 @@ public class CameraActivity extends AppCompatActivity {
                             // Pass selected sheet type to PreviewActivity
                             if (selectedSheetType != null) {
                                 intent.putExtra(DashboardActivity.EXTRA_SHEET_TYPE, selectedSheetType);
+                            }
+                            // Pass class/activity IDs for folder saving
+                            if (classId != null) {
+                                intent.putExtra(DashboardActivity.EXTRA_CLASS_ID, classId);
+                            }
+                            if (activityId != null) {
+                                intent.putExtra(DashboardActivity.EXTRA_ACTIVITY_ID, activityId);
                             }
                             startActivity(intent);
                             // Don't call finish() here - keep CameraActivity in back stack

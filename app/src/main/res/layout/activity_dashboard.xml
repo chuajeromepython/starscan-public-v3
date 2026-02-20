@@ -5,412 +5,401 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F8FAFC"
+    android:background="#0d1117"
     android:fitsSystemWindows="true">
 
-    <!-- Header Card -->
-    <com.google.android.material.card.MaterialCardView
-        android:id="@+id/headerCard"
-        android:layout_width="match_parent"
-        android:layout_height="100dp"
-        app:cardBackgroundColor="#0038A8"
-        app:cardCornerRadius="0dp"
-        app:cardElevation="0dp"
-        app:strokeWidth="0dp"
-        app:strokeColor="@android:color/transparent"
-        app:layout_constraintTop_toTopOf="parent">
-
-
-        <androidx.constraintlayout.widget.ConstraintLayout
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:padding="20dp">
-
-            <!-- Fixed Menu Button with proper size and accessibility -->
-
-            <ImageView
-                android:id="@+id/logo"
-                android:layout_width="100dp"
-                android:layout_height="100dp"
-                android:contentDescription="App Logo"
-                android:src="@drawable/sagotsuri"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="72dp"
-                android:orientation="vertical"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toStartOf="@+id/btnMenu"
-                app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintVertical_bias="0.538">
-
-                <TextView
-                    android:id="@+id/appTitle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="sans-serif-black"
-                    android:text="SagotSuri"
-                    android:textColor="#FFFFFF"
-                    android:textSize="22sp" />
-
-                <TextView
-                    android:id="@+id/teacherInfo"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Ms. Santos • Grade 6 - Rizal"
-                    android:textColor="#CBD5E1"
-                    android:textSize="13sp" />
-            </LinearLayout>
-
-            <ImageButton
-                android:id="@+id/btnMenu"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@drawable/ic_menu"
-                android:contentDescription="Menu"
-                app:tint="#FFFFFF"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintBottom_toBottomOf="parent"/>
-
-        </androidx.constraintlayout.widget.ConstraintLayout>
-    </com.google.android.material.card.MaterialCardView>
-
-    <!-- Tab Bar -->
+    <!-- ═══ Top Bar ═══ -->
     <LinearLayout
-        android:id="@+id/tabBar"
+        android:id="@+id/topBar"
         android:layout_width="0dp"
-        android:layout_height="54dp"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginTop="20dp"
-        android:background="@drawable/tab_bar_bg"
-        android:elevation="2dp"
-        android:gravity="center"
+        android:layout_height="60dp"
+        android:background="#161b22"
+        android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="4dp"
-        app:layout_constraintEnd_toEndOf="parent"
+        android:paddingHorizontal="16dp"
+        android:elevation="4dp"
+        app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/headerCard">
+        app:layout_constraintEnd_toEndOf="parent">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/tabScan"
-            style="@style/Widget.Material3.Button.UnelevatedButton"
+        <!-- Back button (hidden on home) -->
+        <ImageButton
+            android:id="@+id/btnBack"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_arrow_back"
+            app:tint="#f0a500"
+            android:contentDescription="Back"
+            android:visibility="gone"
+            android:layout_marginEnd="8dp" />
+
+        <!-- Title -->
+        <TextView
+            android:id="@+id/topBarTitle"
             android:layout_width="0dp"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Scan"
-            android:textAllCaps="false"
-            android:textColor="#CE1126"
-            app:cornerRadius="20dp"
-            app:backgroundTint="@android:color/transparent"
-            tools:ignore="TouchTargetSizeCheck" />
+            android:text="⬡ OMR SCANNER"
+            android:textColor="#e6edf3"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace"
+            android:singleLine="true"
+            android:ellipsize="end" />
 
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/tabCSV"
-            style="@style/Widget.Material3.Button.UnelevatedButton"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:text="CSV File"
-            android:textAllCaps="false"
-            android:textColor="#CE1126"
-            app:backgroundTint="@android:color/transparent"
-            app:cornerRadius="20dp"
-            tools:ignore="TouchTargetSizeCheck" />
-
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/tabResults"
-            style="@style/Widget.Material3.Button.UnelevatedButton"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:text="Result"
-            android:textAllCaps="false"
-            android:textColor="#CE1126"
-            app:backgroundTint="@android:color/transparent"
-            app:cornerRadius="20dp"
-            tools:ignore="TouchTargetSizeCheck" />
-
+        <!-- Badge / subtitle text -->
+        <TextView
+            android:id="@+id/topBarBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0 classes"
+            android:textColor="#8b949e"
+            android:textSize="11sp"
+            android:fontFamily="monospace" />
 
     </LinearLayout>
 
-    <!-- Content Card -->
-    <com.google.android.material.card.MaterialCardView
-        android:id="@+id/contentCard"
+    <!-- ═══ Content Area ═══ -->
+    <FrameLayout
+        android:id="@+id/contentFrame"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_margin="16dp"
-        app:cardBackgroundColor="#FFFFFF"
-        app:cardCornerRadius="24dp"
-        app:cardElevation="2dp"
-        app:strokeColor="#E2E8F0"
-        app:strokeWidth="1dp"
-        app:layout_constraintBottom_toTopOf="@id/footer"
-        app:layout_constraintEnd_toEndOf="parent"
+        android:clipChildren="false"
+        app:layout_constraintTop_toBottomOf="@id/topBar"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tabBar">
+        app:layout_constraintEnd_toEndOf="parent">
 
-        <FrameLayout
+        <!-- ══════════════════════════════════════════════════ -->
+        <!-- SCREEN 1: HOME — List of class folders            -->
+        <!-- ══════════════════════════════════════════════════ -->
+        <ScrollView
+            android:id="@+id/screenHome"
             android:layout_width="match_parent"
-            android:layout_height="match_parent">
+            android:layout_height="match_parent"
+            android:fillViewport="true"
+            android:visibility="visible">
 
-            <!-- SCAN CONTENT -->
-            <ScrollView
-                android:id="@+id/scanContent"
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:fillViewport="true"
-                android:visibility="visible">
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:paddingBottom="100dp">
 
+                <!-- Empty state -->
                 <LinearLayout
+                    android:id="@+id/homeEmpty"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:gravity="center"
                     android:orientation="vertical"
-                    android:paddingRight="20dp"
-                    android:paddingLeft="20dp"
-                    android:paddingBottom="20dp">
+                    android:gravity="center"
+                    android:padding="40dp"
+                    android:layout_marginTop="60dp"
+                    android:visibility="visible">
 
-                    <!-- Icon -->
-                    <ImageView
-                        android:id="@+id/ivScanIcon"
-                        android:layout_width="80dp"
-                        android:layout_height="80dp"
-                        android:layout_marginTop="30dp"
-                        android:layout_marginBottom="20dp"
-                        android:contentDescription="Scan Icon"
-                        android:src="@drawable/ic_scan_circle"
-                        app:tint="#0038A8" />
-
-                    <!-- Title -->
                     <TextView
-                        android:id="@+id/tvTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginBottom="6dp"
-                        android:fontFamily="sans-serif-medium"
-                        android:text="Scan Exam Paper"
-                        android:textAlignment="center"
-                        android:textColor="#1E293B"
-                        android:textSize="24sp"
-                        android:textStyle="bold" />
+                        android:text="📁"
+                        android:textSize="52sp"
+                        android:alpha="0.5" />
 
-                    <!-- Subtitle -->
                     <TextView
-                        android:id="@+id/tvSubtitle"
-                        android:layout_width="match_parent"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginBottom="28dp"
-                        android:fontFamily="sans-serif"
-                        android:paddingHorizontal="20dp"
-                        android:text="Choose how you want to capture the answer sheet"
-                        android:textAlignment="center"
-                        android:textColor="#64748B"
-                        android:textSize="14sp" />
+                        android:text="No class folders yet"
+                        android:textColor="#8b949e"
+                        android:textSize="15sp"
+                        android:textStyle="bold"
+                        android:layout_marginTop="12dp" />
 
-                    <!-- Upload Image Button -->
-                    <androidx.cardview.widget.CardView
-                        android:id="@+id/cardUpload"
-                        android:layout_width="match_parent"
+                    <TextView
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginBottom="12dp"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:foreground="?android:attr/selectableItemBackground"
-                        app:cardBackgroundColor="#F8FAFC"
-                        app:cardCornerRadius="14dp"
-                        app:cardElevation="2dp"
-                        app:strokeColor="#0038A8"
-                        app:strokeWidth="2dp">
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:gravity="center"
-                            android:orientation="vertical"
-                            android:padding="20dp">
-
-                            <ImageView
-                                android:layout_width="28dp"
-                                android:layout_height="28dp"
-                                android:layout_marginBottom="8dp"
-                                android:contentDescription="Upload Icon"
-                                android:src="@drawable/ic_images"
-                                app:tint="#0038A8" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginBottom="3dp"
-                                android:fontFamily="sans-serif-medium"
-                                android:text="Upload Image"
-                                android:textColor="#0038A8"
-                                android:textSize="17sp"
-                                android:textStyle="bold" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:fontFamily="sans-serif"
-                                android:text="Choose from gallery"
-                                android:textColor="#64748B"
-                                android:textSize="12sp" />
-                        </LinearLayout>
-                    </androidx.cardview.widget.CardView>
-
-                    <!-- Scan Now Button -->
-                    <androidx.cardview.widget.CardView
-                        android:id="@+id/cardScan"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="24dp"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:foreground="?android:attr/selectableItemBackground"
-                        app:cardBackgroundColor="#0038A8"
-                        app:cardCornerRadius="14dp"
-                        app:cardElevation="4dp">
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:gravity="center"
-                            android:orientation="vertical"
-                            android:padding="20dp">
-
-                            <ImageView
-                                android:layout_width="28dp"
-                                android:layout_height="28dp"
-                                android:layout_marginBottom="8dp"
-                                android:contentDescription="Camera Icon"
-                                android:src="@drawable/ic_camera" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginBottom="3dp"
-                                android:fontFamily="sans-serif-medium"
-                                android:text="Scan Now"
-                                android:textColor="#FFFFFF"
-                                android:textSize="17sp"
-                                android:textStyle="bold" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:fontFamily="sans-serif"
-                                android:text="Open camera to scan"
-                                android:textColor="#E0E7FF"
-                                android:textSize="12sp" />
-                        </LinearLayout>
-                    </androidx.cardview.widget.CardView>
-
-                    <!-- Info Box -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:background="@drawable/info_box_bg"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal"
-                        android:padding="14dp">
-
-                        <ImageView
-                            android:layout_width="18dp"
-                            android:layout_height="18dp"
-                            android:layout_marginEnd="10dp"
-                            android:contentDescription="Info Icon"
-                            android:src="@drawable/ic_info_circle"
-                            app:tint="#64748B" />
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:fontFamily="sans-serif"
-                            android:lineSpacingExtra="4dp"
-                            android:text="Make sure the answer sheet is well-lit and clearly visible"
-                            android:textColor="#64748B"
-                            android:textSize="12sp" />
-                    </LinearLayout>
-
+                        android:text="Tap + to create your first class"
+                        android:textColor="#8b949e"
+                        android:textSize="13sp"
+                        android:alpha="0.7"
+                        android:layout_marginTop="4dp" />
                 </LinearLayout>
-            </ScrollView>
 
-            <!-- CSV CONTENT (Placeholder) -->
-            <LinearLayout
-                android:id="@+id/csvContent"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:gravity="center"
-                android:orientation="vertical"
-                android:visibility="gone">
-
-                <TextView
-                    android:layout_width="wrap_content"
+                <!-- Class folders list container -->
+                <LinearLayout
+                    android:id="@+id/homeClassList"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="CSV Files"
-                    android:textColor="#1E293B"
-                    android:textSize="20sp"
-                    android:fontFamily="sans-serif-medium" />
+                    android:orientation="vertical"
+                    android:visibility="gone" />
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="Your scanned files will appear here"
-                    android:textColor="#64748B"
-                    android:textSize="14sp" />
             </LinearLayout>
+        </ScrollView>
 
-            <!-- RESULTS CONTENT (Placeholder) -->
+        <!-- ══════════════════════════════════════════════════ -->
+        <!-- SCREEN 2: CLASS — List of activities in a class   -->
+        <!-- ══════════════════════════════════════════════════ -->
+        <ScrollView
+            android:id="@+id/screenClass"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true"
+            android:visibility="gone">
+
             <LinearLayout
-                android:id="@+id/resultsContent"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:gravity="center"
+                android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:visibility="gone">
+                android:padding="16dp"
+                android:paddingBottom="100dp">
 
+                <!-- Teacher info label -->
                 <TextView
+                    android:id="@+id/classTeacherLabel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Results"
-                    android:textColor="#1E293B"
-                    android:textSize="20sp"
-                    android:fontFamily="sans-serif-medium" />
+                    android:text="Teacher: Unknown"
+                    android:textColor="#8b949e"
+                    android:textSize="12sp"
+                    android:fontFamily="monospace"
+                    android:layout_marginBottom="16dp" />
 
-                <TextView
-                    android:layout_width="wrap_content"
+                <!-- Empty state -->
+                <LinearLayout
+                    android:id="@+id/classEmpty"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="Scan results will appear here"
-                    android:textColor="#64748B"
-                    android:textSize="14sp" />
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:padding="40dp"
+                    android:layout_marginTop="40dp"
+                    android:visibility="visible">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="📋"
+                        android:textSize="52sp"
+                        android:alpha="0.5" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="No activities yet"
+                        android:textColor="#8b949e"
+                        android:textSize="15sp"
+                        android:textStyle="bold"
+                        android:layout_marginTop="12dp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Tap + to add an activity"
+                        android:textColor="#8b949e"
+                        android:textSize="13sp"
+                        android:alpha="0.7"
+                        android:layout_marginTop="4dp" />
+                </LinearLayout>
+
+                <!-- Activities list container -->
+                <LinearLayout
+                    android:id="@+id/classActivityList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone" />
+
             </LinearLayout>
+        </ScrollView>
 
-        </FrameLayout>
+        <!-- ══════════════════════════════════════════════════ -->
+        <!-- SCREEN 3: ACTIVITY — Scans + Start Scanning       -->
+        <!-- ══════════════════════════════════════════════════ -->
+        <ScrollView
+            android:id="@+id/screenActivity"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true"
+            android:visibility="gone">
 
-    </com.google.android.material.card.MaterialCardView>
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:paddingBottom="100dp">
 
-    <!-- Footer with Navigation Bar Padding -->
-    <TextView
-        android:id="@+id/footer"
+                <!-- Master CSV bar (shown when scans exist) -->
+                <LinearLayout
+                    android:id="@+id/masterCsvBar"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/master_csv_bar_bg"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="12dp"
+                    android:layout_marginBottom="16dp"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/masterCsvLabel"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="📊 _Master.csv · 0 entries"
+                        android:textColor="#f0a500"
+                        android:textSize="12sp"
+                        android:textStyle="bold"
+                        android:fontFamily="monospace" />
+
+                    <TextView
+                        android:id="@+id/btnExportMaster"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="↓ Export"
+                        android:textColor="#000000"
+                        android:textSize="12sp"
+                        android:textStyle="bold"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/export_button_bg"
+                        android:paddingHorizontal="12dp"
+                        android:paddingVertical="6dp"
+                        android:clickable="true"
+                        android:focusable="true" />
+                </LinearLayout>
+
+                <!-- Scan CTA Card -->
+                <LinearLayout
+                    android:id="@+id/scanCtaCard"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:padding="28dp"
+                    android:layout_marginBottom="20dp"
+                    android:background="@drawable/scan_cta_bg"
+                    android:clickable="true"
+                    android:focusable="true">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="📷"
+                        android:textSize="40sp"
+                        android:layout_marginBottom="10dp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Start Scanning"
+                        android:textColor="#e6edf3"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:layout_marginBottom="6dp" />
+
+                    <TextView
+                        android:id="@+id/scanCtaSub"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="ZPH30 · 30 items"
+                        android:textColor="#8b949e"
+                        android:textSize="13sp" />
+                </LinearLayout>
+
+                <!-- Section Header (Scanned Papers) -->
+                <LinearLayout
+                    android:id="@+id/scansHeader"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="12dp"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="SCANNED PAPERS"
+                        android:textColor="#8b949e"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:letterSpacing="0.1"
+                        android:fontFamily="monospace" />
+
+                    <TextView
+                        android:id="@+id/scansTotalCount"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0 total"
+                        android:textColor="#f0a500"
+                        android:textSize="11sp"
+                        android:fontFamily="monospace" />
+                </LinearLayout>
+
+                <!-- Scans list container -->
+                <LinearLayout
+                    android:id="@+id/activityScanList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone" />
+
+                <!-- Empty state for scans -->
+                <LinearLayout
+                    android:id="@+id/activityScansEmpty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:padding="30dp"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="🗒"
+                        android:textSize="52sp"
+                        android:alpha="0.5" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="No scans yet"
+                        android:textColor="#8b949e"
+                        android:textSize="15sp"
+                        android:textStyle="bold"
+                        android:layout_marginTop="12dp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Tap 'Start Scanning' to begin"
+                        android:textColor="#8b949e"
+                        android:textSize="13sp"
+                        android:alpha="0.7"
+                        android:layout_marginTop="4dp" />
+                </LinearLayout>
+
+            </LinearLayout>
+        </ScrollView>
+
+    </FrameLayout>
+
+    <!-- ═══ FAB Button ═══ -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="24dp"
-        android:fontFamily="sans-serif-medium"
-        android:text="© 2026 SagotSuri"
-        android:textColor="#94A3B8"
-        android:textSize="11sp"
+        android:layout_margin="24dp"
+        android:contentDescription="Add"
+        android:src="@android:drawable/ic_input_add"
+        app:tint="#000000"
+        app:backgroundTint="#f0a500"
+        app:fabSize="normal"
+        app:elevation="8dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+        android:visibility="visible" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

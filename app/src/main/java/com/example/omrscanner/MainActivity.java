@@ -19,8 +19,8 @@ public class MainActivity extends AppCompatActivity {
 
         // Delay for 2.5 seconds (2500 milliseconds)
         new android.os.Handler().postDelayed(() -> {
-            // Navigate to Login activity
-            Intent intent = new Intent(MainActivity.this, Login.class);
+            // Navigate to Dashboard activity
+            Intent intent = new Intent(MainActivity.this, DashboardActivity.class);
             startActivity(intent);
             finish();
         }, 1500);

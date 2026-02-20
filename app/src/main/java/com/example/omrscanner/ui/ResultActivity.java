@@ -17,6 +17,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.omrscanner.DashboardActivity;
 import com.example.omrscanner.R;
+import com.example.omrscanner.models.ScanEntry;
 import com.example.omrscanner.omr.BubbleScanner;
 import com.example.omrscanner.omr.OmrTemplate;
 import com.example.omrscanner.omr.PerspectiveAligner;
@@ -26,6 +27,9 @@ import com.example.omrscanner.utils.CsvHelper;
 
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Point;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 public class ResultActivity extends AppCompatActivity {
 
@@ -40,6 +44,8 @@ public class ResultActivity extends AppCompatActivity {
     private ScanResult scanResult;
     private String originalImagePath;
     private String selectedSheetType;
+    private String classId;
+    private String activityId;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -67,8 +73,10 @@ public class ResultActivity extends AppCompatActivity {
         originalImagePath = getIntent().getStringExtra(PreviewActivity.IMAGE_PATH);
         double[] anchorData = getIntent().getDoubleArrayExtra(PreviewActivity.ANCHOR_POINTS);
         selectedSheetType = getIntent().getStringExtra(DashboardActivity.EXTRA_SHEET_TYPE);
+        classId = getIntent().getStringExtra(DashboardActivity.EXTRA_CLASS_ID);
+        activityId = getIntent().getStringExtra(DashboardActivity.EXTRA_ACTIVITY_ID);
 
-        Log.d(TAG, "Received sheet type: " + selectedSheetType);
+        Log.d(TAG, "Received sheet type: " + selectedSheetType + ", classId: " + classId + ", activityId: " + activityId);
 
         if (originalImagePath == null || anchorData == null) {
             Toast.makeText(this, "Missing image data", Toast.LENGTH_SHORT).show();
@@ -236,6 +244,11 @@ public class ResultActivity extends AppCompatActivity {
                         scanResult
                 );
 
+                // Save scan result to the class/activity folder structure
+                if (classId != null && activityId != null) {
+                    saveScanToFolder(csvFilePath);
+                }
+
                 if (csvFilePath != null) {
                     runOnUiThread(() -> {
                         showLoading(false);
@@ -277,6 +290,55 @@ public class ResultActivity extends AppCompatActivity {
                 });
             }
         }).start();
+    }
+
+    /**
+     * Save the scan result into the class/activity folder structure
+     * so it appears in the Dashboard's activity scan list.
+     */
+    private void saveScanToFolder(String csvFilePath) {
+        try {
+            // Convert ScanResult answers to the ScanEntry format
+            Map<Integer, String> answersMap = new LinkedHashMap<>();
+            if (scanResult.answers != null) {
+                answersMap.putAll(scanResult.answers);
+            }
+
+            ScanEntry entry = new ScanEntry(
+                    scanResult.lnr,
+                    answersMap,
+                    scanResult.getQuestionCount(),
+                    scanResult.templateId
+            );
+            entry.setImagePath(originalImagePath);
+            entry.setCsvPath(csvFilePath);
+            entry.setScore(scanResult.getAnsweredCount());
+
+            // Save overlay bitmap to disk
+            if (scanResult.overlayBitmap != null && !scanResult.overlayBitmap.isRecycled()) {
+                try {
+                    java.io.File overlayDir = new java.io.File(getFilesDir(), "images");
+                    if (!overlayDir.exists()) overlayDir.mkdirs();
+
+                    String overlayName = "overlay_" + System.currentTimeMillis() + ".png";
+                    java.io.File overlayFile = new java.io.File(overlayDir, overlayName);
+                    java.io.FileOutputStream fos = new java.io.FileOutputStream(overlayFile);
+                    scanResult.overlayBitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, fos);
+                    fos.close();
+
+                    entry.setOverlayImagePath(overlayFile.getAbsolutePath());
+                    Log.d(TAG, "Overlay saved: " + overlayFile.getAbsolutePath());
+                } catch (Exception oe) {
+                    Log.e(TAG, "Error saving overlay image", oe);
+                }
+            }
+
+            DashboardActivity.saveScanResult(this, classId, activityId, entry);
+            Log.d(TAG, "Scan result saved to folder: classId=" + classId + ", activityId=" + activityId);
+
+        } catch (Exception e) {
+            Log.e(TAG, "Error saving scan to folder", e);
+        }
     }
 
     private void showLoading(boolean show) {
