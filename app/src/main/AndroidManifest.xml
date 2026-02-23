@@ -22,7 +22,7 @@
         <activity android:name=".ui.PreviewActivity"/>
         <activity android:name=".camera.CameraActivity"/>
         <activity android:name=".DashboardActivity"/>
-        <activity android:name=".Login"/>
+
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -43,6 +43,11 @@
         <activity
             android:name=".ui.FullImageViewerActivity"
             android:label="View Image"
+            android:theme="@style/Theme.AppCompat.NoActionBar" />
+
+        <activity
+            android:name=".ui.ScanDetailActivity"
+            android:label="Scan Detail"
             android:theme="@style/Theme.AppCompat.NoActionBar" />
 
         <provider

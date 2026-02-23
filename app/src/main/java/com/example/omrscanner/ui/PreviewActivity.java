@@ -40,6 +40,8 @@ public class PreviewActivity extends AppCompatActivity {
     private String imagePath;
     private String imageSource;
     private String selectedSheetType;
+    private String classId;
+    private String activityId;
     private Bitmap originalBitmap;
     private Point[] detectedAnchors;
 
@@ -76,6 +78,10 @@ public class PreviewActivity extends AppCompatActivity {
 
         // Get sheet type from intent
         selectedSheetType = getIntent().getStringExtra(DashboardActivity.EXTRA_SHEET_TYPE);
+
+        // Get class/activity IDs for folder-based saving
+        classId = getIntent().getStringExtra(DashboardActivity.EXTRA_CLASS_ID);
+        activityId = getIntent().getStringExtra(DashboardActivity.EXTRA_ACTIVITY_ID);
 
         if (imagePath != null) {
             loadAndProcessImage();
@@ -193,6 +199,14 @@ public class PreviewActivity extends AppCompatActivity {
         // Pass the selected sheet type
         if (selectedSheetType != null) {
             intent.putExtra(DashboardActivity.EXTRA_SHEET_TYPE, selectedSheetType);
+        }
+
+        // Pass class/activity IDs for folder-based saving
+        if (classId != null) {
+            intent.putExtra(DashboardActivity.EXTRA_CLASS_ID, classId);
+        }
+        if (activityId != null) {
+            intent.putExtra(DashboardActivity.EXTRA_ACTIVITY_ID, activityId);
         }
 
         startActivity(intent);
