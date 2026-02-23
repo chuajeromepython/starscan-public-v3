@@ -208,6 +208,9 @@ public class PreviewActivity extends AppCompatActivity {
         if (activityId != null) {
             intent.putExtra(DashboardActivity.EXTRA_ACTIVITY_ID, activityId);
         }
+        if (imageSource != null) {
+            intent.putExtra(IMAGE_SOURCE, imageSource);
+        }
 
         startActivity(intent);
         finish();

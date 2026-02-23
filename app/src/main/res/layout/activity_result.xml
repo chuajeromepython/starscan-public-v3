@@ -86,7 +86,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
-        <!-- Back Button -->
+        <!-- Retry Button -->
         <Button
             android:id="@+id/btnRetry"
             android:layout_width="0dp"
@@ -95,7 +95,7 @@
             android:layout_weight="1"
             android:backgroundTint="@color/error_red"
             android:elevation="2dp"
-            android:text="BACK"
+            android:text="RETAKE"
             android:textColor="#FFFFFF"
             android:textSize="15sp"
             android:textStyle="bold"
@@ -111,7 +111,7 @@
             android:backgroundTint="@color/primary_blue"
             android:elevation="2dp"
             android:enabled="false"
-            android:text="DOWNLOAD CSV"
+            android:text="SAVE"
             android:textColor="#FFFFFF"
             android:textSize="15sp"
             android:textStyle="bold"

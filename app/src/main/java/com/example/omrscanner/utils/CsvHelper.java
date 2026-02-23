@@ -54,7 +54,11 @@ public class CsvHelper {
         }
 
         Date now = new Date();
-        String fileName = "OMR_" + FILE_DATE_FMT.format(now) + ".csv";
+        String lrnStr = safe(scanResult.lnr);
+        if (lrnStr.isEmpty()) {
+            lrnStr = "UnknownLRN";
+        }
+        String fileName = lrnStr + "_OMR_" + FILE_DATE_FMT.format(now) + ".csv";
 
         File cacheDir = context.getCacheDir();
         File csvFile = new File(cacheDir, fileName);
