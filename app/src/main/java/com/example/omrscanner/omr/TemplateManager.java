@@ -285,18 +285,18 @@ public class TemplateManager {
             // Portrait input → it needs 90-degree rotation to become landscape.
             // Try CW and CCW rotations.
             rotations = new int[][] {
-                { Core.ROTATE_90_CLOCKWISE },
-                { Core.ROTATE_90_COUNTERCLOCKWISE }
+                    { Core.ROTATE_90_CLOCKWISE },
+                    { Core.ROTATE_90_COUNTERCLOCKWISE }
             };
         } else {
             // Already landscape → try as-is first, but also try 180 rotation
             // in case the paper is simply upside down. Also try 90 degree
             // rotations just in case the aligner output is weird.
             rotations = new int[][] {
-                { -1 },  // as-is
-                { Core.ROTATE_180 },
-                { Core.ROTATE_90_CLOCKWISE },
-                { Core.ROTATE_90_COUNTERCLOCKWISE }
+                    { -1 },  // as-is
+                    { Core.ROTATE_180 },
+                    { Core.ROTATE_90_CLOCKWISE },
+                    { Core.ROTATE_90_COUNTERCLOCKWISE }
             };
         }
 
@@ -417,15 +417,15 @@ public class TemplateManager {
         int[][] rotations;
         if (isPortrait) {
             rotations = new int[][] {
-                { Core.ROTATE_90_CLOCKWISE },
-                { Core.ROTATE_90_COUNTERCLOCKWISE }
+                    { Core.ROTATE_90_CLOCKWISE },
+                    { Core.ROTATE_90_COUNTERCLOCKWISE }
             };
         } else {
             rotations = new int[][] {
-                { -1 },
-                { Core.ROTATE_180 },
-                { Core.ROTATE_90_CLOCKWISE },
-                { Core.ROTATE_90_COUNTERCLOCKWISE }
+                    { -1 },
+                    { Core.ROTATE_180 },
+                    { Core.ROTATE_90_CLOCKWISE },
+                    { Core.ROTATE_90_COUNTERCLOCKWISE }
             };
         }
 

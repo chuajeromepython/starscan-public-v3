@@ -2,6 +2,6 @@
 <!-- Badge Background Drawable -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <solid android:color="#CE1126" />
+    <solid android:color="@color/accent_coral" />
     <corners android:radius="12dp" />
 </shape>

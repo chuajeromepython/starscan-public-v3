@@ -28,12 +28,14 @@ import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.cardview.widget.CardView;
 import androidx.core.content.ContextCompat;
 
 import com.example.omrscanner.camera.CameraActivity;
 import com.example.omrscanner.models.ActivityFolder;
 import com.example.omrscanner.models.ClassFolder;
 import com.example.omrscanner.models.ScanEntry;
+import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
@@ -72,11 +74,21 @@ public class DashboardActivity extends AppCompatActivity {
     private LinearLayout homeEmpty, homeClassList;
     private TextView classTeacherLabel;
     private LinearLayout classEmpty, classActivityList;
-    private LinearLayout masterCsvBar, scansHeader, activityScanList, activityScansEmpty;
-    private LinearLayout scanCtaCard;
+
+    // ── FIX: These two were LinearLayout but are now different view types in the new XML ──
+    private MaterialCardView masterCsvBar;   // was LinearLayout — now MaterialCardView in XML
+    private CardView scanCtaCard;            // was LinearLayout — now CardView in XML
+
+    private LinearLayout scansHeader, activityScanList, activityScansEmpty;
     private TextView masterCsvLabel, scansTotalCount, scanCtaSub;
-    private TextView btnExportMaster;
+    private com.google.android.material.button.MaterialButton btnExportMaster;
     private FloatingActionButton fab;
+
+    // Breadcrumb bar
+    private LinearLayout breadcrumbBar;
+    private View breadcrumbDivider;
+    private TextView breadcrumbRoot, breadcrumbSep1, breadcrumbClass,
+            breadcrumbSep2, breadcrumbActivity;
 
     // Gallery launcher
     private ActivityResultLauncher<String> galleryLauncher;
@@ -87,9 +99,9 @@ public class DashboardActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_dashboard);
 
-        // Dark status bar
+        // Update status bar color to match new light design
         Window window = getWindow();
-        window.setStatusBarColor(Color.parseColor("#0d1117"));
+        window.setStatusBarColor(Color.parseColor("#0038A8"));
 
         initViews();
         initGalleryLauncher();
@@ -113,6 +125,7 @@ public class DashboardActivity extends AppCompatActivity {
         classEmpty = findViewById(R.id.classEmpty);
         classActivityList = findViewById(R.id.classActivityList);
 
+        // ── FIX: findViewById now resolves to correct types ──
         masterCsvBar = findViewById(R.id.masterCsvBar);
         masterCsvLabel = findViewById(R.id.masterCsvLabel);
         btnExportMaster = findViewById(R.id.btnExportMaster);
@@ -125,9 +138,33 @@ public class DashboardActivity extends AppCompatActivity {
 
         fab = findViewById(R.id.fab);
 
+        // Breadcrumb bar views
+        breadcrumbBar      = findViewById(R.id.breadcrumbBar);
+        breadcrumbDivider  = findViewById(R.id.breadcrumbDivider);
+        breadcrumbRoot     = findViewById(R.id.breadcrumbRoot);
+        breadcrumbSep1     = findViewById(R.id.breadcrumbSep1);
+        breadcrumbClass    = findViewById(R.id.breadcrumbClass);
+        breadcrumbSep2     = findViewById(R.id.breadcrumbSep2);
+        breadcrumbActivity = findViewById(R.id.breadcrumbActivity);
+
         // Click listeners
         btnBack.setOnClickListener(v -> navigateBack());
         fab.setOnClickListener(v -> onFabClicked());
+
+        // "Classes" root crumb — always jumps straight back to home
+        breadcrumbRoot.setOnClickListener(v -> {
+            selectedClass = null;
+            selectedActivity = null;
+            showScreen(SCREEN_HOME);
+        });
+
+        // Class crumb — on activity screen, tapping goes back to the class
+        breadcrumbClass.setOnClickListener(v -> {
+            if (SCREEN_ACTIVITY.equals(currentScreen)) {
+                selectedActivity = null;
+                showScreen(SCREEN_CLASS);
+            }
+        });
 
         scanCtaCard.setOnClickListener(v -> showScanMethodDialog());
         btnExportMaster.setOnClickListener(v -> exportMasterCSV());
@@ -161,9 +198,12 @@ public class DashboardActivity extends AppCompatActivity {
             case SCREEN_HOME:
                 screenHome.setVisibility(View.VISIBLE);
                 btnBack.setVisibility(View.GONE);
-                topBarTitle.setText("⬡ OMR SCANNER");
+                topBarTitle.setText("SagotSuri");
                 topBarBadge.setText(classFolders.size() + " class" + (classFolders.size() != 1 ? "es" : ""));
                 fab.setVisibility(View.VISIBLE);
+                // Hide breadcrumb entirely on home
+                breadcrumbBar.setVisibility(View.GONE);
+                breadcrumbDivider.setVisibility(View.GONE);
                 renderHomeScreen();
                 break;
 
@@ -173,6 +213,15 @@ public class DashboardActivity extends AppCompatActivity {
                 topBarTitle.setText(selectedClass.getDisplayName());
                 topBarBadge.setText("📁 " + selectedClass.getActivityCount());
                 fab.setVisibility(View.VISIBLE);
+                // Breadcrumb:  ‹  Classes  ›  Grade 10 — Sec A
+                breadcrumbBar.setVisibility(View.VISIBLE);
+                breadcrumbDivider.setVisibility(View.VISIBLE);
+                breadcrumbSep1.setVisibility(View.VISIBLE);
+                breadcrumbClass.setVisibility(View.VISIBLE);
+                breadcrumbClass.setText(selectedClass.getDisplayName());
+                breadcrumbClass.setTextColor(android.graphics.Color.parseColor("#1E293B")); // current level — not tappable-looking
+                breadcrumbSep2.setVisibility(View.GONE);
+                breadcrumbActivity.setVisibility(View.GONE);
                 renderClassScreen();
                 break;
 
@@ -182,6 +231,16 @@ public class DashboardActivity extends AppCompatActivity {
                 topBarTitle.setText(selectedActivity.getName());
                 topBarBadge.setText(selectedActivity.getSheetType());
                 fab.setVisibility(View.GONE);
+                // Breadcrumb:  ‹  Classes  ›  Grade 10 — Sec A  ›  Math Quiz
+                breadcrumbBar.setVisibility(View.VISIBLE);
+                breadcrumbDivider.setVisibility(View.VISIBLE);
+                breadcrumbSep1.setVisibility(View.VISIBLE);
+                breadcrumbClass.setVisibility(View.VISIBLE);
+                breadcrumbClass.setText(selectedClass.getDisplayName());
+                breadcrumbClass.setTextColor(android.graphics.Color.parseColor("#0038A8")); // tappable
+                breadcrumbSep2.setVisibility(View.VISIBLE);
+                breadcrumbActivity.setVisibility(View.VISIBLE);
+                breadcrumbActivity.setText(selectedActivity.getName());
                 renderActivityScreen();
                 break;
         }
@@ -194,7 +253,6 @@ public class DashboardActivity extends AppCompatActivity {
                 showScreen(SCREEN_HOME);
                 break;
             case SCREEN_ACTIVITY:
-                // Refresh class data
                 selectedClass = findClassById(selectedClass.getId());
                 selectedActivity = null;
                 showScreen(SCREEN_CLASS);
@@ -249,8 +307,14 @@ public class DashboardActivity extends AppCompatActivity {
     private View createClassCard(ClassFolder cls) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackground(ContextCompat.getDrawable(this, R.drawable.card_dark_bg));
         card.setPadding(dp(16), dp(16), dp(16), dp(16));
+
+        // Light design card background
+        GradientDrawable cardBg = new GradientDrawable();
+        cardBg.setColor(Color.WHITE);
+        cardBg.setCornerRadius(dp(16));
+        cardBg.setStroke(dp(1), Color.parseColor("#E2E8F0"));
+        card.setBackground(cardBg);
 
         LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -264,7 +328,6 @@ public class DashboardActivity extends AppCompatActivity {
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
 
-        // Left side
         LinearLayout leftCol = new LinearLayout(this);
         leftCol.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams leftParams = new LinearLayout.LayoutParams(
@@ -273,16 +336,15 @@ public class DashboardActivity extends AppCompatActivity {
 
         TextView title = new TextView(this);
         title.setText(cls.getDisplayName());
-        title.setTextColor(Color.parseColor("#e6edf3"));
+        title.setTextColor(Color.parseColor("#1E293B"));
         title.setTextSize(15);
         title.setTypeface(null, Typeface.BOLD);
         leftCol.addView(title);
 
         TextView teacher = new TextView(this);
         teacher.setText("👤 " + cls.getTeacher());
-        teacher.setTextColor(Color.parseColor("#8b949e"));
+        teacher.setTextColor(Color.parseColor("#64748B"));
         teacher.setTextSize(12);
-        teacher.setTypeface(Typeface.MONOSPACE);
         LinearLayout.LayoutParams teacherParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         teacherParams.topMargin = dp(4);
@@ -291,20 +353,18 @@ public class DashboardActivity extends AppCompatActivity {
 
         header.addView(leftCol);
 
-        // Arrow
         TextView arrow = new TextView(this);
         arrow.setText("›");
-        arrow.setTextColor(Color.parseColor("#8b949e"));
+        arrow.setTextColor(Color.parseColor("#94A3B8"));
         arrow.setTextSize(18);
         header.addView(arrow);
 
         card.addView(header);
 
-        // Meta row
         TextView meta = new TextView(this);
         meta.setText("📂 " + cls.getActivityCount() + " activit" +
                 (cls.getActivityCount() != 1 ? "ies" : "y") + " · " + cls.getFormattedDate());
-        meta.setTextColor(Color.parseColor("#8b949e"));
+        meta.setTextColor(Color.parseColor("#94A3B8"));
         meta.setTextSize(11);
         LinearLayout.LayoutParams metaParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -312,13 +372,11 @@ public class DashboardActivity extends AppCompatActivity {
         meta.setLayoutParams(metaParams);
         card.addView(meta);
 
-        // Click
         card.setOnClickListener(v -> {
             selectedClass = cls;
             showScreen(SCREEN_CLASS);
         });
 
-        // Long Click - Options
         card.setOnLongClickListener(v -> {
             showClassOptionsDialog(cls);
             return true;
@@ -353,8 +411,13 @@ public class DashboardActivity extends AppCompatActivity {
     private View createActivityCard(ActivityFolder act) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackground(ContextCompat.getDrawable(this, R.drawable.card_dark_bg));
         card.setPadding(dp(16), dp(16), dp(16), dp(16));
+
+        GradientDrawable cardBg = new GradientDrawable();
+        cardBg.setColor(Color.WHITE);
+        cardBg.setCornerRadius(dp(16));
+        cardBg.setStroke(dp(1), Color.parseColor("#E2E8F0"));
+        card.setBackground(cardBg);
 
         LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -363,12 +426,10 @@ public class DashboardActivity extends AppCompatActivity {
         card.setClickable(true);
         card.setFocusable(true);
 
-        // Header row
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
 
-        // Left
         LinearLayout leftCol = new LinearLayout(this);
         leftCol.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams leftParams = new LinearLayout.LayoutParams(
@@ -377,16 +438,15 @@ public class DashboardActivity extends AppCompatActivity {
 
         TextView title = new TextView(this);
         title.setText(act.getName());
-        title.setTextColor(Color.parseColor("#e6edf3"));
+        title.setTextColor(Color.parseColor("#1E293B"));
         title.setTextSize(15);
         title.setTypeface(null, Typeface.BOLD);
         leftCol.addView(title);
 
         TextView sub = new TextView(this);
         sub.setText("Sheet: " + act.getSheetType());
-        sub.setTextColor(Color.parseColor("#8b949e"));
+        sub.setTextColor(Color.parseColor("#64748B"));
         sub.setTextSize(12);
-        sub.setTypeface(Typeface.MONOSPACE);
         LinearLayout.LayoutParams subParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         subParams.topMargin = dp(4);
@@ -395,20 +455,18 @@ public class DashboardActivity extends AppCompatActivity {
 
         header.addView(leftCol);
 
-        // Arrow
         TextView arrow = new TextView(this);
         arrow.setText("›");
-        arrow.setTextColor(Color.parseColor("#8b949e"));
+        arrow.setTextColor(Color.parseColor("#94A3B8"));
         arrow.setTextSize(18);
         header.addView(arrow);
 
         card.addView(header);
 
-        // Meta
         TextView meta = new TextView(this);
         meta.setText("🗂 " + act.getScanCount() + " scan" +
                 (act.getScanCount() != 1 ? "s" : "") + " · " + act.getFormattedDate());
-        meta.setTextColor(Color.parseColor("#8b949e"));
+        meta.setTextColor(Color.parseColor("#94A3B8"));
         meta.setTextSize(11);
         LinearLayout.LayoutParams metaParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -416,13 +474,11 @@ public class DashboardActivity extends AppCompatActivity {
         meta.setLayoutParams(metaParams);
         card.addView(meta);
 
-        // Click
         card.setOnClickListener(v -> {
             selectedActivity = act;
             showScreen(SCREEN_ACTIVITY);
         });
 
-        // Long Click - Options
         card.setOnLongClickListener(v -> {
             showActivityOptionsDialog(act);
             return true;
@@ -438,13 +494,11 @@ public class DashboardActivity extends AppCompatActivity {
     private void renderActivityScreen() {
         activityScanList.removeAllViews();
 
-        // Update CTA
         scanCtaSub.setText(selectedActivity.getSheetType() + " · " + selectedActivity.getNumItems() + " items");
 
         List<ScanEntry> scans = selectedActivity.getScans();
         boolean hasScans = scans != null && !scans.isEmpty();
 
-        // Master CSV bar
         if (hasScans) {
             masterCsvBar.setVisibility(View.VISIBLE);
             masterCsvLabel.setText("📊 _Master.csv · " + scans.size() + " entries");
@@ -452,7 +506,6 @@ public class DashboardActivity extends AppCompatActivity {
             masterCsvBar.setVisibility(View.GONE);
         }
 
-        // Scans
         if (hasScans) {
             scansHeader.setVisibility(View.VISIBLE);
             scansTotalCount.setText(scans.size() + " total");
@@ -473,8 +526,13 @@ public class DashboardActivity extends AppCompatActivity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.HORIZONTAL);
         card.setGravity(Gravity.CENTER_VERTICAL);
-        card.setBackground(ContextCompat.getDrawable(this, R.drawable.card_dark_bg));
         card.setPadding(dp(14), dp(14), dp(14), dp(14));
+
+        GradientDrawable cardBg = new GradientDrawable();
+        cardBg.setColor(Color.WHITE);
+        cardBg.setCornerRadius(dp(16));
+        cardBg.setStroke(dp(1), Color.parseColor("#E2E8F0"));
+        card.setBackground(cardBg);
 
         LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -488,7 +546,11 @@ public class DashboardActivity extends AppCompatActivity {
         LinearLayout.LayoutParams thumbParams = new LinearLayout.LayoutParams(dp(48), dp(60));
         thumbParams.rightMargin = dp(14);
         thumb.setLayoutParams(thumbParams);
-        thumb.setBackground(ContextCompat.getDrawable(this, R.drawable.scan_thumb_bg));
+        GradientDrawable thumbBg = new GradientDrawable();
+        thumbBg.setColor(Color.parseColor("#F0F7FF"));
+        thumbBg.setCornerRadius(dp(10));
+        thumbBg.setStroke(dp(1), Color.parseColor("#0038A8"));
+        thumb.setBackground(thumbBg);
 
         TextView thumbIcon = new TextView(this);
         thumbIcon.setText("📄");
@@ -507,14 +569,14 @@ public class DashboardActivity extends AppCompatActivity {
 
         TextView lrn = new TextView(this);
         lrn.setText("LRN: " + (scan.getLrn() != null ? scan.getLrn() : "Unknown"));
-        lrn.setTextColor(Color.parseColor("#e6edf3"));
+        lrn.setTextColor(Color.parseColor("#1E293B"));
         lrn.setTextSize(13);
-        lrn.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        lrn.setTypeface(null, Typeface.BOLD);
         info.addView(lrn);
 
         TextView detail = new TextView(this);
         detail.setText("Student #" + (index + 1) + " · " + selectedActivity.getSheetType());
-        detail.setTextColor(Color.parseColor("#8b949e"));
+        detail.setTextColor(Color.parseColor("#64748B"));
         detail.setTextSize(12);
         LinearLayout.LayoutParams detailParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -535,13 +597,11 @@ public class DashboardActivity extends AppCompatActivity {
         // Arrow
         TextView arrow = new TextView(this);
         arrow.setText("›");
-        arrow.setTextColor(Color.parseColor("#8b949e"));
+        arrow.setTextColor(Color.parseColor("#94A3B8"));
         arrow.setTextSize(16);
         card.addView(arrow);
 
-        // Click — navigate to scan detail
         card.setOnClickListener(v -> {
-            // Navigate to detail/result viewing
             Intent intent = new Intent(this, com.example.omrscanner.ui.ScanDetailActivity.class);
             intent.putExtra(com.example.omrscanner.ui.ScanDetailActivity.EXTRA_CLASS_ID, selectedClass.getId());
             intent.putExtra(com.example.omrscanner.ui.ScanDetailActivity.EXTRA_ACTIVITY_ID, selectedActivity.getId());
@@ -556,34 +616,34 @@ public class DashboardActivity extends AppCompatActivity {
         TextView badge = new TextView(this);
         badge.setText(scan.getScore() + "/" + scan.getNumItems());
         badge.setTextSize(12);
-        badge.setTypeface(Typeface.MONOSPACE);
+        badge.setTypeface(null, Typeface.BOLD);
         badge.setPadding(dp(8), dp(3), dp(8), dp(3));
+
+        GradientDrawable badgeBg = new GradientDrawable();
+        badgeBg.setCornerRadius(dp(6));
 
         String level = scan.getScoreLevel();
         switch (level) {
             case "high":
-                badge.setBackground(ContextCompat.getDrawable(this, R.drawable.score_badge_high));
-                badge.setTextColor(Color.parseColor("#3fb950"));
+                badgeBg.setColor(Color.parseColor("#DCFCE7"));
+                badge.setTextColor(Color.parseColor("#16A34A"));
                 break;
             case "mid":
-                badge.setBackground(ContextCompat.getDrawable(this, R.drawable.score_badge_mid));
-                badge.setTextColor(Color.parseColor("#f0a500"));
+                badgeBg.setColor(Color.parseColor("#FEF9C3"));
+                badge.setTextColor(Color.parseColor("#CA8A04"));
                 break;
             default:
-                badge.setBackground(ContextCompat.getDrawable(this, R.drawable.score_badge_low));
-                badge.setTextColor(Color.parseColor("#f85149"));
+                badgeBg.setColor(Color.parseColor("#FEE2E2"));
+                badge.setTextColor(Color.parseColor("#CE1126"));
                 break;
         }
 
+        badge.setBackground(badgeBg);
         return badge;
     }
 
     // ═══════════════════════════════════════════════════════════════
     // DIALOGS
-    // ═══════════════════════════════════════════════════════════════
-
-    // ═══════════════════════════════════════════════════════════════
-    // CLASS OPTIONS DIALOG
     // ═══════════════════════════════════════════════════════════════
 
     private void showClassOptionsDialog(ClassFolder cls) {
@@ -594,26 +654,19 @@ public class DashboardActivity extends AppCompatActivity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(20), dp(24), dp(20), dp(36));
-        root.setBackground(ContextCompat.getDrawable(this, R.drawable.dialog_bottom_sheet_bg));
 
-        // Drag handle
-        View handle = new View(this);
-        LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(dp(40), dp(4));
-        handleParams.gravity = Gravity.CENTER_HORIZONTAL;
-        handleParams.bottomMargin = dp(20);
-        handle.setLayoutParams(handleParams);
-        GradientDrawable handleBg = new GradientDrawable();
-        handleBg.setColor(Color.parseColor("#30363d"));
-        handleBg.setCornerRadius(dp(2));
-        handle.setBackground(handleBg);
-        root.addView(handle);
+        GradientDrawable sheetBg = new GradientDrawable();
+        sheetBg.setColor(Color.WHITE);
+        sheetBg.setCornerRadii(new float[]{dp(24), dp(24), dp(24), dp(24), 0, 0, 0, 0});
+        root.setBackground(sheetBg);
 
-        // Title
+        root.addView(createDialogHandle());
+
         TextView title = new TextView(this);
         title.setText(cls.getDisplayName());
         title.setTextSize(18);
         title.setTypeface(null, Typeface.BOLD);
-        title.setTextColor(Color.parseColor("#e6edf3"));
+        title.setTextColor(Color.parseColor("#1E293B"));
         title.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -621,7 +674,6 @@ public class DashboardActivity extends AppCompatActivity {
         title.setLayoutParams(titleParams);
         root.addView(title);
 
-        // Options
         root.addView(createMenuOption("✏️   Edit Class Details", () -> {
             dialog.dismiss();
             showEditClassDialog(cls);
@@ -645,16 +697,21 @@ public class DashboardActivity extends AppCompatActivity {
     private View createMenuOption(String text, Runnable onClick, boolean isDestructive) {
         TextView btn = new TextView(this);
         btn.setText(text);
-        btn.setTextSize(16);
-        btn.setTextColor(isDestructive ? Color.parseColor("#f85149") : Color.parseColor("#c9d1d9"));
-        btn.setPadding(dp(16), dp(16), dp(16), dp(16));
-        btn.setBackground(ContextCompat.getDrawable(this, R.drawable.btn_ghost_bg));
-        
+        btn.setTextSize(15);
+        btn.setTextColor(isDestructive ? Color.parseColor("#CE1126") : Color.parseColor("#1E293B"));
+        btn.setPadding(dp(16), dp(14), dp(16), dp(14));
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(isDestructive ? Color.parseColor("#FEF2F2") : Color.parseColor("#F8FAFC"));
+        bg.setCornerRadius(dp(12));
+        bg.setStroke(dp(1), isDestructive ? Color.parseColor("#FECACA") : Color.parseColor("#E2E8F0"));
+        btn.setBackground(bg);
+
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        params.bottomMargin = dp(12);
+        params.bottomMargin = dp(10);
         btn.setLayoutParams(params);
-        
+
         btn.setOnClickListener(v -> onClick.run());
         return btn;
     }
@@ -667,51 +724,40 @@ public class DashboardActivity extends AppCompatActivity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(20), dp(24), dp(20), dp(36));
-        root.setBackground(ContextCompat.getDrawable(this, R.drawable.dialog_bottom_sheet_bg));
 
-        // Drag handle
-        View handle = new View(this);
-        LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(dp(40), dp(4));
-        handleParams.gravity = Gravity.CENTER_HORIZONTAL;
-        handleParams.bottomMargin = dp(20);
-        handle.setLayoutParams(handleParams);
-        GradientDrawable handleBg = new GradientDrawable();
-        handleBg.setColor(Color.parseColor("#30363d"));
-        handleBg.setCornerRadius(dp(2));
-        handle.setBackground(handleBg);
-        root.addView(handle);
+        GradientDrawable sheetBg = new GradientDrawable();
+        sheetBg.setColor(Color.WHITE);
+        sheetBg.setCornerRadii(new float[]{dp(24), dp(24), dp(24), dp(24), 0, 0, 0, 0});
+        root.setBackground(sheetBg);
 
-        // Title
+        root.addView(createDialogHandle());
+
         TextView title = new TextView(this);
         title.setText("✏️ Edit Class Folder");
-        title.setTextSize(15);
-        title.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
-        title.setTextColor(Color.parseColor("#f0a500"));
+        title.setTextSize(16);
+        title.setTypeface(null, Typeface.BOLD);
+        title.setTextColor(Color.parseColor("#0038A8"));
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         titleParams.bottomMargin = dp(20);
         title.setLayoutParams(titleParams);
         root.addView(title);
 
-        // Teacher Name field
         root.addView(createFieldLabel("TEACHER NAME"));
-        EditText teacherInput = createDarkInput(cls.getTeacher());
+        EditText teacherInput = createLightInput(cls.getTeacher());
         teacherInput.setText(cls.getTeacher());
         root.addView(teacherInput);
 
-        // Grade field
         root.addView(createFieldLabel("GRADE *"));
-        EditText gradeInput = createDarkInput(cls.getGrade());
+        EditText gradeInput = createLightInput(cls.getGrade());
         gradeInput.setText(cls.getGrade());
         root.addView(gradeInput);
 
-        // Section field
         root.addView(createFieldLabel("SECTION *"));
-        EditText sectionInput = createDarkInput(cls.getSection());
+        EditText sectionInput = createLightInput(cls.getSection());
         sectionInput.setText(cls.getSection());
         root.addView(sectionInput);
 
-        // Actions
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams actionsParams = new LinearLayout.LayoutParams(
@@ -719,7 +765,6 @@ public class DashboardActivity extends AppCompatActivity {
         actionsParams.topMargin = dp(20);
         actions.setLayoutParams(actionsParams);
 
-        // Cancel
         TextView btnCancel = createDialogButton("Cancel", false);
         actions.addView(btnCancel);
 
@@ -727,7 +772,6 @@ public class DashboardActivity extends AppCompatActivity {
         spacer.setLayoutParams(new LinearLayout.LayoutParams(dp(10), 0));
         actions.addView(spacer);
 
-        // Save
         TextView btnSave = createDialogButton("Save", true);
         actions.addView(btnSave);
 
@@ -744,7 +788,6 @@ public class DashboardActivity extends AppCompatActivity {
                 return;
             }
 
-            // Duplicate check: same Grade + Section (excluding this class)
             for (ClassFolder existing : classFolders) {
                 if (!existing.getId().equals(cls.getId())
                         && existing.getGrade().equalsIgnoreCase(grade)
@@ -757,11 +800,9 @@ public class DashboardActivity extends AppCompatActivity {
             cls.setTeacher(teacher.isEmpty() ? "Unknown Teacher" : teacher);
             cls.setGrade(grade);
             cls.setSection(section);
-            
+
             saveData();
             dialog.dismiss();
-            
-            // Refresh
             showToast("Class updated ✓");
             renderHomeScreen();
         });
@@ -779,35 +820,42 @@ public class DashboardActivity extends AppCompatActivity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(24), dp(24), dp(24), dp(24));
-        root.setBackground(ContextCompat.getDrawable(this, R.drawable.dialog_bottom_sheet_bg));
+
+        GradientDrawable sheetBg = new GradientDrawable();
+        sheetBg.setColor(Color.WHITE);
+        sheetBg.setCornerRadii(new float[]{dp(24), dp(24), dp(24), dp(24), 0, 0, 0, 0});
+        root.setBackground(sheetBg);
 
         TextView title = new TextView(this);
         title.setText("Delete Class?");
         title.setTextSize(18);
         title.setTypeface(null, Typeface.BOLD);
-        title.setTextColor(Color.parseColor("#f85149"));
+        title.setTextColor(Color.parseColor("#CE1126"));
         root.addView(title);
 
         TextView msg = new TextView(this);
         msg.setText("Are you sure you want to delete \"" + cls.getDisplayName() + "\"?\n\nThis will permanently delete all activities and scans inside this folder.");
-        msg.setTextColor(Color.parseColor("#c9d1d9"));
+        msg.setTextColor(Color.parseColor("#64748B"));
         msg.setTextSize(14);
         msg.setPadding(0, dp(12), 0, dp(24));
         root.addView(msg);
 
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
-        
+
         TextView btnCancel = createDialogButton("Cancel", false);
         btnCancel.setOnClickListener(v -> dialog.dismiss());
         actions.addView(btnCancel);
-        
+
         View spacer = new View(this);
         spacer.setLayoutParams(new LinearLayout.LayoutParams(dp(10), 0));
         actions.addView(spacer);
 
         TextView btnDelete = createDialogButton("Delete", true);
-        btnDelete.setBackground(ContextCompat.getDrawable(this, R.drawable.score_badge_low)); // Red bg reuse
+        GradientDrawable deleteBg = new GradientDrawable();
+        deleteBg.setColor(Color.parseColor("#CE1126"));
+        deleteBg.setCornerRadius(dp(12));
+        btnDelete.setBackground(deleteBg);
         btnDelete.setTextColor(Color.WHITE);
         btnDelete.setOnClickListener(v -> {
             classFolders.remove(cls);
@@ -836,26 +884,19 @@ public class DashboardActivity extends AppCompatActivity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(20), dp(24), dp(20), dp(36));
-        root.setBackground(ContextCompat.getDrawable(this, R.drawable.dialog_bottom_sheet_bg));
 
-        // Drag handle
-        View handle = new View(this);
-        LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(dp(40), dp(4));
-        handleParams.gravity = Gravity.CENTER_HORIZONTAL;
-        handleParams.bottomMargin = dp(20);
-        handle.setLayoutParams(handleParams);
-        GradientDrawable handleBg = new GradientDrawable();
-        handleBg.setColor(Color.parseColor("#30363d"));
-        handleBg.setCornerRadius(dp(2));
-        handle.setBackground(handleBg);
-        root.addView(handle);
+        GradientDrawable sheetBg = new GradientDrawable();
+        sheetBg.setColor(Color.WHITE);
+        sheetBg.setCornerRadii(new float[]{dp(24), dp(24), dp(24), dp(24), 0, 0, 0, 0});
+        root.setBackground(sheetBg);
 
-        // Title
+        root.addView(createDialogHandle());
+
         TextView title = new TextView(this);
         title.setText(act.getName());
         title.setTextSize(18);
         title.setTypeface(null, Typeface.BOLD);
-        title.setTextColor(Color.parseColor("#e6edf3"));
+        title.setTextColor(Color.parseColor("#1E293B"));
         title.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -863,7 +904,6 @@ public class DashboardActivity extends AppCompatActivity {
         title.setLayoutParams(titleParams);
         root.addView(title);
 
-        // Options
         root.addView(createMenuOption("✏️   Edit Activity Details", () -> {
             dialog.dismiss();
             showEditActivityDialog(act);
@@ -887,54 +927,48 @@ public class DashboardActivity extends AppCompatActivity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(20), dp(24), dp(20), dp(36));
-        root.setBackground(ContextCompat.getDrawable(this, R.drawable.dialog_bottom_sheet_bg));
 
-        // Drag handle
-        View handle = new View(this);
-        LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(dp(40), dp(4));
-        handleParams.gravity = Gravity.CENTER_HORIZONTAL;
-        handleParams.bottomMargin = dp(20);
-        handle.setLayoutParams(handleParams);
-        GradientDrawable handleBg = new GradientDrawable();
-        handleBg.setColor(Color.parseColor("#30363d"));
-        handleBg.setCornerRadius(dp(2));
-        handle.setBackground(handleBg);
-        root.addView(handle);
+        GradientDrawable sheetBg = new GradientDrawable();
+        sheetBg.setColor(Color.WHITE);
+        sheetBg.setCornerRadii(new float[]{dp(24), dp(24), dp(24), dp(24), 0, 0, 0, 0});
+        root.setBackground(sheetBg);
 
-        // Title
+        root.addView(createDialogHandle());
+
         TextView title = new TextView(this);
         title.setText("✏️ Edit Activity");
-        title.setTextSize(15);
-        title.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
-        title.setTextColor(Color.parseColor("#f0a500"));
+        title.setTextSize(16);
+        title.setTypeface(null, Typeface.BOLD);
+        title.setTextColor(Color.parseColor("#0038A8"));
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         titleParams.bottomMargin = dp(20);
         title.setLayoutParams(titleParams);
         root.addView(title);
 
-        // Activity Name field
         root.addView(createFieldLabel("ACTIVITY NAME *"));
-        EditText nameInput = createDarkInput(act.getName());
+        EditText nameInput = createLightInput(act.getName());
         nameInput.setText(act.getName());
         root.addView(nameInput);
 
-        // Sheet type (read-only info)
         root.addView(createFieldLabel("OMR SHEET TYPE"));
         TextView sheetInfo = new TextView(this);
         sheetInfo.setText(act.getSheetType() + " — " + act.getNumItems() + " Items");
         sheetInfo.setTextSize(14);
-        sheetInfo.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
-        sheetInfo.setTextColor(Color.parseColor("#8b949e"));
+        sheetInfo.setTypeface(null, Typeface.BOLD);
+        sheetInfo.setTextColor(Color.parseColor("#64748B"));
         sheetInfo.setPadding(dp(12), dp(10), dp(12), dp(10));
-        sheetInfo.setBackground(ContextCompat.getDrawable(this, R.drawable.btn_ghost_bg));
+        GradientDrawable sheetInfoBg = new GradientDrawable();
+        sheetInfoBg.setColor(Color.parseColor("#F8FAFC"));
+        sheetInfoBg.setCornerRadius(dp(10));
+        sheetInfoBg.setStroke(dp(1), Color.parseColor("#E2E8F0"));
+        sheetInfo.setBackground(sheetInfoBg);
         LinearLayout.LayoutParams sheetParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         sheetParams.bottomMargin = dp(16);
         sheetInfo.setLayoutParams(sheetParams);
         root.addView(sheetInfo);
 
-        // Actions
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams actionsParams = new LinearLayout.LayoutParams(
@@ -942,7 +976,6 @@ public class DashboardActivity extends AppCompatActivity {
         actionsParams.topMargin = dp(20);
         actions.setLayoutParams(actionsParams);
 
-        // Cancel
         TextView btnCancel = createDialogButton("Cancel", false);
         actions.addView(btnCancel);
 
@@ -950,7 +983,6 @@ public class DashboardActivity extends AppCompatActivity {
         spacer.setLayoutParams(new LinearLayout.LayoutParams(dp(10), 0));
         actions.addView(spacer);
 
-        // Save
         TextView btnSave = createDialogButton("Save", true);
         actions.addView(btnSave);
 
@@ -965,7 +997,6 @@ public class DashboardActivity extends AppCompatActivity {
                 return;
             }
 
-            // Duplicate check: same activity name within this class (excluding this activity)
             if (selectedClass != null && selectedClass.getActivities() != null) {
                 for (ActivityFolder existing : selectedClass.getActivities()) {
                     if (!existing.getId().equals(act.getId())
@@ -977,11 +1008,8 @@ public class DashboardActivity extends AppCompatActivity {
             }
 
             act.setName(name);
-
             saveData();
             dialog.dismiss();
-
-            // Refresh
             showToast("Activity updated ✓");
             renderClassScreen();
         });
@@ -999,18 +1027,22 @@ public class DashboardActivity extends AppCompatActivity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(24), dp(24), dp(24), dp(24));
-        root.setBackground(ContextCompat.getDrawable(this, R.drawable.dialog_bottom_sheet_bg));
+
+        GradientDrawable sheetBg = new GradientDrawable();
+        sheetBg.setColor(Color.WHITE);
+        sheetBg.setCornerRadii(new float[]{dp(24), dp(24), dp(24), dp(24), 0, 0, 0, 0});
+        root.setBackground(sheetBg);
 
         TextView title = new TextView(this);
         title.setText("Delete Activity?");
         title.setTextSize(18);
         title.setTypeface(null, Typeface.BOLD);
-        title.setTextColor(Color.parseColor("#f85149"));
+        title.setTextColor(Color.parseColor("#CE1126"));
         root.addView(title);
 
         TextView msg = new TextView(this);
         msg.setText("Are you sure you want to delete \"" + act.getName() + "\"?\n\nThis will permanently delete all " + act.getScanCount() + " scan(s) inside this activity.");
-        msg.setTextColor(Color.parseColor("#c9d1d9"));
+        msg.setTextColor(Color.parseColor("#64748B"));
         msg.setTextSize(14);
         msg.setPadding(0, dp(12), 0, dp(24));
         root.addView(msg);
@@ -1026,14 +1058,16 @@ public class DashboardActivity extends AppCompatActivity {
         actions.addView(spacer);
 
         TextView btnDelete = createDialogButton("Delete", true);
-        btnDelete.setBackground(ContextCompat.getDrawable(this, R.drawable.score_badge_low));
+        GradientDrawable deleteBg = new GradientDrawable();
+        deleteBg.setColor(Color.parseColor("#CE1126"));
+        deleteBg.setCornerRadius(dp(12));
+        btnDelete.setBackground(deleteBg);
         btnDelete.setTextColor(Color.WHITE);
         btnDelete.setOnClickListener(v -> {
             if (selectedClass != null && selectedClass.getActivities() != null) {
                 selectedClass.getActivities().remove(act);
                 saveData();
                 renderClassScreen();
-                // Update top bar badge
                 topBarBadge.setText("📁 " + selectedClass.getActivityCount());
                 dialog.dismiss();
                 showToast("Activity deleted");
@@ -1056,7 +1090,6 @@ public class DashboardActivity extends AppCompatActivity {
                 return;
             }
 
-            // Create class folder: Downloads/OMRScanner/Grade-Section/
             String classFolderName = cls.getGrade().replaceAll("\\s+", "") + "-" +
                     cls.getSection().replaceAll("\\s+", "");
             java.io.File downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(
@@ -1071,23 +1104,18 @@ public class DashboardActivity extends AppCompatActivity {
                 List<ScanEntry> scans = act.getScans();
                 if (scans == null || scans.isEmpty()) continue;
 
-                // ── Activity folder ──────────────────────────────
                 String actDirName = act.getName().replaceAll("[^a-zA-Z0-9_\\- ]", "_").trim();
                 java.io.File actDir = new java.io.File(classDir, actDirName);
                 java.io.File imagesDir = new java.io.File(actDir, "images");
                 if (!imagesDir.exists()) imagesDir.mkdirs();
-                
-                // NEW: Results folder for individual CSVs
+
                 java.io.File resultsDir = new java.io.File(actDir, "result");
                 if (!resultsDir.exists()) resultsDir.mkdirs();
 
-                // ── Copy overlay images (or raw fallback) ────────
                 int scanNum = 0;
                 for (ScanEntry scan : scans) {
                     scanNum++;
-                    
-                    // 1. Save Image
-                    // Prefer overlay, fall back to raw
+
                     String srcPath = scan.getOverlayImagePath();
                     if (srcPath == null || !(new java.io.File(srcPath).exists())) {
                         srcPath = scan.getImagePath();
@@ -1105,25 +1133,22 @@ public class DashboardActivity extends AppCompatActivity {
                             totalImages++;
                         }
                     }
-                    
-                    // 2. Save Individual CSV
-                    // Format: [Class]_[Activity]_[LRN].csv
+
                     try {
-                        String lrnOnly = scan.getLrn() != null && !scan.getLrn().isEmpty() 
+                        String lrnOnly = scan.getLrn() != null && !scan.getLrn().isEmpty()
                                 ? scan.getLrn() : "scan_" + scanNum;
-                        String indCsvName = cls.getGrade() + "-" + cls.getSection() + "_" + 
-                                            act.getName().replaceAll("\\s+", "") + "_" + 
-                                            lrnOnly + ".csv";
-                        // Sanitize filename
+                        String indCsvName = cls.getGrade() + "-" + cls.getSection() + "_" +
+                                act.getName().replaceAll("\\s+", "") + "_" +
+                                lrnOnly + ".csv";
                         indCsvName = indCsvName.replaceAll("[^a-zA-Z0-9_\\-\\.]", "_");
-                        
+
                         java.io.File indCsvFile = new java.io.File(resultsDir, indCsvName);
-                        
+
                         StringBuilder sb = new StringBuilder();
                         sb.append("LRN,Score");
                         for (int k = 1; k <= act.getNumItems(); k++) sb.append(",Q").append(k);
                         sb.append("\n");
-                        
+
                         sb.append(scan.getLrn() != null ? scan.getLrn() : "");
                         sb.append(",").append(scan.getScore()).append("/").append(scan.getNumItems());
                         for (int k = 1; k <= act.getNumItems(); k++) {
@@ -1132,18 +1157,17 @@ public class DashboardActivity extends AppCompatActivity {
                             sb.append(ans != null ? ans : "");
                         }
                         sb.append("\n");
-                        
+
                         java.io.FileWriter indWriter = new java.io.FileWriter(indCsvFile);
                         indWriter.write(sb.toString());
                         indWriter.close();
                         scanMediaFile(indCsvFile);
-                        
+
                     } catch (Exception ex) {
                         Log.e(TAG, "Error saving individual CSV", ex);
                     }
                 }
 
-                // ── Write activity CSV ───────────────────────────
                 int numItems = act.getNumItems();
                 StringBuilder actCsv = new StringBuilder();
 
@@ -1181,7 +1205,6 @@ public class DashboardActivity extends AppCompatActivity {
         }
     }
 
-    /** Copy a file from source to destination. */
     private void copyFile(java.io.File src, java.io.File dst) throws java.io.IOException {
         java.io.FileInputStream in = new java.io.FileInputStream(src);
         java.io.FileOutputStream out = new java.io.FileOutputStream(dst);
@@ -1194,17 +1217,11 @@ public class DashboardActivity extends AppCompatActivity {
         out.close();
     }
 
-    /**
-     * Notify MediaScanner so the file shows up in file managers immediately.
-     */
     private void scanMediaFile(java.io.File file) {
         android.media.MediaScannerConnection.scanFile(
                 this, new String[]{file.getAbsolutePath()}, null, null);
     }
 
-    /**
-     * Show a dialog confirming the download and offering to open the folder.
-     */
     private void showDownloadSuccessDialog(ClassFolder cls, java.io.File classDir, int totalImages, int totalCsvs) {
         Dialog dialog = new Dialog(this);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
@@ -1213,21 +1230,14 @@ public class DashboardActivity extends AppCompatActivity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(20), dp(24), dp(20), dp(36));
-        root.setBackground(ContextCompat.getDrawable(this, R.drawable.dialog_bottom_sheet_bg));
 
-        // Drag handle
-        View handle = new View(this);
-        LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(dp(40), dp(4));
-        handleParams.gravity = Gravity.CENTER_HORIZONTAL;
-        handleParams.bottomMargin = dp(20);
-        handle.setLayoutParams(handleParams);
-        GradientDrawable handleBg = new GradientDrawable();
-        handleBg.setColor(Color.parseColor("#30363d"));
-        handleBg.setCornerRadius(dp(2));
-        handle.setBackground(handleBg);
-        root.addView(handle);
+        GradientDrawable sheetBg = new GradientDrawable();
+        sheetBg.setColor(Color.WHITE);
+        sheetBg.setCornerRadii(new float[]{dp(24), dp(24), dp(24), dp(24), 0, 0, 0, 0});
+        root.setBackground(sheetBg);
 
-        // Success icon
+        root.addView(createDialogHandle());
+
         TextView iconView = new TextView(this);
         iconView.setText("✅");
         iconView.setTextSize(40);
@@ -1238,12 +1248,11 @@ public class DashboardActivity extends AppCompatActivity {
         iconView.setLayoutParams(iconParams);
         root.addView(iconView);
 
-        // Title
         TextView title = new TextView(this);
         title.setText("Download Complete!");
         title.setTextSize(17);
         title.setTypeface(null, Typeface.BOLD);
-        title.setTextColor(Color.parseColor("#3fb950"));
+        title.setTextColor(Color.parseColor("#16A34A"));
         title.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -1251,13 +1260,12 @@ public class DashboardActivity extends AppCompatActivity {
         title.setLayoutParams(titleParams);
         root.addView(title);
 
-        // Info
         TextView info = new TextView(this);
         info.setText("📁 " + cls.getDisplayName() + "\n" +
-                     "🖼️ " + totalImages + " image" + (totalImages != 1 ? "s" : "") +
-                     "  •  📄 " + totalCsvs + " CSV" + (totalCsvs != 1 ? "s" : ""));
+                "🖼️ " + totalImages + " image" + (totalImages != 1 ? "s" : "") +
+                "  •  📄 " + totalCsvs + " CSV" + (totalCsvs != 1 ? "s" : ""));
         info.setTextSize(13);
-        info.setTextColor(Color.parseColor("#c9d1d9"));
+        info.setTextColor(Color.parseColor("#64748B"));
         info.setGravity(Gravity.CENTER);
         info.setLineSpacing(dp(4), 1f);
         LinearLayout.LayoutParams infoParams = new LinearLayout.LayoutParams(
@@ -1266,27 +1274,27 @@ public class DashboardActivity extends AppCompatActivity {
         info.setLayoutParams(infoParams);
         root.addView(info);
 
-        // Path label
         TextView pathLabel = new TextView(this);
         String relativePath = "Downloads/OMRScanner/" + classDir.getName() + "/";
         pathLabel.setText("📂 " + relativePath);
         pathLabel.setTextSize(11);
-        pathLabel.setTypeface(Typeface.MONOSPACE);
-        pathLabel.setTextColor(Color.parseColor("#f0a500"));
+        pathLabel.setTextColor(Color.parseColor("#0038A8"));
         pathLabel.setGravity(Gravity.CENTER);
         pathLabel.setPadding(dp(10), dp(8), dp(10), dp(8));
-        pathLabel.setBackground(ContextCompat.getDrawable(this, R.drawable.card_dark_bg));
+        GradientDrawable pathBg = new GradientDrawable();
+        pathBg.setColor(Color.parseColor("#F0F7FF"));
+        pathBg.setCornerRadius(dp(8));
+        pathBg.setStroke(dp(1), Color.parseColor("#BFDBFE"));
+        pathLabel.setBackground(pathBg);
         LinearLayout.LayoutParams pathParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         pathParams.bottomMargin = dp(20);
         pathLabel.setLayoutParams(pathParams);
         root.addView(pathLabel);
 
-        // Buttons
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
 
-        // Open Folder button
         TextView btnOpen = createDialogButton("Open Folder", true);
         actions.addView(btnOpen);
 
@@ -1294,7 +1302,6 @@ public class DashboardActivity extends AppCompatActivity {
         spacer.setLayoutParams(new LinearLayout.LayoutParams(dp(10), 0));
         actions.addView(spacer);
 
-        // Done button
         TextView btnDone = createDialogButton("Done", false);
         actions.addView(btnDone);
 
@@ -1312,12 +1319,8 @@ public class DashboardActivity extends AppCompatActivity {
         dialog.show();
     }
 
-    /**
-     * Try to open the folder in a file manager app.
-     */
     private void openFolderInFileManager(java.io.File folder) {
         try {
-            // Try to open with content URI
             android.net.Uri folderUri = android.net.Uri.parse(folder.getAbsolutePath());
             Intent intent = new Intent(Intent.ACTION_VIEW);
             intent.setDataAndType(folderUri, "resource/folder");
@@ -1325,7 +1328,6 @@ public class DashboardActivity extends AppCompatActivity {
             if (intent.resolveActivity(getPackageManager()) != null) {
                 startActivity(intent);
             } else {
-                // Fallback: open Downloads folder
                 Intent fallback = new Intent(android.content.Intent.ACTION_VIEW);
                 fallback.setDataAndType(
                         android.net.Uri.parse(android.os.Environment
@@ -1338,7 +1340,6 @@ public class DashboardActivity extends AppCompatActivity {
                 if (fallback.resolveActivity(getPackageManager()) != null) {
                     startActivity(fallback);
                 } else {
-                    // If nothing can open folders, share one of the files
                     showToast("Files saved to: Downloads/OMRScanner/" + folder.getName());
                 }
             }
@@ -1355,48 +1356,37 @@ public class DashboardActivity extends AppCompatActivity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(20), dp(24), dp(20), dp(36));
-        root.setBackground(ContextCompat.getDrawable(this, R.drawable.dialog_bottom_sheet_bg));
 
-        // Drag handle
-        View handle = new View(this);
-        LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(dp(40), dp(4));
-        handleParams.gravity = Gravity.CENTER_HORIZONTAL;
-        handleParams.bottomMargin = dp(20);
-        handle.setLayoutParams(handleParams);
-        GradientDrawable handleBg = new GradientDrawable();
-        handleBg.setColor(Color.parseColor("#30363d"));
-        handleBg.setCornerRadius(dp(2));
-        handle.setBackground(handleBg);
-        root.addView(handle);
+        GradientDrawable sheetBg = new GradientDrawable();
+        sheetBg.setColor(Color.WHITE);
+        sheetBg.setCornerRadii(new float[]{dp(24), dp(24), dp(24), dp(24), 0, 0, 0, 0});
+        root.setBackground(sheetBg);
 
-        // Title
+        root.addView(createDialogHandle());
+
         TextView title = new TextView(this);
         title.setText("⊕ New Class Folder");
-        title.setTextSize(15);
-        title.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
-        title.setTextColor(Color.parseColor("#f0a500"));
+        title.setTextSize(16);
+        title.setTypeface(null, Typeface.BOLD);
+        title.setTextColor(Color.parseColor("#0038A8"));
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         titleParams.bottomMargin = dp(20);
         title.setLayoutParams(titleParams);
         root.addView(title);
 
-        // Teacher Name field
         root.addView(createFieldLabel("TEACHER NAME"));
-        EditText teacherInput = createDarkInput("e.g. Mr. Cruz");
+        EditText teacherInput = createLightInput("e.g. Mr. Cruz");
         root.addView(teacherInput);
 
-        // Grade field
         root.addView(createFieldLabel("GRADE *"));
-        EditText gradeInput = createDarkInput("e.g. Grade 10");
+        EditText gradeInput = createLightInput("e.g. Grade 10");
         root.addView(gradeInput);
 
-        // Section field
         root.addView(createFieldLabel("SECTION *"));
-        EditText sectionInput = createDarkInput("e.g. Section A");
+        EditText sectionInput = createLightInput("e.g. Section A");
         root.addView(sectionInput);
 
-        // Actions
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams actionsParams = new LinearLayout.LayoutParams(
@@ -1404,7 +1394,6 @@ public class DashboardActivity extends AppCompatActivity {
         actionsParams.topMargin = dp(20);
         actions.setLayoutParams(actionsParams);
 
-        // Cancel
         TextView btnCancel = createDialogButton("Cancel", false);
         actions.addView(btnCancel);
 
@@ -1412,7 +1401,6 @@ public class DashboardActivity extends AppCompatActivity {
         spacer.setLayoutParams(new LinearLayout.LayoutParams(dp(10), 0));
         actions.addView(spacer);
 
-        // Done
         TextView btnDone = createDialogButton("Done", true);
         actions.addView(btnDone);
 
@@ -1429,7 +1417,6 @@ public class DashboardActivity extends AppCompatActivity {
                 return;
             }
 
-            // Duplicate check: same Grade + Section
             for (ClassFolder existing : classFolders) {
                 if (existing.getGrade().equalsIgnoreCase(grade)
                         && existing.getSection().equalsIgnoreCase(section)) {
@@ -1462,41 +1449,31 @@ public class DashboardActivity extends AppCompatActivity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(20), dp(24), dp(20), dp(36));
-        root.setBackground(ContextCompat.getDrawable(this, R.drawable.dialog_bottom_sheet_bg));
 
-        // Drag handle
-        View handle = new View(this);
-        LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(dp(40), dp(4));
-        handleParams.gravity = Gravity.CENTER_HORIZONTAL;
-        handleParams.bottomMargin = dp(20);
-        handle.setLayoutParams(handleParams);
-        GradientDrawable handleBg = new GradientDrawable();
-        handleBg.setColor(Color.parseColor("#30363d"));
-        handleBg.setCornerRadius(dp(2));
-        handle.setBackground(handleBg);
-        root.addView(handle);
+        GradientDrawable sheetBg = new GradientDrawable();
+        sheetBg.setColor(Color.WHITE);
+        sheetBg.setCornerRadii(new float[]{dp(24), dp(24), dp(24), dp(24), 0, 0, 0, 0});
+        root.setBackground(sheetBg);
 
-        // Title
+        root.addView(createDialogHandle());
+
         TextView title = new TextView(this);
         title.setText("⊕ New Activity");
-        title.setTextSize(15);
-        title.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
-        title.setTextColor(Color.parseColor("#f0a500"));
+        title.setTextSize(16);
+        title.setTypeface(null, Typeface.BOLD);
+        title.setTextColor(Color.parseColor("#0038A8"));
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         titleParams.bottomMargin = dp(20);
         title.setLayoutParams(titleParams);
         root.addView(title);
 
-        // Activity Name field
         root.addView(createFieldLabel("ACTIVITY NAME *"));
-        EditText nameInput = createDarkInput("e.g. Math Pop Quiz 1");
+        EditText nameInput = createLightInput("e.g. Math Pop Quiz 1");
         root.addView(nameInput);
 
-        // Sheet type selector
         root.addView(createFieldLabel("OMR SHEET TYPE"));
 
-        // Sheet type options as buttons
         String[][] sheetTypes = {
                 {"ZPH30", "30 Items"},
                 {"ZPH50", "50 Items"},
@@ -1516,9 +1493,9 @@ public class DashboardActivity extends AppCompatActivity {
         for (int i = 0; i < sheetTypes.length; i++) {
             final int idx = i;
             TextView typeBtn = new TextView(this);
-            typeBtn.setText(sheetTypes[i][0] + " — " + sheetTypes[i][1]);
-            typeBtn.setTextSize(13);
-            typeBtn.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+            typeBtn.setText(sheetTypes[i][0] + "\n" + sheetTypes[i][1]);
+            typeBtn.setTextSize(12);
+            typeBtn.setTypeface(null, Typeface.BOLD);
             typeBtn.setGravity(Gravity.CENTER);
             typeBtn.setPadding(dp(10), dp(10), dp(10), dp(10));
 
@@ -1542,7 +1519,6 @@ public class DashboardActivity extends AppCompatActivity {
         root.addView(typeRow);
         updateSheetTypeSelection(typeButtons, 0);
 
-        // Actions
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams actionsParams = new LinearLayout.LayoutParams(
@@ -1570,7 +1546,6 @@ public class DashboardActivity extends AppCompatActivity {
                 return;
             }
 
-            // Duplicate check: same activity name within this class
             if (selectedClass.getActivities() != null) {
                 for (ActivityFolder existing : selectedClass.getActivities()) {
                     if (existing.getName().equalsIgnoreCase(name)) {
@@ -1595,18 +1570,24 @@ public class DashboardActivity extends AppCompatActivity {
 
     private void updateSheetTypeSelection(TextView[] buttons, int selectedIdx) {
         for (int i = 0; i < buttons.length; i++) {
+            GradientDrawable bg = new GradientDrawable();
+            bg.setCornerRadius(dp(10));
             if (i == selectedIdx) {
-                buttons[i].setBackground(ContextCompat.getDrawable(this, R.drawable.btn_primary_amber));
-                buttons[i].setTextColor(Color.parseColor("#000000"));
+                bg.setColor(Color.parseColor("#0038A8"));
+                bg.setStroke(dp(1), Color.parseColor("#0038A8"));
+                buttons[i].setBackground(bg);
+                buttons[i].setTextColor(Color.WHITE);
             } else {
-                buttons[i].setBackground(ContextCompat.getDrawable(this, R.drawable.btn_ghost_bg));
-                buttons[i].setTextColor(Color.parseColor("#8b949e"));
+                bg.setColor(Color.parseColor("#F8FAFC"));
+                bg.setStroke(dp(1), Color.parseColor("#E2E8F0"));
+                buttons[i].setBackground(bg);
+                buttons[i].setTextColor(Color.parseColor("#64748B"));
             }
         }
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // SCAN METHOD DIALOG (Camera or Gallery)
+    // SCAN METHOD DIALOG
     // ═══════════════════════════════════════════════════════════════
 
     private void showScanMethodDialog() {
@@ -1617,57 +1598,45 @@ public class DashboardActivity extends AppCompatActivity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(20), dp(24), dp(20), dp(36));
-        root.setBackground(ContextCompat.getDrawable(this, R.drawable.dialog_bottom_sheet_bg));
 
-        // Drag handle
-        View handle = new View(this);
-        LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(dp(40), dp(4));
-        handleParams.gravity = Gravity.CENTER_HORIZONTAL;
-        handleParams.bottomMargin = dp(20);
-        handle.setLayoutParams(handleParams);
-        GradientDrawable handleBg = new GradientDrawable();
-        handleBg.setColor(Color.parseColor("#30363d"));
-        handleBg.setCornerRadius(dp(2));
-        handle.setBackground(handleBg);
-        root.addView(handle);
+        GradientDrawable sheetBg = new GradientDrawable();
+        sheetBg.setColor(Color.WHITE);
+        sheetBg.setCornerRadii(new float[]{dp(24), dp(24), dp(24), dp(24), 0, 0, 0, 0});
+        root.setBackground(sheetBg);
 
-        // Title
+        root.addView(createDialogHandle());
+
         TextView title = new TextView(this);
         title.setText("📷 Start Scanning");
-        title.setTextSize(15);
-        title.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
-        title.setTextColor(Color.parseColor("#f0a500"));
+        title.setTextSize(16);
+        title.setTypeface(null, Typeface.BOLD);
+        title.setTextColor(Color.parseColor("#0038A8"));
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        titleParams.bottomMargin = dp(8);
+        titleParams.bottomMargin = dp(4);
         title.setLayoutParams(titleParams);
         root.addView(title);
 
-        // Subtitle
         TextView subtitle = new TextView(this);
         subtitle.setText(selectedActivity.getSheetType() + " · " + selectedActivity.getNumItems() + " items");
         subtitle.setTextSize(12);
-        subtitle.setTextColor(Color.parseColor("#8b949e"));
-        subtitle.setTypeface(Typeface.MONOSPACE);
+        subtitle.setTextColor(Color.parseColor("#64748B"));
         LinearLayout.LayoutParams subParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         subParams.bottomMargin = dp(20);
         subtitle.setLayoutParams(subParams);
         root.addView(subtitle);
 
-        // Camera option
         root.addView(createScanOptionCard(dialog, "📸", "Open Camera",
                 "Take a photo of the answer sheet", "camera"));
 
-        // Gallery option
         root.addView(createScanOptionCard(dialog, "🖼", "Upload Image",
                 "Choose from gallery", "gallery"));
 
-        // Cancel
         TextView cancel = new TextView(this);
         cancel.setText("Cancel");
         cancel.setTextSize(14);
-        cancel.setTextColor(Color.parseColor("#8b949e"));
+        cancel.setTextColor(Color.parseColor("#94A3B8"));
         cancel.setGravity(Gravity.CENTER);
         cancel.setPadding(0, dp(16), 0, dp(8));
         cancel.setOnClickListener(v -> dialog.dismiss());
@@ -1682,8 +1651,13 @@ public class DashboardActivity extends AppCompatActivity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.HORIZONTAL);
         card.setGravity(Gravity.CENTER_VERTICAL);
-        card.setBackground(ContextCompat.getDrawable(this, R.drawable.card_dark_bg));
         card.setPadding(dp(16), dp(16), dp(16), dp(16));
+
+        GradientDrawable cardBg = new GradientDrawable();
+        cardBg.setColor(Color.parseColor("#F8FAFC"));
+        cardBg.setCornerRadius(dp(14));
+        cardBg.setStroke(dp(1), Color.parseColor("#E2E8F0"));
+        card.setBackground(cardBg);
 
         LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -1692,7 +1666,6 @@ public class DashboardActivity extends AppCompatActivity {
         card.setClickable(true);
         card.setFocusable(true);
 
-        // Emoji icon
         TextView icon = new TextView(this);
         icon.setText(emoji);
         icon.setTextSize(28);
@@ -1702,7 +1675,6 @@ public class DashboardActivity extends AppCompatActivity {
         icon.setLayoutParams(iconParams);
         card.addView(icon);
 
-        // Text column
         LinearLayout textCol = new LinearLayout(this);
         textCol.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams textColParams = new LinearLayout.LayoutParams(
@@ -1712,14 +1684,14 @@ public class DashboardActivity extends AppCompatActivity {
         TextView nameView = new TextView(this);
         nameView.setText(label);
         nameView.setTextSize(15);
-        nameView.setTextColor(Color.parseColor("#e6edf3"));
+        nameView.setTextColor(Color.parseColor("#1E293B"));
         nameView.setTypeface(null, Typeface.BOLD);
         textCol.addView(nameView);
 
         TextView descView = new TextView(this);
         descView.setText(desc);
         descView.setTextSize(12);
-        descView.setTextColor(Color.parseColor("#8b949e"));
+        descView.setTextColor(Color.parseColor("#64748B"));
         LinearLayout.LayoutParams descParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         descParams.topMargin = dp(2);
@@ -1728,11 +1700,10 @@ public class DashboardActivity extends AppCompatActivity {
 
         card.addView(textCol);
 
-        // Arrow
         TextView arrow = new TextView(this);
         arrow.setText("›");
         arrow.setTextSize(18);
-        arrow.setTextColor(Color.parseColor("#8b949e"));
+        arrow.setTextColor(Color.parseColor("#94A3B8"));
         card.addView(arrow);
 
         card.setOnClickListener(v -> {
@@ -1753,12 +1724,25 @@ public class DashboardActivity extends AppCompatActivity {
     // DIALOG HELPERS
     // ═══════════════════════════════════════════════════════════════
 
+    private View createDialogHandle() {
+        View handle = new View(this);
+        LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(dp(40), dp(4));
+        handleParams.gravity = Gravity.CENTER_HORIZONTAL;
+        handleParams.bottomMargin = dp(20);
+        handle.setLayoutParams(handleParams);
+        GradientDrawable handleBg = new GradientDrawable();
+        handleBg.setColor(Color.parseColor("#E2E8F0"));
+        handleBg.setCornerRadius(dp(2));
+        handle.setBackground(handleBg);
+        return handle;
+    }
+
     private TextView createFieldLabel(String text) {
         TextView label = new TextView(this);
         label.setText(text);
         label.setTextSize(11);
-        label.setTextColor(Color.parseColor("#8b949e"));
-        label.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        label.setTextColor(Color.parseColor("#64748B"));
+        label.setTypeface(null, Typeface.BOLD);
         label.setAllCaps(true);
         label.setLetterSpacing(0.08f);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
@@ -1768,13 +1752,18 @@ public class DashboardActivity extends AppCompatActivity {
         return label;
     }
 
-    private EditText createDarkInput(String hint) {
+    private EditText createLightInput(String hint) {
         EditText input = new EditText(this);
         input.setHint(hint);
-        input.setHintTextColor(Color.parseColor("#484f58"));
-        input.setTextColor(Color.parseColor("#e6edf3"));
+        input.setHintTextColor(Color.parseColor("#CBD5E1"));
+        input.setTextColor(Color.parseColor("#1E293B"));
         input.setTextSize(14);
-        input.setBackground(ContextCompat.getDrawable(this, R.drawable.input_field_dark_bg));
+
+        GradientDrawable inputBg = new GradientDrawable();
+        inputBg.setColor(Color.parseColor("#F8FAFC"));
+        inputBg.setCornerRadius(dp(10));
+        inputBg.setStroke(dp(1), Color.parseColor("#E2E8F0"));
+        input.setBackground(inputBg);
         input.setPadding(dp(12), dp(10), dp(12), dp(10));
         input.setSingleLine(true);
 
@@ -1783,6 +1772,11 @@ public class DashboardActivity extends AppCompatActivity {
         params.bottomMargin = dp(16);
         input.setLayoutParams(params);
         return input;
+    }
+
+    // Keep old name as alias so nothing breaks
+    private EditText createDarkInput(String hint) {
+        return createLightInput(hint);
     }
 
     private TextView createDialogButton(String text, boolean isPrimary) {
@@ -1799,14 +1793,19 @@ public class DashboardActivity extends AppCompatActivity {
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         btn.setLayoutParams(params);
 
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(dp(12));
+
         if (isPrimary) {
-            btn.setBackground(ContextCompat.getDrawable(this, R.drawable.btn_primary_amber));
-            btn.setTextColor(Color.parseColor("#000000"));
+            bg.setColor(Color.parseColor("#0038A8"));
+            btn.setTextColor(Color.WHITE);
         } else {
-            btn.setBackground(ContextCompat.getDrawable(this, R.drawable.btn_ghost_bg));
-            btn.setTextColor(Color.parseColor("#8b949e"));
+            bg.setColor(Color.parseColor("#F8FAFC"));
+            bg.setStroke(dp(1), Color.parseColor("#E2E8F0"));
+            btn.setTextColor(Color.parseColor("#64748B"));
         }
 
+        btn.setBackground(bg);
         return btn;
     }
 
@@ -1830,15 +1829,9 @@ public class DashboardActivity extends AppCompatActivity {
         Log.d(TAG, "Opening camera...");
         try {
             Intent intent = new Intent(this, CameraActivity.class);
-            if (selectedSheetType != null) {
-                intent.putExtra(EXTRA_SHEET_TYPE, selectedSheetType);
-            }
-            if (selectedClass != null) {
-                intent.putExtra(EXTRA_CLASS_ID, selectedClass.getId());
-            }
-            if (selectedActivity != null) {
-                intent.putExtra(EXTRA_ACTIVITY_ID, selectedActivity.getId());
-            }
+            if (selectedSheetType != null) intent.putExtra(EXTRA_SHEET_TYPE, selectedSheetType);
+            if (selectedClass != null) intent.putExtra(EXTRA_CLASS_ID, selectedClass.getId());
+            if (selectedActivity != null) intent.putExtra(EXTRA_ACTIVITY_ID, selectedActivity.getId());
             startActivity(intent);
         } catch (Exception e) {
             Log.e(TAG, "Error opening camera", e);
@@ -1870,15 +1863,9 @@ public class DashboardActivity extends AppCompatActivity {
                         intent.putExtra(com.example.omrscanner.ui.PreviewActivity.IMAGE_PATH, savedPath);
                         intent.putExtra(com.example.omrscanner.ui.PreviewActivity.IMAGE_SOURCE,
                                 com.example.omrscanner.ui.PreviewActivity.SOURCE_GALLERY);
-                        if (selectedSheetType != null) {
-                            intent.putExtra(EXTRA_SHEET_TYPE, selectedSheetType);
-                        }
-                        if (selectedClass != null) {
-                            intent.putExtra(EXTRA_CLASS_ID, selectedClass.getId());
-                        }
-                        if (selectedActivity != null) {
-                            intent.putExtra(EXTRA_ACTIVITY_ID, selectedActivity.getId());
-                        }
+                        if (selectedSheetType != null) intent.putExtra(EXTRA_SHEET_TYPE, selectedSheetType);
+                        if (selectedClass != null) intent.putExtra(EXTRA_CLASS_ID, selectedClass.getId());
+                        if (selectedActivity != null) intent.putExtra(EXTRA_ACTIVITY_ID, selectedActivity.getId());
                         startActivity(intent);
                     });
                 } else {
@@ -1929,15 +1916,10 @@ public class DashboardActivity extends AppCompatActivity {
             int numItems = selectedActivity.getNumItems();
 
             StringBuilder csv = new StringBuilder();
-
-            // Header
             csv.append("LRN,Score");
-            for (int i = 1; i <= numItems; i++) {
-                csv.append(",Q").append(i);
-            }
+            for (int i = 1; i <= numItems; i++) csv.append(",Q").append(i);
             csv.append("\n");
 
-            // Rows
             for (ScanEntry scan : scans) {
                 csv.append(scan.getLrn() != null ? scan.getLrn() : "");
                 csv.append(",").append(scan.getScore()).append("/").append(scan.getNumItems());
@@ -1949,7 +1931,6 @@ public class DashboardActivity extends AppCompatActivity {
                 csv.append("\n");
             }
 
-            // Save to cache
             String filename = selectedClass.getGrade() + "-" + selectedClass.getSection() + "_" +
                     selectedActivity.getName().replaceAll("\\s+", "") + "_Master.csv";
             java.io.File csvFile = new java.io.File(getCacheDir(), filename);
@@ -1957,7 +1938,6 @@ public class DashboardActivity extends AppCompatActivity {
             writer.write(csv.toString());
             writer.close();
 
-            // Navigate to CSV file activity for sharing/saving
             Intent intent = new Intent(this, com.example.omrscanner.ui.CSVFileActivity.class);
             intent.putExtra(com.example.omrscanner.ui.CSVFileActivity.EXTRA_CSV_FILEPATH,
                     csvFile.getAbsolutePath());
@@ -1993,13 +1973,9 @@ public class DashboardActivity extends AppCompatActivity {
         Log.d(TAG, "Data loaded: " + classFolders.size() + " classes");
     }
 
-    /**
-     * Public method to save a scan result into a specific class/activity.
-     * Called from ResultActivity after scanning is done.
-     */
     public static void saveScanResult(android.content.Context context,
-                                       String classId, String activityId,
-                                       ScanEntry scanEntry) {
+                                      String classId, String activityId,
+                                      ScanEntry scanEntry) {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         Gson gson = new Gson();
         String json = prefs.getString(KEY_CLASSES, "[]");
@@ -2018,8 +1994,6 @@ public class DashboardActivity extends AppCompatActivity {
                     break;
                 }
             }
-
-            // Save back
             String updatedJson = gson.toJson(classes);
             prefs.edit().putString(KEY_CLASSES, updatedJson).apply();
         }
@@ -2034,17 +2008,12 @@ public class DashboardActivity extends AppCompatActivity {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // TOAST & UTILS
+    // ERROR DIALOG
     // ═══════════════════════════════════════════════════════════════
-
-    private void showToast(String msg) {
-        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
-    }
 
     private Dialog activeErrorDialog = null;
 
     private void showErrorDialog(String title, String message) {
-        // Dismiss any existing error dialog to prevent stacking
         if (activeErrorDialog != null && activeErrorDialog.isShowing()) {
             activeErrorDialog.dismiss();
         }
@@ -2057,26 +2026,27 @@ public class DashboardActivity extends AppCompatActivity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER_HORIZONTAL);
         root.setPadding(dp(28), dp(28), dp(28), dp(28));
-        root.setBackground(ContextCompat.getDrawable(this, R.drawable.error_dialog_bg));
 
-        // ── Error icon circle ──
+        GradientDrawable dialogBg = new GradientDrawable();
+        dialogBg.setColor(Color.WHITE);
+        dialogBg.setCornerRadius(dp(24));
+        root.setBackground(dialogBg);
+
         TextView iconView = new TextView(this);
-        iconView.setText("⚠");
-        iconView.setTextSize(28);
+        iconView.setText("⚠️");
+        iconView.setTextSize(32);
         iconView.setGravity(Gravity.CENTER);
-        iconView.setBackground(ContextCompat.getDrawable(this, R.drawable.error_icon_bg));
-        LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(dp(56), dp(56));
+        LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(dp(60), dp(60));
         iconParams.gravity = Gravity.CENTER_HORIZONTAL;
         iconParams.bottomMargin = dp(16);
         iconView.setLayoutParams(iconParams);
         root.addView(iconView);
 
-        // ── Title ──
         TextView titleView = new TextView(this);
         titleView.setText(title);
         titleView.setTextSize(17);
-        titleView.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
-        titleView.setTextColor(Color.parseColor("#f85149"));
+        titleView.setTypeface(null, Typeface.BOLD);
+        titleView.setTextColor(Color.parseColor("#CE1126"));
         titleView.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -2084,11 +2054,10 @@ public class DashboardActivity extends AppCompatActivity {
         titleView.setLayoutParams(titleParams);
         root.addView(titleView);
 
-        // ── Message ──
         TextView msgView = new TextView(this);
         msgView.setText(message);
         msgView.setTextSize(13);
-        msgView.setTextColor(Color.parseColor("#b1bac4"));
+        msgView.setTextColor(Color.parseColor("#64748B"));
         msgView.setGravity(Gravity.CENTER);
         msgView.setLineSpacing(dp(3), 1f);
         LinearLayout.LayoutParams msgParams = new LinearLayout.LayoutParams(
@@ -2097,14 +2066,16 @@ public class DashboardActivity extends AppCompatActivity {
         msgView.setLayoutParams(msgParams);
         root.addView(msgView);
 
-        // ── Dismiss button ──
         TextView btnDismiss = new TextView(this);
         btnDismiss.setText("Got it");
         btnDismiss.setTextSize(14);
         btnDismiss.setTypeface(null, Typeface.BOLD);
         btnDismiss.setGravity(Gravity.CENTER);
-        btnDismiss.setTextColor(Color.parseColor("#f85149"));
-        btnDismiss.setBackground(ContextCompat.getDrawable(this, R.drawable.btn_error_dismiss_bg));
+        btnDismiss.setTextColor(Color.WHITE);
+        GradientDrawable dismissBg = new GradientDrawable();
+        dismissBg.setColor(Color.parseColor("#CE1126"));
+        dismissBg.setCornerRadius(dp(12));
+        btnDismiss.setBackground(dismissBg);
         btnDismiss.setPadding(dp(20), dp(12), dp(20), dp(12));
         btnDismiss.setClickable(true);
         btnDismiss.setFocusable(true);
@@ -2132,6 +2103,14 @@ public class DashboardActivity extends AppCompatActivity {
         errorDialog.show();
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // UTILS
+    // ═══════════════════════════════════════════════════════════════
+
+    private void showToast(String msg) {
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+    }
+
     private int dp(int dp) {
         return (int) (dp * getResources().getDisplayMetrics().density);
     }
@@ -2139,14 +2118,11 @@ public class DashboardActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        // Reload data in case ResultActivity saved new scans
         loadData();
 
-        // Restore navigation state
         if (selectedClass != null) {
             selectedClass = findClassById(selectedClass.getId());
             if (selectedClass != null && selectedActivity != null) {
-                // Find the updated activity
                 for (ActivityFolder act : selectedClass.getActivities()) {
                     if (act.getId().equals(selectedActivity.getId())) {
                         selectedActivity = act;

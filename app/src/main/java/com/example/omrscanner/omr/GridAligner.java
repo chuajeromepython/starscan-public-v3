@@ -193,13 +193,13 @@ public class GridAligner {
             Log.w(TAG, "No blocks found in template " + template.templateId);
             return 0.0;
         }
-        
+
         double totalScore = 0.0;
         for (OmrBlock block : template.blocks) {
             AlignmentResult ar = getBlockAlignment(graySource, block, scaleX, scaleY);
             totalScore += ar.score;
         }
-        
+
         return totalScore / template.blocks.size();
     }
 
