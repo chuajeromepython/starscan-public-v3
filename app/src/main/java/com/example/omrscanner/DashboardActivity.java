@@ -740,8 +740,18 @@ public class DashboardActivity extends AppCompatActivity {
             String teacher = teacherInput.getText().toString().trim();
 
             if (grade.isEmpty() || section.isEmpty()) {
-                Toast.makeText(this, "Grade and Section are required", Toast.LENGTH_SHORT).show();
+                showErrorDialog("Missing Fields", "Grade and Section are required to save this class.");
                 return;
+            }
+
+            // Duplicate check: same Grade + Section (excluding this class)
+            for (ClassFolder existing : classFolders) {
+                if (!existing.getId().equals(cls.getId())
+                        && existing.getGrade().equalsIgnoreCase(grade)
+                        && existing.getSection().equalsIgnoreCase(section)) {
+                    showErrorDialog("Duplicate Class", "A class with \"" + grade + " — " + section + "\" already exists.\nPlease use a different Grade or Section.");
+                    return;
+                }
             }
 
             cls.setTeacher(teacher.isEmpty() ? "Unknown Teacher" : teacher);
@@ -951,8 +961,19 @@ public class DashboardActivity extends AppCompatActivity {
             String name = nameInput.getText().toString().trim();
 
             if (name.isEmpty()) {
-                Toast.makeText(this, "Activity name is required", Toast.LENGTH_SHORT).show();
+                showErrorDialog("Missing Name", "Activity name is required to save.");
                 return;
+            }
+
+            // Duplicate check: same activity name within this class (excluding this activity)
+            if (selectedClass != null && selectedClass.getActivities() != null) {
+                for (ActivityFolder existing : selectedClass.getActivities()) {
+                    if (!existing.getId().equals(act.getId())
+                            && existing.getName().equalsIgnoreCase(name)) {
+                        showErrorDialog("Duplicate Activity", "An activity named \"" + name + "\" already exists in this class.\nPlease use a different name.");
+                        return;
+                    }
+                }
             }
 
             act.setName(name);
@@ -1404,8 +1425,17 @@ public class DashboardActivity extends AppCompatActivity {
             String teacher = teacherInput.getText().toString().trim();
 
             if (grade.isEmpty() || section.isEmpty()) {
-                Toast.makeText(this, "Grade and Section are required", Toast.LENGTH_SHORT).show();
+                showErrorDialog("Missing Fields", "Grade and Section are required to create a class.");
                 return;
+            }
+
+            // Duplicate check: same Grade + Section
+            for (ClassFolder existing : classFolders) {
+                if (existing.getGrade().equalsIgnoreCase(grade)
+                        && existing.getSection().equalsIgnoreCase(section)) {
+                    showErrorDialog("Duplicate Class", "A class with \"" + grade + " — " + section + "\" already exists.\nPlease use a different Grade or Section.");
+                    return;
+                }
             }
 
             ClassFolder cls = new ClassFolder(
@@ -1536,8 +1566,18 @@ public class DashboardActivity extends AppCompatActivity {
         btnDone.setOnClickListener(v -> {
             String name = nameInput.getText().toString().trim();
             if (name.isEmpty()) {
-                Toast.makeText(this, "Activity name is required", Toast.LENGTH_SHORT).show();
+                showErrorDialog("Missing Name", "Activity name is required to create an activity.");
                 return;
+            }
+
+            // Duplicate check: same activity name within this class
+            if (selectedClass.getActivities() != null) {
+                for (ActivityFolder existing : selectedClass.getActivities()) {
+                    if (existing.getName().equalsIgnoreCase(name)) {
+                        showErrorDialog("Duplicate Activity", "An activity named \"" + name + "\" already exists in this class.\nPlease use a different name.");
+                        return;
+                    }
+                }
             }
 
             ActivityFolder act = new ActivityFolder(name, selectedType[0]);
@@ -1999,6 +2039,97 @@ public class DashboardActivity extends AppCompatActivity {
 
     private void showToast(String msg) {
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+    }
+
+    private Dialog activeErrorDialog = null;
+
+    private void showErrorDialog(String title, String message) {
+        // Dismiss any existing error dialog to prevent stacking
+        if (activeErrorDialog != null && activeErrorDialog.isShowing()) {
+            activeErrorDialog.dismiss();
+        }
+
+        Dialog errorDialog = new Dialog(this);
+        errorDialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        errorDialog.setCancelable(true);
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setGravity(Gravity.CENTER_HORIZONTAL);
+        root.setPadding(dp(28), dp(28), dp(28), dp(28));
+        root.setBackground(ContextCompat.getDrawable(this, R.drawable.error_dialog_bg));
+
+        // ── Error icon circle ──
+        TextView iconView = new TextView(this);
+        iconView.setText("⚠");
+        iconView.setTextSize(28);
+        iconView.setGravity(Gravity.CENTER);
+        iconView.setBackground(ContextCompat.getDrawable(this, R.drawable.error_icon_bg));
+        LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(dp(56), dp(56));
+        iconParams.gravity = Gravity.CENTER_HORIZONTAL;
+        iconParams.bottomMargin = dp(16);
+        iconView.setLayoutParams(iconParams);
+        root.addView(iconView);
+
+        // ── Title ──
+        TextView titleView = new TextView(this);
+        titleView.setText(title);
+        titleView.setTextSize(17);
+        titleView.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        titleView.setTextColor(Color.parseColor("#f85149"));
+        titleView.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        titleParams.bottomMargin = dp(8);
+        titleView.setLayoutParams(titleParams);
+        root.addView(titleView);
+
+        // ── Message ──
+        TextView msgView = new TextView(this);
+        msgView.setText(message);
+        msgView.setTextSize(13);
+        msgView.setTextColor(Color.parseColor("#b1bac4"));
+        msgView.setGravity(Gravity.CENTER);
+        msgView.setLineSpacing(dp(3), 1f);
+        LinearLayout.LayoutParams msgParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        msgParams.bottomMargin = dp(24);
+        msgView.setLayoutParams(msgParams);
+        root.addView(msgView);
+
+        // ── Dismiss button ──
+        TextView btnDismiss = new TextView(this);
+        btnDismiss.setText("Got it");
+        btnDismiss.setTextSize(14);
+        btnDismiss.setTypeface(null, Typeface.BOLD);
+        btnDismiss.setGravity(Gravity.CENTER);
+        btnDismiss.setTextColor(Color.parseColor("#f85149"));
+        btnDismiss.setBackground(ContextCompat.getDrawable(this, R.drawable.btn_error_dismiss_bg));
+        btnDismiss.setPadding(dp(20), dp(12), dp(20), dp(12));
+        btnDismiss.setClickable(true);
+        btnDismiss.setFocusable(true);
+        LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        btnDismiss.setLayoutParams(btnParams);
+        btnDismiss.setOnClickListener(v -> errorDialog.dismiss());
+        root.addView(btnDismiss);
+
+        errorDialog.setContentView(root);
+
+        if (errorDialog.getWindow() != null) {
+            errorDialog.getWindow().setLayout(
+                    (int) (getResources().getDisplayMetrics().widthPixels * 0.82),
+                    WindowManager.LayoutParams.WRAP_CONTENT);
+            errorDialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            errorDialog.getWindow().setGravity(Gravity.CENTER);
+            errorDialog.getWindow().setWindowAnimations(android.R.style.Animation_Dialog);
+        }
+
+        activeErrorDialog = errorDialog;
+        errorDialog.setOnDismissListener(d -> {
+            if (activeErrorDialog == errorDialog) activeErrorDialog = null;
+        });
+        errorDialog.show();
     }
 
     private int dp(int dp) {
