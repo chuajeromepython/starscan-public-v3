@@ -748,61 +748,7 @@
                         android:padding="16dp"
                         android:paddingBottom="40dp">
 
-                        <!-- Master CSV bar (Doc 1) -->
-                        <com.google.android.material.card.MaterialCardView
-                            android:id="@+id/masterCsvBar"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginBottom="16dp"
-                            app:cardBackgroundColor="#F0F7FF"
-                            app:cardCornerRadius="16dp"
-                            app:cardElevation="0dp"
-                            app:strokeColor="#BFDBFE"
-                            app:strokeWidth="1dp"
-                            android:visibility="gone">
-
-                            <LinearLayout
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:orientation="horizontal"
-                                android:gravity="center_vertical"
-                                android:background="@drawable/bg_csv_bar"
-                                android:padding="16dp">
-
-                                <ImageView
-                                    android:layout_width="16dp"
-                                    android:layout_height="16dp"
-                                    android:src="@drawable/ic_file_spreadsheet"
-                                    app:tint="#0038A8"
-                                    android:layout_marginEnd="8dp" />
-
-                                <TextView
-                                    android:id="@+id/masterCsvLabel"
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:text="📊 _Master.csv · 0 entries"
-                                    android:textColor="#0038A8"
-                                    android:textSize="13sp"
-                                    android:textStyle="bold" />
-
-                                <com.google.android.material.button.MaterialButton
-                                    android:id="@+id/btnExportMaster"
-                                    style="@style/Widget.Material3.Button.UnelevatedButton"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="40dp"
-                                    android:text="Export"
-                                    android:textColor="#FFFFFF"
-                                    android:textSize="12sp"
-                                    android:textStyle="bold"
-                                    app:backgroundTint="#0038A8"
-                                    app:cornerRadius="8dp"
-                                    app:icon="@drawable/ic_download"
-                                    app:iconSize="12dp"
-                                    app:iconTint="#FFFFFF" />
-
-                            </LinearLayout>
-                        </com.google.android.material.card.MaterialCardView>
+                        <!-- Master CSV bar removed -->
 
                         <!-- Scan CTA card (Doc 1: gradient bg + decorative circles) -->
                         <androidx.cardview.widget.CardView

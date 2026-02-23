@@ -73,12 +73,10 @@ public class DashboardActivity extends AppCompatActivity {
     private TextView     classTeacherLabel;
     private LinearLayout classEmpty, classActivityList;
 
-    private MaterialCardView masterCsvBar;
     private CardView         scanCtaCard;
 
     private LinearLayout scansHeader, activityScanList, activityScansEmpty;
-    private TextView     masterCsvLabel, scansTotalCount, scanCtaSub;
-    private com.google.android.material.button.MaterialButton btnExportMaster;
+    private TextView     scansTotalCount, scanCtaSub;
     private FloatingActionButton fab;
 
     // Breadcrumb
@@ -185,9 +183,6 @@ public class DashboardActivity extends AppCompatActivity {
         classEmpty        = findViewById(R.id.classEmpty);
         classActivityList = findViewById(R.id.classActivityList);
 
-        masterCsvBar    = findViewById(R.id.masterCsvBar);
-        masterCsvLabel  = findViewById(R.id.masterCsvLabel);
-        btnExportMaster = findViewById(R.id.btnExportMaster);
         scanCtaCard     = findViewById(R.id.scanCtaCard);
         scanCtaSub      = findViewById(R.id.scanCtaSub);
         scansHeader        = findViewById(R.id.scansHeader);
@@ -222,7 +217,6 @@ public class DashboardActivity extends AppCompatActivity {
         });
 
         scanCtaCard.setOnClickListener(v -> showScanMethodDialog());
-        btnExportMaster.setOnClickListener(v -> exportMasterCSV());
     }
 
     private void initGalleryLauncher() {
@@ -525,9 +519,6 @@ public class DashboardActivity extends AppCompatActivity {
 
         List<ScanEntry> scans = selectedActivity.getScans();
         boolean hasScans = (scans != null && !scans.isEmpty());
-
-        masterCsvBar.setVisibility(hasScans ? View.VISIBLE : View.GONE);
-        if (hasScans) masterCsvLabel.setText("📊 _Master.csv · " + scans.size() + " entries");
 
         if (hasScans) {
             scansHeader.setVisibility(View.VISIBLE);
@@ -1516,47 +1507,6 @@ public class DashboardActivity extends AppCompatActivity {
             fos.close(); bitmap.recycle();
             return outputFile.getAbsolutePath();
         } catch (Exception e) { e.printStackTrace(); return null; }
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // MASTER CSV EXPORT
-    // ═══════════════════════════════════════════════════════════════
-
-    private void exportMasterCSV() {
-        if (selectedActivity == null || selectedActivity.getScans() == null
-                || selectedActivity.getScans().isEmpty()) {
-            Toast.makeText(this, "No scans to export", Toast.LENGTH_SHORT).show(); return;
-        }
-        try {
-            List<ScanEntry> scans = selectedActivity.getScans();
-            int numItems = selectedActivity.getNumItems();
-            StringBuilder csv = new StringBuilder("LRN,Score");
-            for (int i = 1; i <= numItems; i++) csv.append(",Q").append(i);
-            csv.append("\n");
-            for (ScanEntry scan : scans) {
-                csv.append(scan.getLrn() != null ? scan.getLrn() : "")
-                        .append(",").append(scan.getScore()).append("/").append(scan.getNumItems());
-                for (int i = 1; i <= numItems; i++) {
-                    String ans = scan.getAnswers() != null ? scan.getAnswers().get(i) : null;
-                    csv.append(",").append(ans != null ? ans : "");
-                }
-                csv.append("\n");
-            }
-            String filename = selectedClass.getGrade() + "-" + selectedClass.getSection() + "_"
-                    + selectedActivity.getName().replaceAll("\\s+", "") + "_Master.csv";
-            java.io.File csvFile = new java.io.File(getCacheDir(), filename);
-            java.io.FileWriter writer = new java.io.FileWriter(csvFile);
-            writer.write(csv.toString()); writer.close();
-
-            Intent intent = new Intent(this, com.example.omrscanner.ui.CSVFileActivity.class);
-            intent.putExtra(com.example.omrscanner.ui.CSVFileActivity.EXTRA_CSV_FILEPATH,
-                    csvFile.getAbsolutePath());
-            startActivity(intent);
-            showToast("Master CSV exported ✓");
-        } catch (Exception e) {
-            Log.e(TAG, "Error exporting master CSV", e);
-            Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-        }
     }
 
     // ═══════════════════════════════════════════════════════════════
