@@ -63,7 +63,7 @@
         <!-- REMOVED: scanFrame anchor box — it served no functional purpose -->
         <!-- REMOVED: scanHintText — no longer needed without scan frame -->
 
-        <!-- ── Top camera controls: Flash · Timer · Grid ───────── -->
+        <!-- ── Top camera controls ───────── -->
         <LinearLayout
             android:id="@+id/topCameraControls"
             android:layout_width="match_parent"
@@ -73,7 +73,7 @@
             android:layout_marginStart="16dp"
             android:layout_marginEnd="16dp"
             android:orientation="horizontal"
-            android:gravity="center">
+            android:gravity="end">
 
             <FrameLayout
                 android:id="@+id/btnFlash"
@@ -92,91 +92,9 @@
                     app:tint="#CCFFFFFF" />
             </FrameLayout>
 
-            <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
-
-            <FrameLayout
-                android:id="@+id/btnTimer"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:background="@drawable/bg_cam_ctrl_inactive"
-                android:clickable="true"
-                android:focusable="true"
-                android:contentDescription="Timer">
-                <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:layout_gravity="center"
-                    android:src="@drawable/ic_timer"
-                    app:tint="#CCFFFFFF" />
-            </FrameLayout>
-
-            <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
-
-            <FrameLayout
-                android:id="@+id/btnGrid"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:background="@drawable/bg_cam_ctrl_inactive"
-                android:clickable="true"
-                android:focusable="true"
-                android:contentDescription="Toggle grid">
-                <ImageView
-                    android:id="@+id/iconGrid"
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:layout_gravity="center"
-                    android:src="@drawable/ic_grid_3x3"
-                    app:tint="#CCFFFFFF" />
-            </FrameLayout>
-
         </LinearLayout>
 
-        <!-- ── Zoom slider bar ──────────────────────────────────── -->
-        <LinearLayout
-            android:id="@+id/zoomSliderBar"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_gravity="bottom"
-            android:layout_marginStart="24dp"
-            android:layout_marginEnd="24dp"
-            android:layout_marginBottom="24dp"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:background="@drawable/bg_zoom_bar"
-            android:paddingStart="20dp"
-            android:paddingEnd="20dp"
-            android:paddingTop="12dp"
-            android:paddingBottom="12dp"
-            android:visibility="gone">
-
-            <ImageView
-                android:layout_width="16dp"
-                android:layout_height="16dp"
-                android:src="@drawable/ic_zoom_in"
-                app:tint="#B3FFFFFF"
-                android:layout_marginEnd="10dp" />
-
-            <TextView
-                android:id="@+id/zoomValueLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="1.0x"
-                android:textColor="#FFFFFF"
-                android:textSize="13sp"
-                android:minWidth="36dp"
-                android:layout_marginEnd="10dp" />
-
-            <SeekBar
-                android:id="@+id/zoomSeekBar"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:max="100"
-                android:progress="0"
-                android:progressDrawable="@drawable/bg_seekbar_track"
-                android:thumb="@drawable/thumb_zoom_seekbar" />
-
-        </LinearLayout>
+        <!-- ── Zoom slider bar removed ──────────────────────────────────── -->
 
     </FrameLayout>
 
@@ -238,105 +156,16 @@
         android:paddingTop="12dp"
         android:paddingBottom="32dp">
 
-        <!-- Zoom pills: 1x  2x  5x -->
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal"
-            android:orientation="horizontal"
-            android:layout_marginBottom="24dp">
+        <!-- Zoom pills removed -->
 
-            <FrameLayout
-                android:id="@+id/btnZoom1x"
-                android:layout_width="52dp"
-                android:layout_height="52dp"
-                android:layout_marginEnd="12dp"
-                android:background="@drawable/bg_zoom_pill_active"
-                android:clickable="true"
-                android:focusable="true"
-                android:contentDescription="1x zoom">
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center"
-                    android:text="1x"
-                    android:textColor="#FFFFFF"
-                    android:textSize="13sp"
-                    android:textStyle="bold" />
-            </FrameLayout>
-
-            <FrameLayout
-                android:id="@+id/btnZoom2x"
-                android:layout_width="52dp"
-                android:layout_height="52dp"
-                android:layout_marginEnd="12dp"
-                android:background="@drawable/bg_zoom_pill_inactive"
-                android:clickable="true"
-                android:focusable="true"
-                android:contentDescription="2x zoom">
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center"
-                    android:text="2x"
-                    android:textColor="#FFFFFF"
-                    android:textSize="13sp"
-                    android:textStyle="bold" />
-            </FrameLayout>
-
-            <FrameLayout
-                android:id="@+id/btnZoom5x"
-                android:layout_width="52dp"
-                android:layout_height="52dp"
-                android:background="@drawable/bg_zoom_pill_inactive"
-                android:clickable="true"
-                android:focusable="true"
-                android:contentDescription="5x zoom">
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center"
-                    android:text="5x"
-                    android:textColor="#FFFFFF"
-                    android:textSize="13sp"
-                    android:textStyle="bold" />
-            </FrameLayout>
-
-        </LinearLayout>
-
-        <!-- Main action row: back | capture ring | flip -->
+        <!-- Main action row: capture ring -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="center_vertical"
+            android:gravity="center"
             android:paddingStart="16dp"
             android:paddingEnd="16dp">
-
-            <!-- Gallery button: shows a thumbnail of the last captured image.
-                 Tapping it opens the device photo picker / gallery. -->
-            <FrameLayout
-                android:id="@+id/btnGallery"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
-                android:background="@drawable/bg_cam_btn_white"
-                android:clickable="true"
-                android:focusable="true"
-                android:contentDescription="Open gallery">
-
-                <!-- Fallback icon shown before any photo is taken -->
-                <ImageView
-                    android:id="@+id/iconGallery"
-                    android:layout_width="28dp"
-                    android:layout_height="28dp"
-                    android:layout_gravity="center"
-                    android:src="@drawable/ic_photo_library"
-                    app:tint="#FFFFFF"
-                    android:scaleType="centerCrop" />
-
-            </FrameLayout>
-
-            <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
 
             <!-- Capture button: outer ring + inner disc -->
             <FrameLayout
@@ -372,27 +201,6 @@
                         app:tint="#B3FFFFFF" />
                 </FrameLayout>
 
-            </FrameLayout>
-
-            <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
-
-            <!-- FIXED: Was ic_flip_horizontal (two overlapping rectangles — confusing).
-                        Now uses ic_camera_switch (rotating arrows around a camera outline)
-                        which is the standard Android camera-flip icon. -->
-            <FrameLayout
-                android:id="@+id/btnFlipCamera"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
-                android:background="@drawable/bg_cam_btn_white"
-                android:clickable="true"
-                android:focusable="true"
-                android:contentDescription="Switch camera">
-                <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:layout_gravity="center"
-                    android:src="@drawable/ic_camera_switch"
-                    app:tint="#FFFFFF" />
             </FrameLayout>
 
         </LinearLayout>
