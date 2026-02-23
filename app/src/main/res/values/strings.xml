@@ -11,6 +11,7 @@
     <string name="total_images">Total Images</string>
     <string name="csv_files">CSV Files</string>
 
+
     <!-- Empty States -->
     <string name="no_saved_exam_papers">No Saved Exam Papers</string>
     <string name="empty_state_description">Capture exam papers using the Scan tab to convert them to CSV files</string>
