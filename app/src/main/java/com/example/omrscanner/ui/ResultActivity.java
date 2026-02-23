@@ -17,6 +17,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.omrscanner.DashboardActivity;
 import com.example.omrscanner.R;
+import com.example.omrscanner.camera.CameraActivity;
 import com.example.omrscanner.models.ScanEntry;
 import com.example.omrscanner.omr.BubbleScanner;
 import com.example.omrscanner.omr.OmrTemplate;
@@ -46,6 +47,7 @@ public class ResultActivity extends AppCompatActivity {
     private String selectedSheetType;
     private String classId;
     private String activityId;
+    private String imageSource;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -75,6 +77,7 @@ public class ResultActivity extends AppCompatActivity {
         selectedSheetType = getIntent().getStringExtra(DashboardActivity.EXTRA_SHEET_TYPE);
         classId = getIntent().getStringExtra(DashboardActivity.EXTRA_CLASS_ID);
         activityId = getIntent().getStringExtra(DashboardActivity.EXTRA_ACTIVITY_ID);
+        imageSource = getIntent().getStringExtra(PreviewActivity.IMAGE_SOURCE);
 
         Log.d(TAG, "Received sheet type: " + selectedSheetType + ", classId: " + classId + ", activityId: " + activityId);
 
@@ -97,8 +100,29 @@ public class ResultActivity extends AppCompatActivity {
         processImage(originalImagePath, anchors);
 
         // Button listeners
-        btnRetry.setOnClickListener(v -> finish());
+        btnRetry.setOnClickListener(v -> retakePhoto());
         btnExport.setOnClickListener(v -> exportResults());
+    }
+
+    private void retakePhoto() {
+        if (PreviewActivity.SOURCE_GALLERY.equals(imageSource)) {
+            // Redirect to dashboard for gallery retake
+            finish();
+        } else {
+            // Go back to camera for retake
+            Intent intent = new Intent(this, CameraActivity.class);
+            if (selectedSheetType != null) {
+                intent.putExtra(DashboardActivity.EXTRA_SHEET_TYPE, selectedSheetType);
+            }
+            if (classId != null) {
+                intent.putExtra(DashboardActivity.EXTRA_CLASS_ID, classId);
+            }
+            if (activityId != null) {
+                intent.putExtra(DashboardActivity.EXTRA_ACTIVITY_ID, activityId);
+            }
+            startActivity(intent);
+            finish();
+        }
     }
 
     private void processImage(String imagePath, Point[] anchors) {
@@ -255,15 +279,9 @@ public class ResultActivity extends AppCompatActivity {
 
                         Toast.makeText(
                                 this,
-                                "Opening file manager to save...",
+                                "Scanned sheet is being saved...",
                                 Toast.LENGTH_SHORT
                         ).show();
-
-                        // Navigate to CSVFileActivity to save the files properly
-                        Intent intent = new Intent(this, CSVFileActivity.class);
-                        intent.putExtra(CSVFileActivity.EXTRA_CSV_FILEPATH, csvFilePath);
-                        intent.putExtra(CSVFileActivity.EXTRA_IMAGE_FILEPATH, originalImagePath);
-                        startActivity(intent);
 
                         // Finish this activity so user goes back to dashboard
                         finish();

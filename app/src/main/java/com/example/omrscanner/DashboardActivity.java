@@ -1310,8 +1310,8 @@ public class DashboardActivity extends AppCompatActivity {
                     try {
                         String lrnOnly = (scan.getLrn() != null && !scan.getLrn().isEmpty())
                                 ? scan.getLrn() : "scan_" + scanNum;
-                        String indName = (cls.getGrade() + "-" + cls.getSection() + "_"
-                                + act.getName().replaceAll("\\s+", "") + "_" + lrnOnly + ".csv")
+                        String indName = (lrnOnly + "_" + cls.getGrade() + "-" + cls.getSection() + "_"
+                                + act.getName().replaceAll("\\s+", "") + ".csv")
                                 .replaceAll("[^a-zA-Z0-9_\\-\\.]", "_");
                         StringBuilder sb = new StringBuilder("LRN,Score");
                         for (int k = 1; k <= act.getNumItems(); k++) sb.append(",Q").append(k);
