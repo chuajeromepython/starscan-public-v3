@@ -1,373 +1,397 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
+<FrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000000"
-    android:fitsSystemWindows="true">
+    android:background="#000000">
 
-    <!-- Header with Status Bar Padding -->
-    <LinearLayout
-        android:id="@+id/tvHeader"
-        android:layout_width="0dp"
-        android:layout_height="70dp"
-        android:orientation="vertical"
-        android:paddingTop="15dp"
-        android:paddingBottom="8dp"
-        android:elevation="8dp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent">
+    <!-- ── CAMERA PREVIEW CONTAINER ───────────────────────────── -->
+    <FrameLayout
+        android:id="@+id/cameraPreviewCard"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginTop="72dp"
+        android:layout_marginBottom="192dp"
+        android:background="@drawable/bg_camera_preview"
+        android:clipToOutline="true">
 
-        <TextView
+        <androidx.camera.view.PreviewView
+            android:id="@+id/previewView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            app:scaleType="fillCenter" />
+
+        <!-- ── Grid overlay ──────────────────────────────────── -->
+        <FrameLayout
+            android:id="@+id/gridOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone">
+
+            <View
+                android:id="@+id/gridHLine1"
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#33FFFFFF"
+                android:layout_gravity="top"
+                android:layout_marginTop="0dp" />
+
+            <View
+                android:id="@+id/gridHLine2"
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#33FFFFFF" />
+
+            <View
+                android:id="@+id/gridVLine1"
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="#33FFFFFF"
+                android:layout_gravity="start" />
+
+            <View
+                android:id="@+id/gridVLine2"
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="#33FFFFFF" />
+
+        </FrameLayout>
+
+        <!-- REMOVED: scanFrame anchor box — it served no functional purpose -->
+        <!-- REMOVED: scanHintText — no longer needed without scan frame -->
+
+        <!-- ── Top camera controls: Flash · Timer · Grid ───────── -->
+        <LinearLayout
+            android:id="@+id/topCameraControls"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:fontFamily="sans-serif-medium"
-            android:gravity="center"
-            android:text="Camera Capture"
-            android:textColor="#FFFFFF"
-            android:textSize="25sp"
-            android:textStyle="bold"
-            android:paddingTop="4dp"
-            android:paddingBottom="4dp" />
-
-    </LinearLayout>
-
-    <!-- Camera Preview -->
-    <androidx.camera.view.PreviewView
-        android:id="@+id/previewView"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:background="#000000"
-        app:layout_constraintBottom_toTopOf="@id/controlsContainer"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tvHeader"
-        app:scaleType="fillCenter" />
-
-    <!-- Top Camera Controls (Flash, Timer, Grid) -->
-    <LinearLayout
-        android:id="@+id/topControls"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="20dp"
-        android:gravity="center_vertical"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tvHeader">
-
-        <!-- Flash Button with Background (UPDATED TO FLASHLIGHT ICON) -->
-        <FrameLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content">
-
-            <View
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:background="@drawable/control_button_bg"
-                android:alpha="0.9" />
-
-            <ImageButton
-                android:id="@+id/btnFlash"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@drawable/ic_flashlight"
-                android:contentDescription="Toggle flashlight"
-                android:padding="12dp"
-                android:scaleType="fitCenter"
-                app:tint="#FFFFFF" />
-        </FrameLayout>
-
-        <Space
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" />
-
-        <!-- Timer Button with Background -->
-        <FrameLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content">
-
-            <View
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:background="@drawable/control_button_bg"
-                android:alpha="0.9" />
-
-            <ImageButton
-                android:id="@+id/btnTimer"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_menu_recent_history"
-                android:contentDescription="Set timer"
-                android:padding="12dp"
-                android:scaleType="fitCenter"
-                app:tint="#FFFFFF" />
-        </FrameLayout>
-
-        <Space
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" />
-
-        <!-- Grid Button with Background -->
-        <FrameLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content">
-
-            <View
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:background="@drawable/control_button_bg"
-                android:alpha="0.9" />
-
-            <ImageButton
-                android:id="@+id/btnRatio"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_menu_crop"
-                android:contentDescription="Toggle grid"
-                android:padding="12dp"
-                android:scaleType="fitCenter"
-                app:tint="#FFFFFF" />
-        </FrameLayout>
-
-    </LinearLayout>
-
-    <!-- Zoom Slider with improved styling - FIXED TO USE MaterialCardView -->
-    <com.google.android.material.card.MaterialCardView
-        android:id="@+id/zoomContainer"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:visibility="gone"
-        app:cardBackgroundColor="#CC000000"
-        app:cardCornerRadius="25dp"
-        app:cardElevation="8dp"
-        app:layout_constraintBottom_toTopOf="@id/controlsContainer"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginBottom="24dp">
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_gravity="top"
+            android:layout_marginTop="16dp"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
             android:orientation="horizontal"
-            android:padding="16dp"
-            android:gravity="center_vertical">
+            android:gravity="center">
+
+            <FrameLayout
+                android:id="@+id/btnFlash"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/bg_cam_ctrl_inactive"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="Toggle flash">
+                <ImageView
+                    android:id="@+id/iconFlash"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_flash"
+                    app:tint="#CCFFFFFF" />
+            </FrameLayout>
+
+            <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
+
+            <FrameLayout
+                android:id="@+id/btnTimer"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/bg_cam_ctrl_inactive"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="Timer">
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_timer"
+                    app:tint="#CCFFFFFF" />
+            </FrameLayout>
+
+            <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
+
+            <FrameLayout
+                android:id="@+id/btnGrid"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/bg_cam_ctrl_inactive"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="Toggle grid">
+                <ImageView
+                    android:id="@+id/iconGrid"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_grid_3x3"
+                    app:tint="#CCFFFFFF" />
+            </FrameLayout>
+
+        </LinearLayout>
+
+        <!-- ── Zoom slider bar ──────────────────────────────────── -->
+        <LinearLayout
+            android:id="@+id/zoomSliderBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:layout_marginStart="24dp"
+            android:layout_marginEnd="24dp"
+            android:layout_marginBottom="24dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/bg_zoom_bar"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:src="@drawable/ic_zoom_in"
+                app:tint="#B3FFFFFF"
+                android:layout_marginEnd="10dp" />
 
             <TextView
-                android:id="@+id/tvZoomValue"
+                android:id="@+id/zoomValueLabel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="1.0x"
                 android:textColor="#FFFFFF"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:fontFamily="sans-serif-medium"
-                android:minWidth="55dp"
-                android:gravity="center" />
+                android:textSize="13sp"
+                android:minWidth="36dp"
+                android:layout_marginEnd="10dp" />
 
             <SeekBar
                 android:id="@+id/zoomSeekBar"
-                android:layout_width="220dp"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
-                android:layout_marginEnd="12dp"
+                android:layout_weight="1"
                 android:max="100"
                 android:progress="0"
-                android:progressTint="#FFFFFF"
-                android:thumbTint="#FFFFFF"
-                android:progressBackgroundTint="#60FFFFFF"
-                android:contentDescription="Zoom level" />
+                android:progressDrawable="@drawable/bg_seekbar_track"
+                android:thumb="@drawable/thumb_zoom_seekbar" />
 
         </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
 
-    <!-- Bottom Controls Container -->
+    </FrameLayout>
+
+    <!-- ── HEADER ROW ──────────────────────────────────────────── -->
     <LinearLayout
-        android:id="@+id/controlsContainer"
-        android:layout_width="0dp"
+        android:id="@+id/cameraHeader"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@drawable/bottom_controls_gradient"
-        android:orientation="vertical"
-        android:paddingTop="20dp"
-        android:paddingBottom="36dp"
-        android:elevation="4dp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent">
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="12dp">
 
-        <!-- Quick Zoom Buttons -->
-        <LinearLayout
-            android:id="@+id/quickZoomButtons"
-            android:layout_width="match_parent"
+        <!-- FIXED: Back button now calls finish() once and returns directly to the caller -->
+        <FrameLayout
+            android:id="@+id/btnCameraBack"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/bg_cam_btn_white"
+            android:clickable="true"
+            android:focusable="true"
+            android:contentDescription="Back">
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_arrow_back"
+                app:tint="#FFFFFF" />
+        </FrameLayout>
+
+        <TextView
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Camera Capture"
+            android:textColor="#E6FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:gravity="center" />
+
+        <View
+            android:layout_width="40dp"
+            android:layout_height="40dp" />
+
+    </LinearLayout>
+
+    <!-- ── BOTTOM CONTROLS ─────────────────────────────────────── -->
+    <LinearLayout
+        android:id="@+id/bottomControls"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:background="@drawable/bg_bottom_fade"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="32dp">
+
+        <!-- Zoom pills: 1x  2x  5x -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
             android:orientation="horizontal"
-            android:gravity="center"
-            android:layout_marginBottom="20dp">
+            android:layout_marginBottom="24dp">
 
-            <com.google.android.material.button.MaterialButton
+            <FrameLayout
                 android:id="@+id/btnZoom1x"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="52dp"
-                android:minHeight="52dp"
-                android:text="1x"
-                android:textSize="15sp"
-                android:textColor="#FFFFFF"
-                android:fontFamily="sans-serif-medium"
-                app:backgroundTint="#33FFFFFF"
-                android:contentDescription="Zoom 1x"
-                app:cornerRadius="26dp"
-                app:strokeColor="#66FFFFFF"
-                app:strokeWidth="1dp"
-                android:layout_marginEnd="10dp"
-                android:paddingStart="18dp"
-                android:paddingEnd="18dp"
-                android:elevation="2dp" />
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:layout_marginEnd="12dp"
+                android:background="@drawable/bg_zoom_pill_active"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="1x zoom">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:text="1x"
+                    android:textColor="#FFFFFF"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+            </FrameLayout>
 
-            <com.google.android.material.button.MaterialButton
+            <FrameLayout
                 android:id="@+id/btnZoom2x"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="52dp"
-                android:minHeight="52dp"
-                android:text="2x"
-                android:textSize="15sp"
-                android:textColor="#FFFFFF"
-                android:fontFamily="sans-serif-medium"
-                app:backgroundTint="#33FFFFFF"
-                android:contentDescription="Zoom 2x"
-                app:cornerRadius="26dp"
-                app:strokeColor="#66FFFFFF"
-                app:strokeWidth="1dp"
-                android:layout_marginEnd="10dp"
-                android:paddingStart="18dp"
-                android:paddingEnd="18dp"
-                android:elevation="2dp" />
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:layout_marginEnd="12dp"
+                android:background="@drawable/bg_zoom_pill_inactive"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="2x zoom">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:text="2x"
+                    android:textColor="#FFFFFF"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+            </FrameLayout>
 
-            <com.google.android.material.button.MaterialButton
+            <FrameLayout
                 android:id="@+id/btnZoom5x"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="52dp"
-                android:minHeight="52dp"
-                android:text="5x"
-                android:textSize="15sp"
-                android:textColor="#FFFFFF"
-                android:fontFamily="sans-serif-medium"
-                app:backgroundTint="#33FFFFFF"
-                android:contentDescription="Zoom 5x"
-                app:cornerRadius="26dp"
-                app:strokeColor="#66FFFFFF"
-                app:strokeWidth="1dp"
-                android:paddingStart="18dp"
-                android:paddingEnd="18dp"
-                android:elevation="2dp" />
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:background="@drawable/bg_zoom_pill_inactive"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="5x zoom">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:text="5x"
+                    android:textColor="#FFFFFF"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+            </FrameLayout>
 
         </LinearLayout>
 
-        <!-- Main Control Row -->
+        <!-- Main action row: back | capture ring | flip -->
         <LinearLayout
-            android:id="@+id/linearLayout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:paddingStart="28dp"
-            android:paddingEnd="28dp">
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp">
 
-            <!-- Back Button (UPDATED FROM GALLERY) -->
+            <!-- Gallery button: shows a thumbnail of the last captured image.
+                 Tapping it opens the device photo picker / gallery. -->
             <FrameLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content">
+                android:id="@+id/btnGallery"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:background="@drawable/bg_cam_btn_white"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="Open gallery">
 
-                <View
-                    android:layout_width="60dp"
-                    android:layout_height="60dp"
-                    android:background="@drawable/secondary_button_bg" />
+                <!-- Fallback icon shown before any photo is taken -->
+                <ImageView
+                    android:id="@+id/iconGallery"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_photo_library"
+                    app:tint="#FFFFFF"
+                    android:scaleType="centerCrop" />
 
-                <ImageButton
-                    android:id="@+id/btnGallery"
-                    android:layout_width="60dp"
-                    android:layout_height="60dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:src="@android:drawable/ic_menu_revert"
-                    android:contentDescription="Back"
-                    android:padding="14dp"
-                    android:scaleType="fitCenter"
-                    app:tint="#FFFFFF" />
             </FrameLayout>
 
-            <Space
-                android:layout_width="0dp"
-                android:layout_height="1dp"
-                android:layout_weight="1" />
+            <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
 
-            <!-- Capture Button with beautiful ring -->
+            <!-- Capture button: outer ring + inner disc -->
             <FrameLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content">
+                android:layout_width="80dp"
+                android:layout_height="80dp"
+                android:layout_gravity="center_horizontal">
 
-                <!-- Outer Glow Ring -->
                 <View
-                    android:layout_width="90dp"
-                    android:layout_height="90dp"
-                    android:layout_gravity="center"
-                    android:background="@drawable/capture_outer_ring"
-                    android:alpha="0.3" />
+                    android:layout_width="80dp"
+                    android:layout_height="80dp"
+                    android:background="@drawable/bg_capture_ring" />
 
-                <!-- White Ring -->
                 <View
-                    android:layout_width="82dp"
-                    android:layout_height="82dp"
-                    android:layout_gravity="center"
-                    android:background="@drawable/capture_ring" />
+                    android:layout_width="80dp"
+                    android:layout_height="80dp"
+                    android:background="@drawable/bg_capture_glow"
+                    android:alpha="0.30" />
 
-                <!-- Inner Red Button -->
-                <com.google.android.material.button.MaterialButton
+                <FrameLayout
                     android:id="@+id/btnCapture"
-                    android:layout_width="72dp"
-                    android:layout_height="78dp"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
                     android:layout_gravity="center"
-                    app:backgroundTint="#D32F2F"
-                    android:elevation="6dp"
-                    android:text=""
-                    android:contentDescription="Capture photo"
-                    app:cornerRadius="36dp"
-                    app:rippleColor="#FFFFFF" />
+                    android:background="@drawable/bg_capture_disc"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:contentDescription="Capture">
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:layout_gravity="center"
+                        android:src="@drawable/ic_focus"
+                        app:tint="#B3FFFFFF" />
+                </FrameLayout>
 
             </FrameLayout>
 
-            <Space
-                android:layout_width="0dp"
-                android:layout_height="1dp"
-                android:layout_weight="1" />
+            <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
 
-            <!-- Flip Camera Button -->
+            <!-- FIXED: Was ic_flip_horizontal (two overlapping rectangles — confusing).
+                        Now uses ic_camera_switch (rotating arrows around a camera outline)
+                        which is the standard Android camera-flip icon. -->
             <FrameLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content">
-
-                <View
-                    android:layout_width="60dp"
-                    android:layout_height="60dp"
-                    android:background="@drawable/secondary_button_bg" />
-
-                <ImageButton
-                    android:id="@+id/btnFlipCamera"
-                    android:layout_width="60dp"
-                    android:layout_height="60dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:src="@android:drawable/ic_menu_rotate"
-                    android:contentDescription="Flip Camera"
-                    android:padding="14dp"
-                    android:scaleType="fitCenter"
+                android:id="@+id/btnFlipCamera"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:background="@drawable/bg_cam_btn_white"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="Switch camera">
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_camera_switch"
                     app:tint="#FFFFFF" />
             </FrameLayout>
 
@@ -375,4 +399,13 @@
 
     </LinearLayout>
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+    <!-- ── FLASH OVERLAY ───────────────────────────────────────── -->
+    <View
+        android:id="@+id/flashOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#FFFFFFFF"
+        android:alpha="0"
+        android:visibility="invisible" />
+
+</FrameLayout>
