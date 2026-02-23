@@ -5,12 +5,13 @@ import android.util.Log;
 
 import org.opencv.android.Utils;
 import org.opencv.core.Core;
+import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.Point;
 import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -55,7 +56,20 @@ public class BubbleScanner {
      * Increase to 0.50 if shadows cause false positives;
      * decrease to 0.30 for faint pencil marks.
      */
-    private static final double FILL_THRESHOLD = 0.40;
+    private static final double FILL_THRESHOLD = 0.45;
+
+    /**
+     * Inner-circle factor for fill analysis.
+     * We intentionally ignore the printed ring outline by measuring only
+     * the inner disk.
+     */
+    private static final double INNER_MASK_RADIUS_FACTOR = 0.60;
+
+    /**
+     * Maximum fraction of bubble spacing allowed for per-block alignment offset.
+     * Prevents a wrong template match from jumping by one full bubble step.
+     */
+    private static final double MAX_OFFSET_SPACING_FRACTION = 0.45;
 
     // ── Overlay colours (BGR for OpenCV Mat) ────────────────────────────────
     private static final Scalar COLOUR_FILLED = new Scalar(0, 255, 0);   // green
@@ -100,11 +114,6 @@ public class BubbleScanner {
         Mat gray = new Mat();
         Imgproc.cvtColor(colour, gray, Imgproc.COLOR_BGR2GRAY);
 
-        // Otsu threshold once on the full image
-        Mat binary = new Mat();
-        Imgproc.threshold(gray, binary, 0, 255,
-                Imgproc.THRESH_BINARY_INV | Imgproc.THRESH_OTSU);
-
         // Overlay mat — draw on a copy of the colour image
         Mat overlay = colour.clone();
 
@@ -118,7 +127,8 @@ public class BubbleScanner {
         int questionCounter = 0; // 1-based running counter across all question blocks
 
         for (OmrBlock block : template.blocks) {
-            int scaledRadius = templateMgr.getScaledRadius(block, template, bw);
+            int scaledRadius = Math.max(1,
+                    (int) Math.round(block.radius * ((scaleX + scaleY) * 0.5)));
 
             // ── Per-block alignment offset ──────────────────────────────
             GridAligner.AlignmentResult alignment =
@@ -131,12 +141,14 @@ public class BubbleScanner {
                     block.label, offX, offY, alignment.score));
 
             if (block.label.equals("LNR")) {
+                int[] safeOffset = sanitizeAlignmentOffset(block, scaleX, scaleY, scaledRadius, offX, offY);
                 result.lnr = scanLnrBlock(block, scaleX, scaleY, scaledRadius,
-                        binary, overlay, offX, offY);
+                        gray, overlay, safeOffset[0], safeOffset[1]);
             } else {
+                int[] safeOffset = sanitizeAlignmentOffset(block, scaleX, scaleY, scaledRadius, offX, offY);
                 questionCounter = scanQuestionBlock(block, scaleX, scaleY,
-                        scaledRadius, binary, overlay,
-                        result.answers, questionCounter, offX, offY);
+                        scaledRadius, gray, overlay,
+                        result.answers, questionCounter, safeOffset[0], safeOffset[1]);
             }
         }
 
@@ -150,7 +162,6 @@ public class BubbleScanner {
         // Cleanup
         colour.release();
         gray.release();
-        binary.release();
         overlay.release();
 
         Log.i(TAG, "Scan complete: " + result);
@@ -171,7 +182,7 @@ public class BubbleScanner {
      * @param offY per-block vertical offset from GridAligner
      */
     private String scanLnrBlock(OmrBlock block, double scaleX, double scaleY,
-                                int scaledRadius, Mat binary, Mat overlay,
+                                int scaledRadius, Mat gray, Mat overlay,
                                 int offX, int offY) {
         // block.rows = 10 (digits 0-9), block.cols = 12 (positions)
         // Fill ratios: [col][row]
@@ -182,7 +193,7 @@ public class BubbleScanner {
                 int cx = (int) Math.round((block.startX + col * block.dx) * scaleX) + offX;
                 int cy = (int) Math.round((block.startY + row * block.dy) * scaleY) + offY;
 
-                ratios[col][row] = measureFillRatio(binary, cx, cy, scaledRadius);
+                ratios[col][row] = measureFillRatio(gray, cx, cy, scaledRadius);
             }
         }
 
@@ -231,7 +242,7 @@ public class BubbleScanner {
      * @return updated question counter after this block
      */
     private int scanQuestionBlock(OmrBlock block, double scaleX, double scaleY,
-                                  int scaledRadius, Mat binary, Mat overlay,
+                                  int scaledRadius, Mat gray, Mat overlay,
                                   Map<Integer, String> answers, int questionCounter,
                                   int offX, int offY) {
 
@@ -243,7 +254,7 @@ public class BubbleScanner {
                 int cx = (int) Math.round((block.startX + col * block.dx) * scaleX) + offX;
                 int cy = (int) Math.round((block.startY + row * block.dy) * scaleY) + offY;
 
-                double ratio = measureFillRatio(binary, cx, cy, scaledRadius);
+                double ratio = measureFillRatio(gray, cx, cy, scaledRadius);
                 boolean filled = ratio >= FILL_THRESHOLD;
 
                 if (filled && col < CHOICE_LABELS.length) {
@@ -275,24 +286,72 @@ public class BubbleScanner {
      *
      * @return fill ratio in [0.0, 1.0]
      */
-    private double measureFillRatio(Mat binary, int cx, int cy, int radius) {
+    private double measureFillRatio(Mat gray, int cx, int cy, int radius) {
         int x1 = Math.max(0, cx - radius);
         int y1 = Math.max(0, cy - radius);
-        int x2 = Math.min(binary.cols(), cx + radius);
-        int y2 = Math.min(binary.rows(), cy + radius);
+        int x2 = Math.min(gray.cols(), cx + radius);
+        int y2 = Math.min(gray.rows(), cy + radius);
 
         int w = x2 - x1;
         int h = y2 - y1;
         if (w <= 0 || h <= 0) return 0.0;
 
         Rect roi = new Rect(x1, y1, w, h);
-        Mat patch = binary.submat(roi);
+        Mat patch = gray.submat(roi);
 
-        int foreground = Core.countNonZero(patch);
-        int total = w * h;
+        // Local Otsu threshold per bubble ROI for better lighting robustness.
+        Mat localBinary = new Mat();
+        Imgproc.threshold(patch, localBinary, 0, 255,
+                Imgproc.THRESH_BINARY_INV | Imgproc.THRESH_OTSU);
 
+        // Use an inner circular mask to ignore the printed ring outline.
+        int localCx = cx - x1;
+        int localCy = cy - y1;
+        int innerRadius = Math.max(1, (int) Math.round(radius * INNER_MASK_RADIUS_FACTOR));
+
+        Mat mask = Mat.zeros(h, w, CvType.CV_8UC1);
+        Imgproc.circle(mask, new Point(localCx, localCy), innerRadius, new Scalar(255), -1);
+
+        Mat maskedInk = new Mat();
+        Core.bitwise_and(localBinary, mask, maskedInk);
+
+        int foreground = Core.countNonZero(maskedInk);
+        int total = Math.max(1, Core.countNonZero(mask));
+
+        maskedInk.release();
+        mask.release();
+        localBinary.release();
         patch.release();
+
         return (double) foreground / total;
+    }
+
+    /**
+     * Reject implausibly large offsets to avoid snapping to the wrong nearby bubble.
+     */
+    private int[] sanitizeAlignmentOffset(OmrBlock block,
+                                          double scaleX,
+                                          double scaleY,
+                                          int scaledRadius,
+                                          int offX,
+                                          int offY) {
+        int spacingX = block.cols > 1
+                ? Math.max(1, (int) Math.round(Math.abs(block.dx * scaleX)))
+                : scaledRadius * 2;
+        int spacingY = block.rows > 1
+                ? Math.max(1, (int) Math.round(Math.abs(block.dy * scaleY)))
+                : scaledRadius * 2;
+
+        int maxOffsetX = Math.max(scaledRadius, (int) Math.round(spacingX * MAX_OFFSET_SPACING_FRACTION));
+        int maxOffsetY = Math.max(scaledRadius, (int) Math.round(spacingY * MAX_OFFSET_SPACING_FRACTION));
+
+        if (Math.abs(offX) > maxOffsetX || Math.abs(offY) > maxOffsetY) {
+            Log.w(TAG, String.format(
+                    "Offset rejected for block '%s': (%d,%d) exceeds max (%d,%d)",
+                    block.label, offX, offY, maxOffsetX, maxOffsetY));
+            return new int[]{0, 0};
+        }
+        return new int[]{offX, offY};
     }
 
     // =====================================================================

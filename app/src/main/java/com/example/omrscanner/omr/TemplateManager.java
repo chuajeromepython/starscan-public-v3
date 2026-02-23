@@ -282,16 +282,19 @@ public class TemplateManager {
         //   - whether we need to release the Mat afterwards
         int[][] rotations;
         if (isPortrait) {
-            // Portrait input → only try CW and CCW rotations
+            // Portrait input → it needs 90-degree rotation to become landscape.
+            // Try CW and CCW rotations.
             rotations = new int[][] {
                 { Core.ROTATE_90_CLOCKWISE },
                 { Core.ROTATE_90_COUNTERCLOCKWISE }
             };
         } else {
-            // Already landscape → try as-is first, but also try rotations
-            // in case the aligner warped oddly
+            // Already landscape → try as-is first, but also try 180 rotation
+            // in case the paper is simply upside down. Also try 90 degree
+            // rotations just in case the aligner output is weird.
             rotations = new int[][] {
                 { -1 },  // as-is
+                { Core.ROTATE_180 },
                 { Core.ROTATE_90_CLOCKWISE },
                 { Core.ROTATE_90_COUNTERCLOCKWISE }
             };
@@ -420,6 +423,7 @@ public class TemplateManager {
         } else {
             rotations = new int[][] {
                 { -1 },
+                { Core.ROTATE_180 },
                 { Core.ROTATE_90_CLOCKWISE },
                 { Core.ROTATE_90_COUNTERCLOCKWISE }
             };

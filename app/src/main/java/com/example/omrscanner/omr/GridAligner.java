@@ -175,27 +175,32 @@ public class GridAligner {
     }
 
     /**
-     * Convenience method: returns just the confidence score of aligning the
-     * first question block of a template against the warped image.
-     * Used by {@link TemplateManager} for sheet-type detection.
+     * Convenience method: returns the average confidence score of aligning the
+     * first bubble of ALL blocks in a template against the warped image.
+     * Used by {@link TemplateManager} for robust sheet-type and orientation detection.
      *
      * @param graySource the full warped grayscale image
      * @param template   the candidate template
      * @param scaleX     bitmapWidth / template.width
      * @param scaleY     bitmapHeight / template.height
-     * @return best match score for the first non-LNR block (0.0 – 1.0)
+     * @return robust average match score for all blocks (0.0 – 1.0)
      */
     public double getAlignmentScore(Mat graySource,
                                     OmrTemplate template,
                                     double scaleX,
                                     double scaleY) {
-        OmrBlock probeBlock = getFirstQuestionBlock(template);
-        if (probeBlock == null) {
-            Log.w(TAG, "No question block found in template " + template.templateId);
+        if (template.blocks == null || template.blocks.isEmpty()) {
+            Log.w(TAG, "No blocks found in template " + template.templateId);
             return 0.0;
         }
-        AlignmentResult ar = getBlockAlignment(graySource, probeBlock, scaleX, scaleY);
-        return ar.score;
+        
+        double totalScore = 0.0;
+        for (OmrBlock block : template.blocks) {
+            AlignmentResult ar = getBlockAlignment(graySource, block, scaleX, scaleY);
+            totalScore += ar.score;
+        }
+        
+        return totalScore / template.blocks.size();
     }
 
     /**
