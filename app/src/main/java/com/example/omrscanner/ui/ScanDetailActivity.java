@@ -217,7 +217,9 @@ public class ScanDetailActivity extends AppCompatActivity {
         grid.setLayoutParams(params);
 
         Map<Integer, String> answers = currentScan.getAnswers();
-
+        if (answers == null) {
+            answers = new LinkedHashMap<>();
+        }
         // Calculate item width based on screen width (roughly)
         int screenWidth = getResources().getDisplayMetrics().widthPixels;
         int padding = dp(32); // parent padding
