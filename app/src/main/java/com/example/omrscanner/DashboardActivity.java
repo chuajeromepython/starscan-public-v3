@@ -6,6 +6,7 @@ import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
+import android.app.DatePickerDialog;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.util.Log;
@@ -39,8 +40,11 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
 import java.lang.reflect.Type;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
+import java.util.Locale;
 
 public class DashboardActivity extends AppCompatActivity {
 
@@ -49,40 +53,40 @@ public class DashboardActivity extends AppCompatActivity {
     private static final String KEY_CLASSES = "class_folders";
 
     // Extras
-    public static final String EXTRA_SHEET_TYPE  = "sheet_type";
-    public static final String EXTRA_CLASS_ID    = "class_id";
+    public static final String EXTRA_SHEET_TYPE = "sheet_type";
+    public static final String EXTRA_CLASS_ID = "class_id";
     public static final String EXTRA_ACTIVITY_ID = "activity_id";
 
     // Screens
-    private static final String SCREEN_HOME     = "home";
-    private static final String SCREEN_CLASS    = "class";
+    private static final String SCREEN_HOME = "home";
+    private static final String SCREEN_CLASS = "class";
     private static final String SCREEN_ACTIVITY = "activity";
 
     // State
-    private String            currentScreen    = SCREEN_HOME;
-    private List<ClassFolder> classFolders     = new ArrayList<>();
-    private ClassFolder       selectedClass    = null;
-    private ActivityFolder    selectedActivity = null;
-    private String            selectedSheetType = null;
+    private String currentScreen = SCREEN_HOME;
+    private List<ClassFolder> classFolders = new ArrayList<>();
+    private ClassFolder selectedClass = null;
+    private ActivityFolder selectedActivity = null;
+    private String selectedSheetType = null;
 
     // Views
-    private ImageButton  btnBack;
-    private TextView     topBarTitle, topBarBadge;
-    private ScrollView   screenHome, screenClass, screenActivity;
+    private ImageButton btnBack;
+    private TextView topBarTitle, topBarBadge;
+    private ScrollView screenHome, screenClass, screenActivity;
     private LinearLayout homeEmpty, homeClassList;
-    private TextView     classTeacherLabel;
+    private TextView classTeacherLabel;
     private LinearLayout classEmpty, classActivityList;
 
-    private CardView         scanCtaCard;
+    private CardView scanCtaCard;
 
     private LinearLayout scansHeader, activityScanList, activityScansEmpty;
-    private TextView     scansTotalCount, scanCtaSub;
+    private TextView scansTotalCount, scanCtaSub;
     private FloatingActionButton fab;
 
     // Breadcrumb
     private LinearLayout breadcrumbBar;
-    private View         breadcrumbDivider;
-    private TextView     breadcrumbRoot, breadcrumbSep1, breadcrumbClass,
+    private View breadcrumbDivider;
+    private TextView breadcrumbRoot, breadcrumbSep1, breadcrumbClass,
             breadcrumbSep2, breadcrumbActivity;
 
     private ActivityResultLauncher<String> galleryLauncher;
@@ -100,7 +104,7 @@ public class DashboardActivity extends AppCompatActivity {
         getWindow().setStatusBarColor(Color.parseColor("#0038A8"));
 
         initViews();
-        initBackHandler();       // ← modern replacement for onBackPressed()
+        initBackHandler(); // ← modern replacement for onBackPressed()
         initGalleryLauncher();
         loadData();
         showScreen(SCREEN_HOME);
@@ -134,12 +138,12 @@ public class DashboardActivity extends AppCompatActivity {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // BACK HANDLER  —  replaces deprecated onBackPressed() override
+    // BACK HANDLER — replaces deprecated onBackPressed() override
     // ═══════════════════════════════════════════════════════════════
 
     /**
      * Use OnBackPressedDispatcher (AndroidX) instead of the deprecated
-     * onBackPressed() override.  The callback is always enabled.
+     * onBackPressed() override. The callback is always enabled.
      * When we are already on the home screen we disable the callback first,
      * then call onBackPressed() on the dispatcher so the system can finish
      * the activity normally.
@@ -168,43 +172,43 @@ public class DashboardActivity extends AppCompatActivity {
     // ═══════════════════════════════════════════════════════════════
 
     private void initViews() {
-        btnBack     = findViewById(R.id.btnBack);
+        btnBack = findViewById(R.id.btnBack);
         topBarTitle = findViewById(R.id.topBarTitle);
         topBarBadge = findViewById(R.id.topBarBadge);
 
-        screenHome     = findViewById(R.id.screenHome);
-        screenClass    = findViewById(R.id.screenClass);
+        screenHome = findViewById(R.id.screenHome);
+        screenClass = findViewById(R.id.screenClass);
         screenActivity = findViewById(R.id.screenActivity);
 
-        homeEmpty     = findViewById(R.id.homeEmpty);
+        homeEmpty = findViewById(R.id.homeEmpty);
         homeClassList = findViewById(R.id.homeClassList);
 
         classTeacherLabel = findViewById(R.id.classTeacherLabel);
-        classEmpty        = findViewById(R.id.classEmpty);
+        classEmpty = findViewById(R.id.classEmpty);
         classActivityList = findViewById(R.id.classActivityList);
 
-        scanCtaCard     = findViewById(R.id.scanCtaCard);
-        scanCtaSub      = findViewById(R.id.scanCtaSub);
-        scansHeader        = findViewById(R.id.scansHeader);
-        scansTotalCount    = findViewById(R.id.scansTotalCount);
-        activityScanList   = findViewById(R.id.activityScanList);
+        scanCtaCard = findViewById(R.id.scanCtaCard);
+        scanCtaSub = findViewById(R.id.scanCtaSub);
+        scansHeader = findViewById(R.id.scansHeader);
+        scansTotalCount = findViewById(R.id.scansTotalCount);
+        activityScanList = findViewById(R.id.activityScanList);
         activityScansEmpty = findViewById(R.id.activityScansEmpty);
 
         fab = findViewById(R.id.fab);
 
-        breadcrumbBar      = findViewById(R.id.breadcrumbBar);
-        breadcrumbDivider  = findViewById(R.id.breadcrumbDivider);
-        breadcrumbRoot     = findViewById(R.id.breadcrumbRoot);
-        breadcrumbSep1     = findViewById(R.id.breadcrumbSep1);
-        breadcrumbClass    = findViewById(R.id.breadcrumbClass);
-        breadcrumbSep2     = findViewById(R.id.breadcrumbSep2);
+        breadcrumbBar = findViewById(R.id.breadcrumbBar);
+        breadcrumbDivider = findViewById(R.id.breadcrumbDivider);
+        breadcrumbRoot = findViewById(R.id.breadcrumbRoot);
+        breadcrumbSep1 = findViewById(R.id.breadcrumbSep1);
+        breadcrumbClass = findViewById(R.id.breadcrumbClass);
+        breadcrumbSep2 = findViewById(R.id.breadcrumbSep2);
         breadcrumbActivity = findViewById(R.id.breadcrumbActivity);
 
         btnBack.setOnClickListener(v -> navigateBack());
         fab.setOnClickListener(v -> onFabClicked());
 
         breadcrumbRoot.setOnClickListener(v -> {
-            selectedClass    = null;
+            selectedClass = null;
             selectedActivity = null;
             showScreen(SCREEN_HOME);
         });
@@ -223,8 +227,10 @@ public class DashboardActivity extends AppCompatActivity {
         galleryLauncher = registerForActivityResult(
                 new ActivityResultContracts.GetContent(),
                 uri -> {
-                    if (uri != null) handleSelectedImage(uri);
-                    else Toast.makeText(this, "No image selected", Toast.LENGTH_SHORT).show();
+                    if (uri != null)
+                        handleSelectedImage(uri);
+                    else
+                        Toast.makeText(this, "No image selected", Toast.LENGTH_SHORT).show();
                 });
     }
 
@@ -253,7 +259,10 @@ public class DashboardActivity extends AppCompatActivity {
                 break;
 
             case SCREEN_CLASS:
-                if (selectedClass == null) { showScreen(SCREEN_HOME); return; }
+                if (selectedClass == null) {
+                    showScreen(SCREEN_HOME);
+                    return;
+                }
                 screenClass.setVisibility(View.VISIBLE);
                 btnBack.setVisibility(View.VISIBLE);
                 topBarTitle.setText(selectedClass.getDisplayName());
@@ -272,7 +281,8 @@ public class DashboardActivity extends AppCompatActivity {
 
             case SCREEN_ACTIVITY:
                 if (selectedClass == null || selectedActivity == null) {
-                    showScreen(SCREEN_HOME); return;
+                    showScreen(SCREEN_HOME);
+                    return;
                 }
                 screenActivity.setVisibility(View.VISIBLE);
                 btnBack.setVisibility(View.VISIBLE);
@@ -312,8 +322,12 @@ public class DashboardActivity extends AppCompatActivity {
 
     private void onFabClicked() {
         switch (currentScreen) {
-            case SCREEN_HOME:  showNewClassDialog();    break;
-            case SCREEN_CLASS: showNewActivityDialog(); break;
+            case SCREEN_HOME:
+                showNewClassDialog();
+                break;
+            case SCREEN_CLASS:
+                showNewActivityDialog();
+                break;
         }
     }
 
@@ -324,22 +338,27 @@ public class DashboardActivity extends AppCompatActivity {
     private void renderHomeScreen() {
         homeClassList.removeAllViews();
 
-        TextView statClasses    = findViewById(R.id.statClasses);
+        TextView statClasses = findViewById(R.id.statClasses);
         TextView statActivities = findViewById(R.id.statActivities);
-        TextView statScans      = findViewById(R.id.statScans);
+        TextView statScans = findViewById(R.id.statScans);
         TextView homeClassCount = findViewById(R.id.homeClassCount);
 
         int totalActivities = 0, totalScans = 0;
         for (ClassFolder cls : classFolders) {
             if (cls.getActivities() != null) {
                 totalActivities += cls.getActivities().size();
-                for (ActivityFolder act : cls.getActivities()) totalScans += act.getScanCount();
+                for (ActivityFolder act : cls.getActivities())
+                    totalScans += act.getScanCount();
             }
         }
-        if (statClasses    != null) statClasses.setText(String.valueOf(classFolders.size()));
-        if (statActivities != null) statActivities.setText(String.valueOf(totalActivities));
-        if (statScans      != null) statScans.setText(String.valueOf(totalScans));
-        if (homeClassCount != null) homeClassCount.setText(classFolders.size() + " total");
+        if (statClasses != null)
+            statClasses.setText(String.valueOf(classFolders.size()));
+        if (statActivities != null)
+            statActivities.setText(String.valueOf(totalActivities));
+        if (statScans != null)
+            statScans.setText(String.valueOf(totalScans));
+        if (homeClassCount != null)
+            homeClassCount.setText(classFolders.size() + " total");
 
         if (classFolders.isEmpty()) {
             homeEmpty.setVisibility(View.VISIBLE);
@@ -347,7 +366,8 @@ public class DashboardActivity extends AppCompatActivity {
         } else {
             homeEmpty.setVisibility(View.GONE);
             homeClassList.setVisibility(View.VISIBLE);
-            for (ClassFolder cls : classFolders) homeClassList.addView(createClassCard(cls));
+            for (ClassFolder cls : classFolders)
+                homeClassList.addView(createClassCard(cls));
         }
     }
 
@@ -404,9 +424,12 @@ public class DashboardActivity extends AppCompatActivity {
         card.addView(header);
 
         TextView meta = new TextView(this);
-        meta.setText("📂 " + cls.getActivityCount() + " activit"
-                + (cls.getActivityCount() != 1 ? "ies" : "y")
-                + " · " + cls.getFormattedDate());
+        String schoolYearText = (cls.getSchoolYear() != null && !cls.getSchoolYear().isEmpty())
+                ? " · S.Y. " + cls.getSchoolYear()
+                : "";
+        meta.setText("📂 " + cls.getActivityCount() + " Assessment"
+                + (cls.getActivityCount() != 1 ? "s" : "")
+                + schoolYearText);
         meta.setTextColor(Color.parseColor("#94A3B8"));
         meta.setTextSize(11);
         LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(
@@ -415,8 +438,14 @@ public class DashboardActivity extends AppCompatActivity {
         meta.setLayoutParams(mlp);
         card.addView(meta);
 
-        card.setOnClickListener(v -> { selectedClass = cls; showScreen(SCREEN_CLASS); });
-        card.setOnLongClickListener(v -> { showClassOptionsDialog(cls); return true; });
+        card.setOnClickListener(v -> {
+            selectedClass = cls;
+            showScreen(SCREEN_CLASS);
+        });
+        card.setOnLongClickListener(v -> {
+            showClassOptionsDialog(cls);
+            return true;
+        });
         return card;
     }
 
@@ -435,7 +464,8 @@ public class DashboardActivity extends AppCompatActivity {
         } else {
             classEmpty.setVisibility(View.GONE);
             classActivityList.setVisibility(View.VISIBLE);
-            for (ActivityFolder act : activities) classActivityList.addView(createActivityCard(act));
+            for (ActivityFolder act : activities)
+                classActivityList.addView(createActivityCard(act));
         }
     }
 
@@ -492,9 +522,11 @@ public class DashboardActivity extends AppCompatActivity {
         card.addView(header);
 
         TextView meta = new TextView(this);
-        meta.setText("🗂 " + act.getScanCount() + " scan"
+        String dateToShow = act.getExamDate() != null && !act.getExamDate().isEmpty() ? act.getExamDate()
+                : act.getFormattedDate();
+        meta.setText("�� " + act.getScanCount() + " scan"
                 + (act.getScanCount() != 1 ? "s" : "")
-                + " · " + act.getFormattedDate());
+                + " · " + dateToShow);
         meta.setTextColor(Color.parseColor("#94A3B8"));
         meta.setTextSize(11);
         LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(
@@ -503,8 +535,14 @@ public class DashboardActivity extends AppCompatActivity {
         meta.setLayoutParams(mlp);
         card.addView(meta);
 
-        card.setOnClickListener(v -> { selectedActivity = act; showScreen(SCREEN_ACTIVITY); });
-        card.setOnLongClickListener(v -> { showActivityOptionsDialog(act); return true; });
+        card.setOnClickListener(v -> {
+            selectedActivity = act;
+            showScreen(SCREEN_ACTIVITY);
+        });
+        card.setOnLongClickListener(v -> {
+            showActivityOptionsDialog(act);
+            return true;
+        });
         return card;
     }
 
@@ -527,9 +565,9 @@ public class DashboardActivity extends AppCompatActivity {
             activityScansEmpty.setVisibility(View.GONE);
 
             // ── FIX: Capture IDs as final local Strings so the lambda never
-            //         holds a reference to the mutable selectedClass /
-            //         selectedActivity fields (which can become null on resume).
-            final String classId    = selectedClass.getId();
+            // holds a reference to the mutable selectedClass /
+            // selectedActivity fields (which can become null on resume).
+            final String classId = selectedClass.getId();
             final String activityId = selectedActivity.getId();
 
             for (int i = 0; i < scans.size(); i++) {
@@ -548,7 +586,7 @@ public class DashboardActivity extends AppCompatActivity {
      * captures stable strings instead of mutable activity-level fields.
      */
     private View createScanCard(ScanEntry scan, int index,
-                                final String classId, final String activityId) {
+            final String classId, final String activityId) {
 
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.HORIZONTAL);
@@ -602,7 +640,8 @@ public class DashboardActivity extends AppCompatActivity {
 
         TextView lrn = new TextView(this);
         lrn.setText("LRN: " + (scan.getLrn() != null && !scan.getLrn().isEmpty()
-                ? scan.getLrn() : "Unknown"));
+                ? scan.getLrn()
+                : "Unknown"));
         lrn.setTextColor(Color.parseColor("#1E293B"));
         lrn.setTextSize(13);
         lrn.setTypeface(null, Typeface.BOLD);
@@ -645,9 +684,9 @@ public class DashboardActivity extends AppCompatActivity {
             Log.d(TAG, "Opening ScanDetail — index=" + index
                     + "  classId=" + classId + "  activityId=" + activityId);
             Intent intent = new Intent(DashboardActivity.this, ScanDetailActivity.class);
-            intent.putExtra(ScanDetailActivity.EXTRA_CLASS_ID,    classId);
+            intent.putExtra(ScanDetailActivity.EXTRA_CLASS_ID, classId);
             intent.putExtra(ScanDetailActivity.EXTRA_ACTIVITY_ID, activityId);
-            intent.putExtra(ScanDetailActivity.EXTRA_SCAN_INDEX,  index);
+            intent.putExtra(ScanDetailActivity.EXTRA_SCAN_INDEX, index);
             startActivity(intent);
         });
 
@@ -693,11 +732,20 @@ public class DashboardActivity extends AppCompatActivity {
         root.addView(createDialogHandle());
         root.addView(buildSheetTitle(cls.getDisplayName(), "#1E293B", Gravity.CENTER, 24));
         root.addView(createMenuOption("✏️   Edit Class Details",
-                () -> { dialog.dismiss(); showEditClassDialog(cls); }, false));
+                () -> {
+                    dialog.dismiss();
+                    showEditClassDialog(cls);
+                }, false));
         root.addView(createMenuOption("⬇️   Download Summary",
-                () -> { dialog.dismiss(); downloadClassData(cls); }, false));
+                () -> {
+                    dialog.dismiss();
+                    downloadClassData(cls);
+                }, false));
         root.addView(createMenuOption("🗑️   Delete Class",
-                () -> { dialog.dismiss(); showDeleteClassConfirmation(cls); }, true));
+                () -> {
+                    dialog.dismiss();
+                    showDeleteClassConfirmation(cls);
+                }, true));
 
         dialog.setContentView(root);
         configureBottomDialog(dialog);
@@ -709,15 +757,18 @@ public class DashboardActivity extends AppCompatActivity {
         btn.setText(text);
         btn.setTextSize(15);
         btn.setTextColor(isDestructive
-                ? Color.parseColor("#CE1126") : Color.parseColor("#1E293B"));
+                ? Color.parseColor("#CE1126")
+                : Color.parseColor("#1E293B"));
         btn.setPadding(dp(16), dp(14), dp(16), dp(14));
 
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(isDestructive
-                ? Color.parseColor("#FEF2F2") : Color.parseColor("#F8FAFC"));
+                ? Color.parseColor("#FEF2F2")
+                : Color.parseColor("#F8FAFC"));
         bg.setCornerRadius(dp(12));
         bg.setStroke(dp(1), isDestructive
-                ? Color.parseColor("#FECACA") : Color.parseColor("#E2E8F0"));
+                ? Color.parseColor("#FECACA")
+                : Color.parseColor("#E2E8F0"));
         btn.setBackground(bg);
 
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
@@ -752,15 +803,22 @@ public class DashboardActivity extends AppCompatActivity {
         sectionInput.setText(cls.getSection());
         root.addView(sectionInput);
 
+        root.addView(createFieldLabel("SCHOOL YEAR"));
+        EditText schoolYearInput = createLightInput("e.g. 2023-2024");
+        schoolYearInput.setText(cls.getSchoolYear() != null ? cls.getSchoolYear() : "");
+        root.addView(schoolYearInput);
+
         LinearLayout actions = buildActionsRow(dp(20));
         TextView btnCancel = createDialogButton("Cancel", false);
-        TextView btnSave   = createDialogButton("Save",   true);
-        actions.addView(btnCancel); actions.addView(spacer(dp(10))); actions.addView(btnSave);
+        TextView btnSave = createDialogButton("Save", true);
+        actions.addView(btnCancel);
+        actions.addView(spacer(dp(10)));
+        actions.addView(btnSave);
         root.addView(actions);
 
         btnCancel.setOnClickListener(v -> dialog.dismiss());
         btnSave.setOnClickListener(v -> {
-            String grade   = gradeInput.getText().toString().trim();
+            String grade = gradeInput.getText().toString().trim();
             String section = sectionInput.getText().toString().trim();
             String teacher = teacherInput.getText().toString().trim();
             if (grade.isEmpty() || section.isEmpty()) {
@@ -780,6 +838,7 @@ public class DashboardActivity extends AppCompatActivity {
             cls.setTeacher(teacher.isEmpty() ? "Unknown Teacher" : teacher);
             cls.setGrade(grade);
             cls.setSection(section);
+            cls.setSchoolYear(schoolYearInput.getText().toString().trim());
             saveData();
             dialog.dismiss();
             showToast("Class updated ✓");
@@ -853,10 +912,16 @@ public class DashboardActivity extends AppCompatActivity {
         LinearLayout root = buildSheet();
         root.addView(createDialogHandle());
         root.addView(buildSheetTitle(act.getName(), "#1E293B", Gravity.CENTER, 24));
-        root.addView(createMenuOption("✏️   Edit Activity Details",
-                () -> { dialog.dismiss(); showEditActivityDialog(act); }, false));
-        root.addView(createMenuOption("🗑️   Delete Activity",
-                () -> { dialog.dismiss(); showDeleteActivityConfirmation(act); }, true));
+        root.addView(createMenuOption("✏️   Edit Assessment Details",
+                () -> {
+                    dialog.dismiss();
+                    showEditActivityDialog(act);
+                }, false));
+        root.addView(createMenuOption("🗑️   Delete Assessment",
+                () -> {
+                    dialog.dismiss();
+                    showDeleteActivityConfirmation(act);
+                }, true));
 
         dialog.setContentView(root);
         configureBottomDialog(dialog);
@@ -870,12 +935,29 @@ public class DashboardActivity extends AppCompatActivity {
 
         LinearLayout root = buildSheet();
         root.addView(createDialogHandle());
-        root.addView(buildSheetTitle("✏️ Edit Activity", "#0038A8", Gravity.START, 20));
+        root.addView(buildSheetTitle("✏️ Edit Assessment", "#0038A8", Gravity.START, 20));
 
-        root.addView(createFieldLabel("ACTIVITY NAME *"));
+        root.addView(createFieldLabel("ASSESSMENT NAME *"));
         EditText nameInput = createLightInput(act.getName());
         nameInput.setText(act.getName());
         root.addView(nameInput);
+
+        root.addView(createFieldLabel("EXAM DATE"));
+        EditText dateInput = createLightInput("Select date");
+        dateInput.setFocusable(false);
+        dateInput.setClickable(true);
+        String initialDate = (act.getExamDate() != null && !act.getExamDate().isEmpty()) ? act.getExamDate()
+                : act.getFormattedDate();
+        dateInput.setText(initialDate);
+        dateInput.setOnClickListener(v -> {
+            Calendar c = Calendar.getInstance();
+            new DatePickerDialog(this, (view, year, month, dayOfMonth) -> {
+                Calendar chosen = Calendar.getInstance();
+                chosen.set(year, month, dayOfMonth);
+                dateInput.setText(new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(chosen.getTime()));
+            }, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).show();
+        });
+        root.addView(dateInput);
 
         root.addView(createFieldLabel("OMR SHEET TYPE"));
         TextView sheetInfo = new TextView(this);
@@ -897,32 +979,35 @@ public class DashboardActivity extends AppCompatActivity {
 
         LinearLayout actions = buildActionsRow(dp(20));
         TextView btnCancel = createDialogButton("Cancel", false);
-        TextView btnSave   = createDialogButton("Save",   true);
-        actions.addView(btnCancel); actions.addView(spacer(dp(10))); actions.addView(btnSave);
+        TextView btnSave = createDialogButton("Save", true);
+        actions.addView(btnCancel);
+        actions.addView(spacer(dp(10)));
+        actions.addView(btnSave);
         root.addView(actions);
 
         btnCancel.setOnClickListener(v -> dialog.dismiss());
         btnSave.setOnClickListener(v -> {
             String name = nameInput.getText().toString().trim();
             if (name.isEmpty()) {
-                showErrorDialog("Missing Name", "Activity name is required to save.");
+                showErrorDialog("Missing Name", "Assessment name is required to save.");
                 return;
             }
             if (selectedClass != null && selectedClass.getActivities() != null) {
                 for (ActivityFolder existing : selectedClass.getActivities()) {
                     if (!existing.getId().equals(act.getId())
                             && existing.getName().equalsIgnoreCase(name)) {
-                        showErrorDialog("Duplicate Activity",
-                                "An activity named \"" + name
+                        showErrorDialog("Duplicate Assessment",
+                                "An assessment named \"" + name
                                         + "\" already exists in this class.\nPlease use a different name.");
                         return;
                     }
                 }
             }
             act.setName(name);
+            act.setExamDate(dateInput.getText().toString().trim());
             saveData();
             dialog.dismiss();
-            showToast("Activity updated ✓");
+            showToast("Assessment updated ✓");
             renderClassScreen();
         });
 
@@ -939,7 +1024,7 @@ public class DashboardActivity extends AppCompatActivity {
         LinearLayout root = buildSheet();
 
         TextView title = new TextView(this);
-        title.setText("Delete Activity?");
+        title.setText("Delete Assessment?");
         title.setTextSize(18);
         title.setTypeface(null, Typeface.BOLD);
         title.setTextColor(Color.parseColor("#CE1126"));
@@ -948,7 +1033,7 @@ public class DashboardActivity extends AppCompatActivity {
         TextView msg = new TextView(this);
         msg.setText("Are you sure you want to delete \"" + act.getName()
                 + "\"?\n\nThis will permanently delete all "
-                + act.getScanCount() + " scan(s) inside this activity.");
+                + act.getScanCount() + " scan(s) inside this assessment.");
         msg.setTextColor(Color.parseColor("#64748B"));
         msg.setTextSize(14);
         msg.setPadding(0, dp(12), 0, dp(24));
@@ -973,7 +1058,7 @@ public class DashboardActivity extends AppCompatActivity {
                 renderClassScreen();
                 topBarBadge.setText("📁 " + selectedClass.getActivityCount());
                 dialog.dismiss();
-                showToast("Activity deleted");
+                showToast("Assessment deleted");
             }
         });
         actions.addView(btnDelete);
@@ -1010,15 +1095,21 @@ public class DashboardActivity extends AppCompatActivity {
         EditText sectionInput = createLightInput("e.g. Section A");
         root.addView(sectionInput);
 
+        root.addView(createFieldLabel("SCHOOL YEAR"));
+        EditText schoolYearInput = createLightInput("e.g. 2023-2024");
+        root.addView(schoolYearInput);
+
         LinearLayout actions = buildActionsRow(dp(20));
         TextView btnCancel = createDialogButton("Cancel", false);
-        TextView btnDone   = createDialogButton("Done",   true);
-        actions.addView(btnCancel); actions.addView(spacer(dp(10))); actions.addView(btnDone);
+        TextView btnDone = createDialogButton("Done", true);
+        actions.addView(btnCancel);
+        actions.addView(spacer(dp(10)));
+        actions.addView(btnDone);
         root.addView(actions);
 
         btnCancel.setOnClickListener(v -> dialog.dismiss());
         btnDone.setOnClickListener(v -> {
-            String grade   = gradeInput.getText().toString().trim();
+            String grade = gradeInput.getText().toString().trim();
             String section = sectionInput.getText().toString().trim();
             String teacher = teacherInput.getText().toString().trim();
             if (grade.isEmpty() || section.isEmpty()) {
@@ -1034,8 +1125,9 @@ public class DashboardActivity extends AppCompatActivity {
                     return;
                 }
             }
+            String schoolYear = schoolYearInput.getText().toString().trim();
             ClassFolder cls = new ClassFolder(
-                    teacher.isEmpty() ? "Unknown Teacher" : teacher, grade, section);
+                    teacher.isEmpty() ? "Unknown Teacher" : teacher, grade, section, schoolYear);
             classFolders.add(cls);
             saveData();
             dialog.dismiss();
@@ -1055,16 +1147,31 @@ public class DashboardActivity extends AppCompatActivity {
 
         LinearLayout root = buildSheet();
         root.addView(createDialogHandle());
-        root.addView(buildSheetTitle("⊕ New Activity", "#0038A8", Gravity.START, 20));
+        root.addView(buildSheetTitle("⊕ New Assessment", "#0038A8", Gravity.START, 20));
 
-        root.addView(createFieldLabel("ACTIVITY NAME *"));
+        root.addView(createFieldLabel("ASSESSMENT NAME *"));
         EditText nameInput = createLightInput("e.g. Math Pop Quiz 1");
         root.addView(nameInput);
 
+        root.addView(createFieldLabel("EXAM DATE"));
+        EditText dateInput = createLightInput("Select date");
+        dateInput.setFocusable(false);
+        dateInput.setClickable(true);
+        dateInput.setText(new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(new java.util.Date()));
+        dateInput.setOnClickListener(v -> {
+            Calendar c = Calendar.getInstance();
+            new DatePickerDialog(this, (view, year, month, dayOfMonth) -> {
+                Calendar chosen = Calendar.getInstance();
+                chosen.set(year, month, dayOfMonth);
+                dateInput.setText(new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(chosen.getTime()));
+            }, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).show();
+        });
+        root.addView(dateInput);
+
         root.addView(createFieldLabel("OMR SHEET TYPE"));
 
-        String[][] sheetTypes = {{"ZPH30","30 Items"},{"ZPH50","50 Items"},{"ZPH60","60 Items"}};
-        final String[] selectedType = {"ZPH30"};
+        String[][] sheetTypes = { { "ZPH30", "30 Items" }, { "ZPH50", "50 Items" }, { "ZPH60", "60 Items" } };
+        final String[] selectedType = { "ZPH30" };
 
         LinearLayout typeRow = new LinearLayout(this);
         typeRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -1086,7 +1193,8 @@ public class DashboardActivity extends AppCompatActivity {
             btn.setFocusable(true);
             LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
                     0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-            if (i < 2) blp.rightMargin = dp(8);
+            if (i < 2)
+                blp.rightMargin = dp(8);
             btn.setLayoutParams(blp);
             typeButtons[i] = btn;
             btn.setOnClickListener(v -> {
@@ -1100,33 +1208,36 @@ public class DashboardActivity extends AppCompatActivity {
 
         LinearLayout actions = buildActionsRow(dp(4));
         TextView btnCancel = createDialogButton("Cancel", false);
-        TextView btnDone   = createDialogButton("Done",   true);
-        actions.addView(btnCancel); actions.addView(spacer(dp(10))); actions.addView(btnDone);
+        TextView btnDone = createDialogButton("Done", true);
+        actions.addView(btnCancel);
+        actions.addView(spacer(dp(10)));
+        actions.addView(btnDone);
         root.addView(actions);
 
         btnCancel.setOnClickListener(v -> dialog.dismiss());
         btnDone.setOnClickListener(v -> {
             String name = nameInput.getText().toString().trim();
             if (name.isEmpty()) {
-                showErrorDialog("Missing Name", "Activity name is required to create an activity.");
+                showErrorDialog("Missing Name", "Assessment name is required to create an assessment.");
                 return;
             }
             if (selectedClass.getActivities() != null) {
                 for (ActivityFolder existing : selectedClass.getActivities()) {
                     if (existing.getName().equalsIgnoreCase(name)) {
-                        showErrorDialog("Duplicate Activity",
-                                "An activity named \"" + name
+                        showErrorDialog("Duplicate Assessment",
+                                "An assessment named \"" + name
                                         + "\" already exists in this class.\nPlease use a different name.");
                         return;
                     }
                 }
             }
             ActivityFolder act = new ActivityFolder(name, selectedType[0]);
+            act.setExamDate(dateInput.getText().toString().trim());
             selectedClass.addActivity(act);
             saveData();
             dialog.dismiss();
             showScreen(SCREEN_CLASS);
-            showToast("Activity folder created ✓");
+            showToast("Assessment folder created ✓");
         });
 
         dialog.setContentView(root);
@@ -1196,7 +1307,7 @@ public class DashboardActivity extends AppCompatActivity {
     }
 
     private View createScanOptionCard(Dialog dialog, String emoji, String label,
-                                      String desc, String action) {
+            String desc, String action) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.HORIZONTAL);
         card.setGravity(Gravity.CENTER_VERTICAL);
@@ -1256,7 +1367,10 @@ public class DashboardActivity extends AppCompatActivity {
         card.setOnClickListener(v -> {
             selectedSheetType = selectedActivity.getSheetType();
             dialog.dismiss();
-            if ("camera".equals(action)) openCamera(); else openGallery();
+            if ("camera".equals(action))
+                openCamera();
+            else
+                openGallery();
         });
         return card;
     }
@@ -1268,7 +1382,8 @@ public class DashboardActivity extends AppCompatActivity {
     private void downloadClassData(ClassFolder cls) {
         try {
             if (cls.getActivities() == null || cls.getActivities().isEmpty()) {
-                showToast("No data to download"); return;
+                showToast("No data to download");
+                return;
             }
             String folderName = cls.getGrade().replaceAll("\\s+", "")
                     + "-" + cls.getSection().replaceAll("\\s+", "");
@@ -1280,14 +1395,17 @@ public class DashboardActivity extends AppCompatActivity {
 
             for (ActivityFolder act : cls.getActivities()) {
                 List<ScanEntry> scans = act.getScans();
-                if (scans == null || scans.isEmpty()) continue;
+                if (scans == null || scans.isEmpty())
+                    continue;
 
                 String actDirName = act.getName().replaceAll("[^a-zA-Z0-9_\\- ]", "_").trim();
-                java.io.File actDir     = new java.io.File(classDir, actDirName);
-                java.io.File imagesDir  = new java.io.File(actDir, "images");
+                java.io.File actDir = new java.io.File(classDir, actDirName);
+                java.io.File imagesDir = new java.io.File(actDir, "images");
                 java.io.File resultsDir = new java.io.File(actDir, "result");
-                if (!imagesDir.exists())  imagesDir.mkdirs();
-                if (!resultsDir.exists()) resultsDir.mkdirs();
+                if (!imagesDir.exists())
+                    imagesDir.mkdirs();
+                if (!resultsDir.exists())
+                    resultsDir.mkdirs();
 
                 int scanNum = 0;
                 for (ScanEntry scan : scans) {
@@ -1300,7 +1418,8 @@ public class DashboardActivity extends AppCompatActivity {
                         if (srcFile.exists()) {
                             String ext = srcPath.endsWith(".png") ? ".png" : ".jpg";
                             String lrnPart = (scan.getLrn() != null && !scan.getLrn().isEmpty())
-                                    ? scan.getLrn().replaceAll("[^a-zA-Z0-9]", "") : "scan_" + scanNum;
+                                    ? scan.getLrn().replaceAll("[^a-zA-Z0-9]", "")
+                                    : "scan_" + scanNum;
                             java.io.File dest = new java.io.File(imagesDir, lrnPart + ext);
                             copyFile(srcFile, dest);
                             scanMediaFile(dest);
@@ -1309,12 +1428,14 @@ public class DashboardActivity extends AppCompatActivity {
                     }
                     try {
                         String lrnOnly = (scan.getLrn() != null && !scan.getLrn().isEmpty())
-                                ? scan.getLrn() : "scan_" + scanNum;
+                                ? scan.getLrn()
+                                : "scan_" + scanNum;
                         String indName = (lrnOnly + "_" + cls.getGrade() + "-" + cls.getSection() + "_"
                                 + act.getName().replaceAll("\\s+", "") + ".csv")
                                 .replaceAll("[^a-zA-Z0-9_\\-\\.]", "_");
                         StringBuilder sb = new StringBuilder("LRN,Score");
-                        for (int k = 1; k <= act.getNumItems(); k++) sb.append(",Q").append(k);
+                        for (int k = 1; k <= act.getNumItems(); k++)
+                            sb.append(",Q").append(k);
                         sb.append("\n").append(scan.getLrn() != null ? scan.getLrn() : "")
                                 .append(",").append(scan.getScore()).append("/").append(scan.getNumItems());
                         for (int k = 1; k <= act.getNumItems(); k++) {
@@ -1323,13 +1444,17 @@ public class DashboardActivity extends AppCompatActivity {
                         }
                         sb.append("\n");
                         java.io.FileWriter fw = new java.io.FileWriter(new java.io.File(resultsDir, indName));
-                        fw.write(sb.toString()); fw.close();
+                        fw.write(sb.toString());
+                        fw.close();
                         scanMediaFile(new java.io.File(resultsDir, indName));
-                    } catch (Exception ex) { Log.e(TAG, "Ind CSV error", ex); }
+                    } catch (Exception ex) {
+                        Log.e(TAG, "Ind CSV error", ex);
+                    }
                 }
 
                 StringBuilder actCsv = new StringBuilder("LRN,Score");
-                for (int i = 1; i <= act.getNumItems(); i++) actCsv.append(",Q").append(i);
+                for (int i = 1; i <= act.getNumItems(); i++)
+                    actCsv.append(",Q").append(i);
                 actCsv.append("\n");
                 for (ScanEntry scan : scans) {
                     actCsv.append(scan.getLrn() != null ? scan.getLrn() : "")
@@ -1342,7 +1467,8 @@ public class DashboardActivity extends AppCompatActivity {
                 }
                 java.io.File csvFile = new java.io.File(actDir, actDirName.replaceAll("\\s+", "_") + ".csv");
                 java.io.FileWriter writer = new java.io.FileWriter(csvFile);
-                writer.write(actCsv.toString()); writer.close();
+                writer.write(actCsv.toString());
+                writer.close();
                 scanMediaFile(csvFile);
                 totalCsvs++;
             }
@@ -1354,20 +1480,22 @@ public class DashboardActivity extends AppCompatActivity {
     }
 
     private void copyFile(java.io.File src, java.io.File dst) throws java.io.IOException {
-        try (java.io.FileInputStream in  = new java.io.FileInputStream(src);
-             java.io.FileOutputStream out = new java.io.FileOutputStream(dst)) {
-            byte[] buf = new byte[4096]; int len;
-            while ((len = in.read(buf)) > 0) out.write(buf, 0, len);
+        try (java.io.FileInputStream in = new java.io.FileInputStream(src);
+                java.io.FileOutputStream out = new java.io.FileOutputStream(dst)) {
+            byte[] buf = new byte[4096];
+            int len;
+            while ((len = in.read(buf)) > 0)
+                out.write(buf, 0, len);
         }
     }
 
     private void scanMediaFile(java.io.File file) {
         android.media.MediaScannerConnection.scanFile(
-                this, new String[]{file.getAbsolutePath()}, null, null);
+                this, new String[] { file.getAbsolutePath() }, null, null);
     }
 
     private void showDownloadSuccessDialog(ClassFolder cls, java.io.File classDir,
-                                           int totalImages, int totalCsvs) {
+            int totalImages, int totalCsvs) {
         Dialog dialog = new Dialog(this);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setCancelable(true);
@@ -1422,10 +1550,15 @@ public class DashboardActivity extends AppCompatActivity {
         actions.setOrientation(LinearLayout.HORIZONTAL);
         TextView btnOpen = createDialogButton("Open Folder", true);
         TextView btnDone = createDialogButton("Done", false);
-        actions.addView(btnOpen); actions.addView(spacer(dp(10))); actions.addView(btnDone);
+        actions.addView(btnOpen);
+        actions.addView(spacer(dp(10)));
+        actions.addView(btnDone);
         root.addView(actions);
 
-        btnOpen.setOnClickListener(v -> { dialog.dismiss(); openFolderInFileManager(classDir); });
+        btnOpen.setOnClickListener(v -> {
+            dialog.dismiss();
+            openFolderInFileManager(classDir);
+        });
         btnDone.setOnClickListener(v -> dialog.dismiss());
 
         dialog.setContentView(root);
@@ -1437,8 +1570,10 @@ public class DashboardActivity extends AppCompatActivity {
         try {
             Intent intent = new Intent(Intent.ACTION_VIEW);
             intent.setDataAndType(android.net.Uri.parse(folder.getAbsolutePath()), "resource/folder");
-            if (intent.resolveActivity(getPackageManager()) != null) startActivity(intent);
-            else showToast("Files saved to: Downloads/OMRScanner/" + folder.getName());
+            if (intent.resolveActivity(getPackageManager()) != null)
+                startActivity(intent);
+            else
+                showToast("Files saved to: Downloads/OMRScanner/" + folder.getName());
         } catch (Exception e) {
             showToast("Files saved to: Downloads/OMRScanner/" + folder.getName());
         }
@@ -1451,9 +1586,12 @@ public class DashboardActivity extends AppCompatActivity {
     private void openCamera() {
         try {
             Intent intent = new Intent(this, CameraActivity.class);
-            if (selectedSheetType != null) intent.putExtra(EXTRA_SHEET_TYPE,  selectedSheetType);
-            if (selectedClass    != null) intent.putExtra(EXTRA_CLASS_ID,    selectedClass.getId());
-            if (selectedActivity != null) intent.putExtra(EXTRA_ACTIVITY_ID, selectedActivity.getId());
+            if (selectedSheetType != null)
+                intent.putExtra(EXTRA_SHEET_TYPE, selectedSheetType);
+            if (selectedClass != null)
+                intent.putExtra(EXTRA_CLASS_ID, selectedClass.getId());
+            if (selectedActivity != null)
+                intent.putExtra(EXTRA_ACTIVITY_ID, selectedActivity.getId());
             startActivity(intent);
         } catch (Exception e) {
             Log.e(TAG, "Error opening camera", e);
@@ -1462,8 +1600,9 @@ public class DashboardActivity extends AppCompatActivity {
     }
 
     private void openGallery() {
-        try { galleryLauncher.launch("image/*"); }
-        catch (Exception e) {
+        try {
+            galleryLauncher.launch("image/*");
+        } catch (Exception e) {
             Log.e(TAG, "Error opening gallery", e);
             Toast.makeText(this, "Error opening gallery: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
@@ -1481,9 +1620,12 @@ public class DashboardActivity extends AppCompatActivity {
                         intent.putExtra(com.example.omrscanner.ui.PreviewActivity.IMAGE_PATH, savedPath);
                         intent.putExtra(com.example.omrscanner.ui.PreviewActivity.IMAGE_SOURCE,
                                 com.example.omrscanner.ui.PreviewActivity.SOURCE_GALLERY);
-                        if (selectedSheetType != null) intent.putExtra(EXTRA_SHEET_TYPE,  selectedSheetType);
-                        if (selectedClass    != null) intent.putExtra(EXTRA_CLASS_ID,    selectedClass.getId());
-                        if (selectedActivity != null) intent.putExtra(EXTRA_ACTIVITY_ID, selectedActivity.getId());
+                        if (selectedSheetType != null)
+                            intent.putExtra(EXTRA_SHEET_TYPE, selectedSheetType);
+                        if (selectedClass != null)
+                            intent.putExtra(EXTRA_CLASS_ID, selectedClass.getId());
+                        if (selectedActivity != null)
+                            intent.putExtra(EXTRA_ACTIVITY_ID, selectedActivity.getId());
                         startActivity(intent);
                     });
                 } else {
@@ -1500,13 +1642,18 @@ public class DashboardActivity extends AppCompatActivity {
         try {
             android.graphics.Bitmap bitmap = android.provider.MediaStore.Images.Media
                     .getBitmap(getContentResolver(), imageUri);
-            if (bitmap == null) return null;
+            if (bitmap == null)
+                return null;
             java.io.File outputFile = java.io.File.createTempFile("omr_upload_", ".jpg", getCacheDir());
             java.io.FileOutputStream fos = new java.io.FileOutputStream(outputFile);
             bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, fos);
-            fos.close(); bitmap.recycle();
+            fos.close();
+            bitmap.recycle();
             return outputFile.getAbsolutePath();
-        } catch (Exception e) { e.printStackTrace(); return null; }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -1522,25 +1669,31 @@ public class DashboardActivity extends AppCompatActivity {
     private void loadData() {
         String json = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
                 .getString(KEY_CLASSES, "[]");
-        Type type = new TypeToken<List<ClassFolder>>(){}.getType();
+        Type type = new TypeToken<List<ClassFolder>>() {
+        }.getType();
         classFolders = gson.fromJson(json, type);
-        if (classFolders == null) classFolders = new ArrayList<>();
+        if (classFolders == null)
+            classFolders = new ArrayList<>();
         Log.d(TAG, "Loaded " + classFolders.size() + " classes");
     }
 
     public static void saveScanResult(android.content.Context context,
-                                      String classId, String activityId,
-                                      ScanEntry scanEntry) {
+            String classId, String activityId,
+            ScanEntry scanEntry) {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         Gson g = new Gson();
         String json = prefs.getString(KEY_CLASSES, "[]");
-        Type type = new TypeToken<List<ClassFolder>>(){}.getType();
+        Type type = new TypeToken<List<ClassFolder>>() {
+        }.getType();
         List<ClassFolder> classes = g.fromJson(json, type);
         if (classes != null) {
             for (ClassFolder cls : classes) {
                 if (cls.getId().equals(classId)) {
                     for (ActivityFolder act : cls.getActivities()) {
-                        if (act.getId().equals(activityId)) { act.addScan(scanEntry); break; }
+                        if (act.getId().equals(activityId)) {
+                            act.addScan(scanEntry);
+                            break;
+                        }
                     }
                     break;
                 }
@@ -1550,8 +1703,11 @@ public class DashboardActivity extends AppCompatActivity {
     }
 
     private ClassFolder findClassById(String classId) {
-        if (classId == null) return null;
-        for (ClassFolder cls : classFolders) if (cls.getId().equals(classId)) return cls;
+        if (classId == null)
+            return null;
+        for (ClassFolder cls : classFolders)
+            if (cls.getId().equals(classId))
+                return cls;
         return null;
     }
 
@@ -1633,7 +1789,7 @@ public class DashboardActivity extends AppCompatActivity {
         errorDialog.setContentView(root);
         if (errorDialog.getWindow() != null) {
             errorDialog.getWindow().setLayout(
-                    (int)(getResources().getDisplayMetrics().widthPixels * 0.82),
+                    (int) (getResources().getDisplayMetrics().widthPixels * 0.82),
                     WindowManager.LayoutParams.WRAP_CONTENT);
             errorDialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
             errorDialog.getWindow().setGravity(Gravity.CENTER);
@@ -1641,7 +1797,8 @@ public class DashboardActivity extends AppCompatActivity {
         }
         activeErrorDialog = errorDialog;
         errorDialog.setOnDismissListener(d -> {
-            if (activeErrorDialog == errorDialog) activeErrorDialog = null;
+            if (activeErrorDialog == errorDialog)
+                activeErrorDialog = null;
         });
         errorDialog.show();
     }
@@ -1657,7 +1814,7 @@ public class DashboardActivity extends AppCompatActivity {
         root.setPadding(dp(20), dp(24), dp(20), dp(36));
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(Color.WHITE);
-        bg.setCornerRadii(new float[]{dp(24), dp(24), dp(24), dp(24), 0, 0, 0, 0});
+        bg.setCornerRadii(new float[] { dp(24), dp(24), dp(24), dp(24), 0, 0, 0, 0 });
         root.setBackground(bg);
         return root;
     }
@@ -1772,8 +1929,8 @@ public class DashboardActivity extends AppCompatActivity {
                     WindowManager.LayoutParams.WRAP_CONTENT);
             dialog.getWindow().setGravity(Gravity.BOTTOM);
             dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-            dialog.getWindow().getAttributes().windowAnimations =
-                    com.google.android.material.R.style.Animation_Design_BottomSheetDialog;
+            dialog.getWindow()
+                    .getAttributes().windowAnimations = com.google.android.material.R.style.Animation_Design_BottomSheetDialog;
         }
     }
 

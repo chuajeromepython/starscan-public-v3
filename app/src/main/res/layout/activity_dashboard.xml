@@ -407,7 +407,7 @@
                                     <TextView
                                         android:layout_width="wrap_content"
                                         android:layout_height="wrap_content"
-                                        android:text="@string/Activities"
+                                        android:text="@string/Assessments"
                                         android:textSize="11sp"
                                         android:textColor="#64748B"
                                         android:layout_marginTop="2dp" />
@@ -656,7 +656,7 @@
                                             android:id="@+id/classActivityCount"
                                             android:layout_width="wrap_content"
                                             android:layout_height="wrap_content"
-                                            android:text="8 activities"
+                                            android:text="8 assessments"
                                             android:textColor="#CCFFFFFF"
                                             android:textSize="13sp" />
                                     </LinearLayout>
@@ -676,7 +676,7 @@
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:text="Activities"
+                                android:text="Assessments"
                                 android:textSize="15sp"
                                 android:textStyle="bold"
                                 android:textColor="#1E293B" />
@@ -709,7 +709,7 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="No activities yet"
+                                android:text="No assessments yet"
                                 android:textColor="#64748B"
                                 android:textSize="15sp"
                                 android:textStyle="bold"
@@ -718,7 +718,7 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Tap + to add an activity"
+                                android:text="Tap + to add an assessment"
                                 android:textColor="#94A3B8"
                                 android:textSize="13sp"
                                 android:layout_marginTop="4dp" />

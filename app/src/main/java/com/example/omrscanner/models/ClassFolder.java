@@ -13,6 +13,7 @@ public class ClassFolder {
     private String teacher;
     private String grade;
     private String section;
+    private String schoolYear;
     private List<ActivityFolder> activities;
     private long createdAt;
 
@@ -21,33 +22,72 @@ public class ClassFolder {
         this.activities = new ArrayList<>();
     }
 
-    public ClassFolder(String teacher, String grade, String section) {
+    public ClassFolder(String teacher, String grade, String section, String schoolYear) {
         this.id = UUID.randomUUID().toString().substring(0, 7).toUpperCase();
         this.teacher = teacher;
         this.grade = grade;
         this.section = section;
+        this.schoolYear = schoolYear;
         this.activities = new ArrayList<>();
         this.createdAt = System.currentTimeMillis();
     }
 
     // Getters and Setters
-    public String getId() { return id; }
-    public void setId(String id) { this.id = id; }
+    public String getId() {
+        return id;
+    }
 
-    public String getTeacher() { return teacher; }
-    public void setTeacher(String teacher) { this.teacher = teacher; }
+    public void setId(String id) {
+        this.id = id;
+    }
 
-    public String getGrade() { return grade; }
-    public void setGrade(String grade) { this.grade = grade; }
+    public String getTeacher() {
+        return teacher;
+    }
 
-    public String getSection() { return section; }
-    public void setSection(String section) { this.section = section; }
+    public void setTeacher(String teacher) {
+        this.teacher = teacher;
+    }
 
-    public List<ActivityFolder> getActivities() { return activities; }
-    public void setActivities(List<ActivityFolder> activities) { this.activities = activities; }
+    public String getGrade() {
+        return grade;
+    }
 
-    public long getCreatedAt() { return createdAt; }
-    public void setCreatedAt(long createdAt) { this.createdAt = createdAt; }
+    public void setGrade(String grade) {
+        this.grade = grade;
+    }
+
+    public String getSection() {
+        return section;
+    }
+
+    public void setSection(String section) {
+        this.section = section;
+    }
+
+    public String getSchoolYear() {
+        return schoolYear;
+    }
+
+    public void setSchoolYear(String schoolYear) {
+        this.schoolYear = schoolYear;
+    }
+
+    public List<ActivityFolder> getActivities() {
+        return activities;
+    }
+
+    public void setActivities(List<ActivityFolder> activities) {
+        this.activities = activities;
+    }
+
+    public long getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(long createdAt) {
+        this.createdAt = createdAt;
+    }
 
     public void addActivity(ActivityFolder activity) {
         if (this.activities == null) {
