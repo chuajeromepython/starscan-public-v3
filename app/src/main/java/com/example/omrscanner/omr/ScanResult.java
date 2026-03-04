@@ -2,7 +2,9 @@ package com.example.omrscanner.omr;
 
 import android.graphics.Bitmap;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -24,6 +26,13 @@ public class ScanResult {
     public String lnr;
 
     /**
+     * 0-based column indices of LRN digit positions where no bubble was
+     * clearly shaded (best fill ratio was below the threshold).
+     * Empty if all 12 digits were detected.
+     */
+    public List<Integer> undetectedLnrPositions = new ArrayList<>();
+
+    /**
      * Detected answers keyed by 1-based question number.
      * Value is one or more uppercase letters, e.g. "A", "BD", or "" if blank.
      * Insertion order matches question numbering (LinkedHashMap).
@@ -39,6 +48,11 @@ public class ScanResult {
 
     public ScanResult() {
         this.answers = new LinkedHashMap<>();
+    }
+
+    /** @return true if any LRN digit position was not clearly shaded. */
+    public boolean hasUndetectedLrnDigits() {
+        return undetectedLnrPositions != null && !undetectedLnrPositions.isEmpty();
     }
 
     /**

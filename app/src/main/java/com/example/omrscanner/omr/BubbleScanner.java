@@ -74,6 +74,7 @@ public class BubbleScanner {
     // ── Overlay colours (BGR for OpenCV Mat) ────────────────────────────────
     private static final Scalar COLOUR_FILLED = new Scalar(0, 255, 0);   // green
     private static final Scalar COLOUR_EMPTY  = new Scalar(255, 0, 0);   // blue
+    private static final Scalar COLOUR_RED    = new Scalar(0, 0, 255);   // red (undetected)
 
     // ── Choice labels ───────────────────────────────────────────────────────
     private static final char[] CHOICE_LABELS = {'A', 'B', 'C', 'D'};
@@ -143,7 +144,7 @@ public class BubbleScanner {
             if (block.label.equals("LNR")) {
                 int[] safeOffset = sanitizeAlignmentOffset(block, scaleX, scaleY, scaledRadius, offX, offY);
                 result.lnr = scanLnrBlock(block, scaleX, scaleY, scaledRadius,
-                        gray, overlay, safeOffset[0], safeOffset[1]);
+                        gray, overlay, safeOffset[0], safeOffset[1], result);
             } else {
                 int[] safeOffset = sanitizeAlignmentOffset(block, scaleX, scaleY, scaledRadius, offX, offY);
                 questionCounter = scanQuestionBlock(block, scaleX, scaleY,
@@ -177,13 +178,16 @@ public class BubbleScanner {
      *
      * Layout: 10 rows (digits 0-9) x 12 columns (digit positions).
      * For each column, the row with the highest fill ratio wins.
+     * If no row in a column exceeds the FILL_THRESHOLD, the digit is
+     * marked as undetected ('_') and a red box is drawn on the overlay.
      *
-     * @param offX per-block horizontal offset from GridAligner
-     * @param offY per-block vertical offset from GridAligner
+     * @param offX   per-block horizontal offset from GridAligner
+     * @param offY   per-block vertical offset from GridAligner
+     * @param result the ScanResult to populate with undetected positions
      */
     private String scanLnrBlock(OmrBlock block, double scaleX, double scaleY,
                                 int scaledRadius, Mat gray, Mat overlay,
-                                int offX, int offY) {
+                                int offX, int offY, ScanResult result) {
         // block.rows = 10 (digits 0-9), block.cols = 12 (positions)
         // Fill ratios: [col][row]
         double[][] ratios = new double[block.cols][block.rows];
@@ -208,9 +212,21 @@ public class BubbleScanner {
                     bestRow = row;
                 }
             }
-            lnr.append(bestRow); // row index IS the digit (0-9)
 
-            Log.d(TAG, String.format("LNR col %d: digit=%d (ratio=%.3f)", col, bestRow, bestRatio));
+            if (bestRatio >= FILL_THRESHOLD) {
+                // Digit clearly detected
+                lnr.append(bestRow);
+            } else {
+                // No bubble clearly shaded in this column
+                lnr.append('_');
+                result.undetectedLnrPositions.add(col);
+                Log.w(TAG, String.format("LNR col %d: UNDETECTED (best ratio=%.3f < %.3f)",
+                        col, bestRatio, FILL_THRESHOLD));
+            }
+
+            Log.d(TAG, String.format("LNR col %d: digit=%d (ratio=%.3f)%s",
+                    col, bestRow, bestRatio,
+                    bestRatio < FILL_THRESHOLD ? " [UNDETECTED]" : ""));
         }
 
         // Draw overlay for LNR block
@@ -221,6 +237,22 @@ public class BubbleScanner {
                 boolean filled = ratios[col][row] >= FILL_THRESHOLD;
                 drawBubble(overlay, cx, cy, scaledRadius, filled);
             }
+        }
+
+        // Draw red boxes around undetected LNR columns
+        for (int col : result.undetectedLnrPositions) {
+            // Calculate the bounding box for this column (spans all rows)
+            int topCy = (int) Math.round((block.startY) * scaleY) + offY;
+            int botCy = (int) Math.round((block.startY + (block.rows - 1) * block.dy) * scaleY) + offY;
+            int cx    = (int) Math.round((block.startX + col * block.dx) * scaleX) + offX;
+
+            int margin = scaledRadius + 4;
+            int x1 = Math.max(0, cx - margin);
+            int y1 = Math.max(0, topCy - margin);
+            int x2 = Math.min(overlay.cols() - 1, cx + margin);
+            int y2 = Math.min(overlay.rows() - 1, botCy + margin);
+
+            drawRedBox(overlay, x1, y1, x2, y2);
         }
 
         Log.i(TAG, "LNR extracted: " + lnr);
@@ -372,5 +404,16 @@ public class BubbleScanner {
             // Blue outline circle (thickness 1)
             Imgproc.circle(overlay, centre, radius, COLOUR_EMPTY, 1);
         }
+    }
+
+    /**
+     * Draw a red box (rectangle) on the overlay to indicate an undetected region.
+     * Used mainly for LNR columns where no bubble met the fill threshold.
+     */
+    private void drawRedBox(Mat overlay, int x1, int y1, int x2, int y2) {
+        Point tl = new Point(x1, y1);
+        Point br = new Point(x2, y2);
+        // Outer red rectangle, 3px thick for visibility
+        Imgproc.rectangle(overlay, tl, br, COLOUR_RED, 3);
     }
 }

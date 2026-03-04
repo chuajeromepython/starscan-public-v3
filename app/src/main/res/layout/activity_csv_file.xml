@@ -12,7 +12,7 @@
     <TextView
         android:layout_width="80dp"
         android:layout_height="80dp"
-        android:text="✓"
+        android:text="@string/check_logo"
         android:textSize="60sp"
         android:textColor="#4CAF50"
         android:gravity="center"
@@ -23,7 +23,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="CSV File Ready"
+        android:text="@string/csv_file_ready"
         android:textSize="24sp"
         android:textStyle="bold"
         android:textColor="#212121"
@@ -33,7 +33,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Your OMR results have been exported"
+        android:text="@string/OMR_result"
         android:textSize="14sp"
         android:textColor="#757575"
         android:layout_marginBottom="32dp"/>
@@ -57,7 +57,7 @@
                 android:id="@+id/tvFilePath"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="File: OMR_Results_20240101.csv"
+                android:text="@string/file_name"
                 android:textSize="14sp"
                 android:textColor="#212121"
                 android:textStyle="bold"
@@ -67,7 +67,7 @@
                 android:id="@+id/tvFileInfo"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Size: 2.5 KB"
+                android:text="@string/Size"
                 android:textSize="12sp"
                 android:textColor="#757575"/>
 
@@ -80,7 +80,7 @@
         android:id="@+id/btnShare"
         android:layout_width="match_parent"
         android:layout_height="56dp"
-        android:text="Share CSV File"
+        android:text="@string/share_file"
         android:textColor="#FFFFFF"
         android:textSize="16sp"
         android:textStyle="bold"
@@ -92,7 +92,7 @@
         android:id="@+id/btnSaveToDownloads"
         android:layout_width="match_parent"
         android:layout_height="56dp"
-        android:text="Save to Downloads"
+        android:text="@string/save_downloads"
         android:textColor="#2196F3"
         android:textSize="16sp"
         android:textStyle="bold"
@@ -104,7 +104,7 @@
         android:id="@+id/btnDone"
         android:layout_width="match_parent"
         android:layout_height="56dp"
-        android:text="Done"
+        android:text="@string/done"
         android:textColor="#757575"
         android:textSize="16sp"
         style="?android:attr/borderlessButtonStyle"

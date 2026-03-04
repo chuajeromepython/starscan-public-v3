@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="breadcrumb_bg">#F5F5F5</color>
+    <color name="accent_coral">#FF7F50</color>
+    <color name="accent_amber">#FFC107</color>
+    <color name="text_secondary">#757575</color>
+    <color name="primary_blue">#2196F3</color>
+    <color name="success_green_light">#81C784</color>
+    <color name="bg_surface">#FFFFFF</color>
+    <color name="bg_scan_text">#FFFFFF</color>
+    <color name="error_red">#F44336</color>
+</resources>

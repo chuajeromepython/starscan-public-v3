@@ -5,15 +5,21 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.util.Log;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
+import android.widget.TextView;
 import android.widget.Toast;
 import android.view.Window;
 import androidx.core.content.ContextCompat;
 
 import androidx.appcompat.app.AppCompatActivity;
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.card.MaterialCardView;
 
 import com.example.omrscanner.DashboardActivity;
 import com.example.omrscanner.R;
@@ -40,6 +46,14 @@ public class ResultActivity extends AppCompatActivity {
     private Button btnExport;
     private Button btnRetry;
     private ProgressBar progressBar;
+
+    // LRN verification views
+    private MaterialCardView lrnCard;
+    private EditText etLrnResult;
+    private TextView tvLrnStatus;
+    private TextView tvLrnHelper;
+    private MaterialButton btnConfirmLrn;
+    private boolean isLrnConfirmed = false;
 
     private Bitmap alignedBitmap;
     private ScanResult scanResult;
@@ -70,6 +84,13 @@ public class ResultActivity extends AppCompatActivity {
         btnExport = findViewById(R.id.btnExport);
         btnRetry = findViewById(R.id.btnRetry);
         progressBar = findViewById(R.id.progressBar);
+
+        // LRN verification views
+        lrnCard       = findViewById(R.id.lrnCard);
+        etLrnResult   = findViewById(R.id.etLrnResult);
+        tvLrnStatus   = findViewById(R.id.tvLrnStatus);
+        tvLrnHelper   = findViewById(R.id.tvLrnHelper);
+        btnConfirmLrn = findViewById(R.id.btnConfirmLrn);
 
         // Get data from intent
         originalImagePath = getIntent().getStringExtra(PreviewActivity.IMAGE_PATH);
@@ -102,6 +123,24 @@ public class ResultActivity extends AppCompatActivity {
         // Button listeners
         btnRetry.setOnClickListener(v -> retakePhoto());
         btnExport.setOnClickListener(v -> exportResults());
+        btnConfirmLrn.setOnClickListener(v -> confirmLrn());
+
+        // When user edits LRN after confirming, reset verification
+        etLrnResult.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                if (isLrnConfirmed) {
+                    isLrnConfirmed = false;
+                    tvLrnStatus.setText("⚠ Not verified");
+                    tvLrnStatus.setTextColor(0xFFF59E0B); // amber
+                    tvLrnHelper.setText("LRN was modified. Please re-confirm before saving.");
+                    tvLrnHelper.setTextColor(0xFFF59E0B);
+                    btnExport.setEnabled(false);
+                    btnConfirmLrn.setText("CONFIRM");
+                }
+            }
+            @Override public void afterTextChanged(Editable s) {}
+        });
     }
 
     private void retakePhoto() {
@@ -209,18 +248,33 @@ public class ResultActivity extends AppCompatActivity {
                         imageResult.setImageBitmap(scanResult.overlayBitmap);
 
                         // Show detection summary
-                        String summary = String.format(
-                                "✓ %s | LNR: %s | %d / %d answers",
-                                scanResult.templateId,
-                                scanResult.lnr,
-                                scanResult.getAnsweredCount(),
-                                scanResult.getQuestionCount()
-                        );
+                        String summary;
+                        if (scanResult.hasUndetectedLrnDigits()) {
+                            summary = String.format(
+                                    "⚠ %s | LRN: %s (%d digit(s) not detected!) | %d / %d answers",
+                                    scanResult.templateId,
+                                    scanResult.lnr,
+                                    scanResult.undetectedLnrPositions.size(),
+                                    scanResult.getAnsweredCount(),
+                                    scanResult.getQuestionCount()
+                            );
+                        } else {
+                            summary = String.format(
+                                    "✓ %s | LRN: %s | %d / %d answers",
+                                    scanResult.templateId,
+                                    scanResult.lnr,
+                                    scanResult.getAnsweredCount(),
+                                    scanResult.getQuestionCount()
+                            );
+                        }
 
                         Toast.makeText(this, summary, Toast.LENGTH_LONG).show();
 
-                        // Enable export button
-                        btnExport.setEnabled(true);
+                        // Show LRN verification card with detected LRN
+                        showLrnVerification(scanResult.lnr);
+
+                        // SAVE stays disabled until LRN is confirmed
+                        btnExport.setEnabled(false);
 
                     } else {
                         Toast.makeText(
@@ -250,6 +304,82 @@ public class ResultActivity extends AppCompatActivity {
                 });
             }
         }).start();
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // LRN VERIFICATION
+    // ──────────────────────────────────────────────────────────
+    private void showLrnVerification(String detectedLrn) {
+        lrnCard.setVisibility(View.VISIBLE);
+        isLrnConfirmed = false;
+
+        // Clean LRN for display: replace '_' with empty for editing
+        String displayLrn = (detectedLrn != null) ? detectedLrn.replace("_", "") : "";
+        etLrnResult.setText(displayLrn);
+
+        // Check for undetected digits
+        if (scanResult != null && scanResult.hasUndetectedLrnDigits()) {
+            // Build human-readable list of missing positions (1-based)
+            StringBuilder positions = new StringBuilder();
+            for (int i = 0; i < scanResult.undetectedLnrPositions.size(); i++) {
+                if (i > 0) positions.append(", ");
+                positions.append(scanResult.undetectedLnrPositions.get(i) + 1); // 1-based
+            }
+            int count = scanResult.undetectedLnrPositions.size();
+
+            tvLrnStatus.setText("⚠ " + count + " digit(s) missing");
+            tvLrnStatus.setTextColor(0xFFEF4444); // red
+            tvLrnHelper.setText(count + " LRN digit(s) not detected at position(s): "
+                    + positions + ". Red boxes on the image mark undetected areas. "
+                    + "Please enter the correct 12-digit LRN manually.");
+            tvLrnHelper.setTextColor(0xFFEF4444); // red
+        } else if (detectedLrn == null || detectedLrn.trim().isEmpty()) {
+            tvLrnHelper.setText("No LRN detected. Please enter the 12-digit LRN manually.");
+            tvLrnHelper.setTextColor(0xFFEF4444); // red
+        } else if (displayLrn.length() != 12) {
+            tvLrnHelper.setText("Detected LRN is " + displayLrn.length() + " digits — expected 12. Please correct it.");
+            tvLrnHelper.setTextColor(0xFFF59E0B); // amber
+        } else {
+            tvLrnHelper.setText("Please verify the detected LRN is correct before saving.");
+            tvLrnHelper.setTextColor(0xFF64748B); // muted
+        }
+    }
+
+    private void confirmLrn() {
+        String lrn = etLrnResult.getText().toString().trim();
+
+        if (lrn.isEmpty()) {
+            tvLrnStatus.setText("✗ Empty");
+            tvLrnStatus.setTextColor(0xFFEF4444);
+            tvLrnHelper.setText("LRN cannot be empty. Please enter a valid 12-digit LRN.");
+            tvLrnHelper.setTextColor(0xFFEF4444);
+            Toast.makeText(this, "Please enter the student LRN", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (lrn.length() != 12) {
+            tvLrnStatus.setText("✗ Invalid (" + lrn.length() + " digits)");
+            tvLrnStatus.setTextColor(0xFFEF4444);
+            tvLrnHelper.setText("LRN must be exactly 12 digits. Current: " + lrn.length() + " digits.");
+            tvLrnHelper.setTextColor(0xFFEF4444);
+            Toast.makeText(this, "LRN must be exactly 12 digits", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // LRN is valid — confirm it
+        isLrnConfirmed = true;
+        scanResult.lnr = lrn;
+
+        tvLrnStatus.setText("✓ Verified");
+        tvLrnStatus.setTextColor(0xFF22C55E); // green
+        tvLrnHelper.setText("LRN confirmed: " + lrn + ". You can now save the result.");
+        tvLrnHelper.setTextColor(0xFF22C55E);
+        btnConfirmLrn.setText("CONFIRMED ✓");
+
+        // Enable the SAVE button
+        btnExport.setEnabled(true);
+
+        Toast.makeText(this, "LRN verified ✓", Toast.LENGTH_SHORT).show();
     }
 
     private void exportResults() {

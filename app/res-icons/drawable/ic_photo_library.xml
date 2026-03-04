@@ -1,0 +1,12 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <!--  Back card (offset top-right to suggest a stack)  -->
+    <path android:fillColor="#FFFFFF" android:pathData="M 5,3 L 19,3 Q 20,3 20,4 L 20,5 L 4,5 L 4,4 Q 4,3 5,3 Z"/>
+    <!--  Middle card  -->
+    <path android:fillColor="#FFFFFF" android:pathData="M 4,5 L 20,5 L 20,6 L 3,6 L 3,5 Q 3,5 4,5 Z"/>
+    <!--  Main photo frame (rounded rectangle)  -->
+    <path android:fillColor="#FFFFFF" android:pathData="M 3,7 Q 2,7 2,8 L 2,20 Q 2,21 3,21 L 21,21 Q 22,21 22,20 L 22,8 Q 22,7 21,7 Z M 3,8 L 21,8 L 21,20 L 3,20 Z"/>
+    <!--  Sun / circle in top-left of photo  -->
+    <path android:fillColor="#FFFFFF" android:pathData="M 7,11 m -1.5,0 a 1.5,1.5 0 1 0 3,0 a 1.5,1.5 0 1 0 -3,0"/>
+    <!--  Mountain / landscape triangle  -->
+    <path android:fillColor="#FFFFFF" android:pathData="M 2,18 L 9,12 L 13.5,16.5 L 16,14 L 22,18 Z"/>
+</vector>

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- CSV Viewer Dialog Layout -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <!-- Filename -->
+    <TextView
+        android:id="@+id/tvFilename"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="filename.csv"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:textColor="#64748B"
+        android:layout_marginBottom="16dp"
+        android:fontFamily="sans-serif-medium" />
+
+    <!-- CSV Content -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:maxHeight="400dp">
+
+        <TextView
+            android:id="@+id/tvContent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Question Number,1,2,3..."
+            android:textSize="12sp"
+            android:textColor="#1E293B"
+            android:fontFamily="monospace"
+            android:padding="12dp"
+            android:background="#F8FAFC" />
+    </ScrollView>
+
+    <!-- Help Text -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="💡 Close this viewer and tap the 'Save' button to save to your phone"
+        android:textSize="13sp"
+        android:textColor="#64748B"
+        android:layout_marginTop="16dp"
+        android:gravity="center" />
+
+</LinearLayout>

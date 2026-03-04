@@ -614,6 +614,7 @@
                                     android:layout_marginTop="4dp" />
                             </LinearLayout>
 
+
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
 
@@ -633,15 +634,31 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
 
-    <!-- ═══ SAVE FAB ═══ -->
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fabSave"
-        android:layout_width="wrap_content" android:layout_height="wrap_content"
-        android:layout_marginEnd="24dp" android:layout_marginBottom="88dp"
-        android:src="@drawable/ic_check" android:contentDescription="Save"
-        android:visibility="gone" app:backgroundTint="#F43F5E" app:tint="#FFFFFF"
-        app:fabSize="normal" app:elevation="10dp" app:maxImageSize="28dp"
-        app:layout_constraintBottom_toTopOf="@id/footer"
-        app:layout_constraintEnd_toEndOf="parent" />
+    <!-- ═══ FLOATING SAVE CHANGES BUTTON (centered) ═══ -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnSaveChanges"
+        style="@style/Widget.Material3.Button.UnelevatedButton"
+        android:layout_width="wrap_content"
+        android:layout_height="48dp"
+        android:layout_marginBottom="16dp"
+        android:text="SAVE CHANGES"
+        android:textAllCaps="true"
+        android:textColor="#FFFFFF"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:fontFamily="sans-serif-medium"
+        android:paddingStart="32dp"
+        android:paddingEnd="32dp"
+        android:visibility="gone"
+        android:elevation="12dp"
+        app:backgroundTint="#0038A8"
+        app:cornerRadius="24dp"
+        app:icon="@drawable/ic_check"
+        app:iconTint="#FFFFFF"
+        app:iconGravity="textStart"
+        app:iconPadding="8dp"
+        app:layout_constraintBottom_toBottomOf="@id/contentCard"
+        app:layout_constraintStart_toStartOf="@id/contentCard"
+        app:layout_constraintEnd_toEndOf="@id/contentCard" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
