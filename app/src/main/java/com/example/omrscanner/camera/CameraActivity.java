@@ -16,8 +16,10 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.view.OrientationEventListener;
 import android.view.View;
 import android.view.Window;
+import android.widget.LinearLayout;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -98,10 +100,15 @@ public class CameraActivity extends AppCompatActivity {
     private TextView anchorStatusText;
     private ImageView anchorStatusIcon;
     private TextView floatingHintText;
+    private LinearLayout orientationGuideOverlay;
+
+    // ── Orientation detection ─────────────────────────────────────
+    private OrientationEventListener orientationListener;
+    private boolean isInLandscape = false;
 
     // ── Camera state ──────────────────────────────────────────────
     private int cameraFacing = CameraSelector.LENS_FACING_BACK;
-    private int flashMode = ImageCapture.FLASH_MODE_OFF;
+    private boolean isTorchOn = false;
 
     // ── Auto-capture state ────────────────────────────────────────
     private int consecutiveDetections = 0;
@@ -148,6 +155,7 @@ public class CameraActivity extends AppCompatActivity {
 
             initializeViews();
             setupListeners();
+            setupOrientationListener();
 
             cameraExecutor = Executors.newSingleThreadExecutor();
 
@@ -179,6 +187,7 @@ public class CameraActivity extends AppCompatActivity {
         anchorStatusText = findViewById(R.id.anchorStatusText);
         anchorStatusIcon = findViewById(R.id.anchorStatusIcon);
         floatingHintText = findViewById(R.id.floatingHintText);
+        orientationGuideOverlay = findViewById(R.id.orientationGuideOverlay);
 
         if (previewView   == null) Log.e(TAG, "previewView is null!");
         if (btnCapture    == null) Log.e(TAG, "btnCapture is null!");
@@ -249,7 +258,6 @@ public class CameraActivity extends AppCompatActivity {
 
         imageCapture = new ImageCapture.Builder()
                 .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                .setFlashMode(flashMode)
                 .build();
 
         // ── ImageAnalysis for real-time anchor detection ──────────
@@ -281,8 +289,8 @@ public class CameraActivity extends AppCompatActivity {
 
     @OptIn(markerClass = ExperimentalGetImage.class)
     private void analyzeFrame(@NonNull ImageProxy imageProxy) {
-        // Skip if OpenCV not ready, already analyzing, or already auto-captured
-        if (!openCVReady || autoCaptureTriggered) {
+        // Skip if OpenCV not ready, already auto-captured, or orientation overlay showing
+        if (!openCVReady || autoCaptureTriggered || !isInLandscape) {
             imageProxy.close();
             return;
         }
@@ -583,29 +591,21 @@ public class CameraActivity extends AppCompatActivity {
 
     // ─────────────────────────────────────────────────────────────
     private void toggleFlash() {
-        if (flashMode == ImageCapture.FLASH_MODE_OFF) {
-            flashMode = ImageCapture.FLASH_MODE_ON;
-        } else if (flashMode == ImageCapture.FLASH_MODE_ON) {
-            flashMode = ImageCapture.FLASH_MODE_AUTO;
-        } else {
-            flashMode = ImageCapture.FLASH_MODE_OFF;
+        isTorchOn = !isTorchOn;
+        if (cameraControl != null) {
+            cameraControl.enableTorch(isTorchOn);
         }
-        if (imageCapture != null) imageCapture.setFlashMode(flashMode);
         updateFlashButton();
     }
 
     private void updateFlashButton() {
         if (iconFlash == null) return;
-        if (flashMode == ImageCapture.FLASH_MODE_ON) {
+        if (isTorchOn) {
             iconFlash.setImageResource(R.drawable.ic_flash);
             iconFlash.setAlpha(1.0f);
             iconFlash.setColorFilter(
                     ContextCompat.getColor(this, R.color.primary_blue),
                     android.graphics.PorterDuff.Mode.SRC_IN);
-        } else if (flashMode == ImageCapture.FLASH_MODE_AUTO) {
-            iconFlash.setImageResource(R.drawable.ic_flash);
-            iconFlash.setAlpha(0.7f);
-            iconFlash.clearColorFilter();
         } else {
             iconFlash.setImageResource(R.drawable.ic_flash);
             iconFlash.setAlpha(0.4f);
@@ -660,6 +660,68 @@ public class CameraActivity extends AppCompatActivity {
     }
 
     // ─────────────────────────────────────────────────────────────
+    //  ORIENTATION GUIDE
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Sets up an OrientationEventListener that monitors the device's physical
+     * rotation. When the phone is held in portrait (or near-portrait), a
+     * full-screen overlay is shown telling the user to rotate to landscape.
+     * The overlay hides automatically once landscape orientation is detected.
+     */
+    private void setupOrientationListener() {
+        orientationListener = new OrientationEventListener(this) {
+            @Override
+            public void onOrientationChanged(int orientation) {
+                if (orientation == ORIENTATION_UNKNOWN) return;
+
+                // Landscape ranges: 60-120 (right landscape) or 240-300 (left landscape)
+                boolean landscape = (orientation >= 60 && orientation <= 120)
+                        || (orientation >= 240 && orientation <= 300);
+
+                if (landscape != isInLandscape) {
+                    isInLandscape = landscape;
+                    runOnUiThread(() -> updateOrientationGuide(!landscape));
+                }
+            }
+        };
+    }
+
+    /**
+     * Show or hide the orientation guide overlay with a fade animation.
+     *
+     * @param show true to display the "rotate your phone" overlay
+     */
+    private void updateOrientationGuide(boolean show) {
+        if (orientationGuideOverlay == null) return;
+
+        if (show) {
+            if (orientationGuideOverlay.getVisibility() != View.VISIBLE) {
+                orientationGuideOverlay.setAlpha(0f);
+                orientationGuideOverlay.setVisibility(View.VISIBLE);
+                orientationGuideOverlay.animate()
+                        .alpha(1f)
+                        .setDuration(300)
+                        .start();
+            }
+        } else {
+            if (orientationGuideOverlay.getVisibility() == View.VISIBLE) {
+                orientationGuideOverlay.animate()
+                        .alpha(0f)
+                        .setDuration(300)
+                        .setListener(new AnimatorListenerAdapter() {
+                            @Override
+                            public void onAnimationEnd(Animator animation) {
+                                orientationGuideOverlay.setVisibility(View.GONE);
+                                orientationGuideOverlay.animate().setListener(null);
+                            }
+                        })
+                        .start();
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
     @Override
     protected void onResume() {
         super.onResume();
@@ -668,11 +730,41 @@ public class CameraActivity extends AppCompatActivity {
         consecutiveDetections = 0;
         currentHintIndex = 0;
         lastHintChangeTime = 0;
+
+        // Check current orientation immediately and show guide if portrait
+        int rotation = getWindowManager().getDefaultDisplay().getRotation();
+        boolean currentlyLandscape = (rotation == android.view.Surface.ROTATION_90
+                || rotation == android.view.Surface.ROTATION_270);
+        isInLandscape = currentlyLandscape;
+        updateOrientationGuide(!currentlyLandscape);
+
+        // Start listening for orientation changes
+        if (orientationListener != null && orientationListener.canDetectOrientation()) {
+            orientationListener.enable();
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // Turn off torch when leaving the activity
+        if (isTorchOn && cameraControl != null) {
+            isTorchOn = false;
+            cameraControl.enableTorch(false);
+            updateFlashButton();
+        }
+        // Stop listening when activity is not visible
+        if (orientationListener != null) {
+            orientationListener.disable();
+        }
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (orientationListener != null) {
+            orientationListener.disable();
+        }
         if (cameraExecutor != null) cameraExecutor.shutdown();
     }
 }
