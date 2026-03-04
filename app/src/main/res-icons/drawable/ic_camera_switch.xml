@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    ic_camera_switch — front/back camera toggle icon
+    Two curved arrows forming a circle around a small camera lens dot.
+    Drop this into res/drawable/ic_camera_switch.xml
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- Top arrow: curves left-to-right across the top -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M 7,4 A 7,7 0 0 1 19,10" />
+
+    <!-- Arrowhead for top arrow (pointing right/down) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 19,7 L 19,10.5 L 22,9 Z" />
+
+    <!-- Bottom arrow: curves right-to-left across the bottom -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M 17,20 A 7,7 0 0 1 5,14" />
+
+    <!-- Arrowhead for bottom arrow (pointing left/up) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 5,17 L 5,13.5 L 2,15 Z" />
+
+    <!-- Camera lens circle in the centre -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 12,10 m -2.5,0 a 2.5,2.5 0 1 0 5,0 a 2.5,2.5 0 1 0 -5,0" />
+
+</vector>

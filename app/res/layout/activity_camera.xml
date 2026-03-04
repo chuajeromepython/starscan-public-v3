@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <!-- ── CAMERA PREVIEW CONTAINER ───────────────────────────── -->
+    <FrameLayout
+        android:id="@+id/cameraPreviewCard"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginTop="72dp"
+        android:layout_marginBottom="192dp"
+        android:background="@drawable/bg_camera_preview"
+        android:clipToOutline="true">
+
+        <androidx.camera.view.PreviewView
+            android:id="@+id/previewView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            app:scaleType="fillCenter" />
+
+        <!-- ── Grid overlay ──────────────────────────────────── -->
+        <FrameLayout
+            android:id="@+id/gridOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone">
+
+            <View
+                android:id="@+id/gridHLine1"
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#33FFFFFF"
+                android:layout_gravity="top"
+                android:layout_marginTop="0dp" />
+
+            <View
+                android:id="@+id/gridHLine2"
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#33FFFFFF" />
+
+            <View
+                android:id="@+id/gridVLine1"
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="#33FFFFFF"
+                android:layout_gravity="start" />
+
+            <View
+                android:id="@+id/gridVLine2"
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="#33FFFFFF" />
+
+        </FrameLayout>
+
+        <!-- REMOVED: scanFrame anchor box — it served no functional purpose -->
+        <!-- REMOVED: scanHintText — no longer needed without scan frame -->
+
+        <!-- ── Top camera controls ───────── -->
+        <LinearLayout
+            android:id="@+id/topCameraControls"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top"
+            android:layout_marginTop="16dp"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
+            android:orientation="horizontal"
+            android:gravity="end">
+
+            <FrameLayout
+                android:id="@+id/btnFlash"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/bg_cam_ctrl_inactive"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="Toggle flash">
+                <ImageView
+                    android:id="@+id/iconFlash"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_flash"
+                    app:tint="#CCFFFFFF" />
+            </FrameLayout>
+
+        </LinearLayout>
+
+        <!-- ── Zoom slider bar removed ──────────────────────────────────── -->
+
+    </FrameLayout>
+
+    <!-- ── HEADER ROW ──────────────────────────────────────────── -->
+    <LinearLayout
+        android:id="@+id/cameraHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="12dp">
+
+        <!-- FIXED: Back button now calls finish() once and returns directly to the caller -->
+        <FrameLayout
+            android:id="@+id/btnCameraBack"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/bg_cam_btn_white"
+            android:clickable="true"
+            android:focusable="true"
+            android:contentDescription="Back">
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_arrow_back"
+                app:tint="#FFFFFF" />
+        </FrameLayout>
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Camera Capture"
+            android:textColor="#E6FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:gravity="center" />
+
+        <View
+            android:layout_width="40dp"
+            android:layout_height="40dp" />
+
+    </LinearLayout>
+
+    <!-- ── BOTTOM CONTROLS ─────────────────────────────────────── -->
+    <LinearLayout
+        android:id="@+id/bottomControls"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:background="@drawable/bg_bottom_fade"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="32dp">
+
+        <!-- Zoom pills removed -->
+
+        <!-- Main action row: capture ring -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp">
+
+            <!-- Capture button: outer ring + inner disc -->
+            <FrameLayout
+                android:layout_width="80dp"
+                android:layout_height="80dp"
+                android:layout_gravity="center_horizontal">
+
+                <View
+                    android:layout_width="80dp"
+                    android:layout_height="80dp"
+                    android:background="@drawable/bg_capture_ring" />
+
+                <View
+                    android:layout_width="80dp"
+                    android:layout_height="80dp"
+                    android:background="@drawable/bg_capture_glow"
+                    android:alpha="0.30" />
+
+                <FrameLayout
+                    android:id="@+id/btnCapture"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:layout_gravity="center"
+                    android:background="@drawable/bg_capture_disc"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:contentDescription="Capture">
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:layout_gravity="center"
+                        android:src="@drawable/ic_focus"
+                        app:tint="#B3FFFFFF" />
+                </FrameLayout>
+
+            </FrameLayout>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- ── FLASH OVERLAY ───────────────────────────────────────── -->
+    <View
+        android:id="@+id/flashOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#FFFFFFFF"
+        android:alpha="0"
+        android:visibility="invisible" />
+
+</FrameLayout>

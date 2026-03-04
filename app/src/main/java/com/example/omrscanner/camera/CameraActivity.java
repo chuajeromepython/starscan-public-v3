@@ -1,28 +1,40 @@
 package com.example.omrscanner.camera;
 
 import android.Manifest;
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.ImageFormat;
+import android.graphics.Matrix;
+import android.graphics.PointF;
+import android.graphics.Rect;
+import android.graphics.YuvImage;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
-import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.view.Window;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
-import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.OptIn;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.camera.core.Camera;
 import androidx.camera.core.CameraControl;
 import androidx.camera.core.CameraInfo;
 import androidx.camera.core.CameraSelector;
+import androidx.camera.core.ExperimentalGetImage;
+import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageCapture;
 import androidx.camera.core.ImageCaptureException;
+import androidx.camera.core.ImageProxy;
 import androidx.camera.core.Preview;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
@@ -31,10 +43,16 @@ import androidx.core.content.ContextCompat;
 
 import com.example.omrscanner.DashboardActivity;
 import com.example.omrscanner.R;
+import com.example.omrscanner.omr.AnchorDetector;
 import com.example.omrscanner.ui.PreviewActivity;
 import com.google.common.util.concurrent.ListenableFuture;
 
+import org.opencv.android.OpenCVLoader;
+import org.opencv.core.Point;
+
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.nio.ByteBuffer;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -43,9 +61,27 @@ public class CameraActivity extends AppCompatActivity {
     private static final int CAMERA_PERMISSION_REQUEST = 1001;
     private static final String TAG = "CameraActivity";
 
+    // Number of consecutive frames with anchors before auto-capture
+    private static final int STABLE_FRAME_THRESHOLD = 3;
+
+    // How long each hint stays visible before cycling (milliseconds)
+    private static final long HINT_DISPLAY_DURATION_MS = 5000;
+
+    // Floating guidance hints (cycled when no anchors detected)
+    private static final String[] FLOATING_HINTS = {
+            "📄  Point camera at the OMR sheet",
+            "🔍  Move closer to the paper",
+            "💡  Ensure good lighting, avoid shadows",
+            "📏  Keep the sheet flat and straight",
+            "🔲  Make sure all 4 corner squares are visible",
+            "🚫  Avoid glare on the paper",
+            "📐  Hold phone parallel to the paper"
+    };
+
     // ── Camera core ───────────────────────────────────────────────
     private PreviewView previewView;
     private ImageCapture imageCapture;
+    private ImageAnalysis imageAnalysis;
     private ExecutorService cameraExecutor;
     private Camera camera;
     private CameraControl cameraControl;
@@ -58,10 +94,22 @@ public class CameraActivity extends AppCompatActivity {
     private View flashOverlay;
     private FrameLayout btnFlash;
     private ImageView iconFlash;
+    private AnchorOverlayView anchorOverlay;
+    private TextView anchorStatusText;
+    private ImageView anchorStatusIcon;
+    private TextView floatingHintText;
 
     // ── Camera state ──────────────────────────────────────────────
     private int cameraFacing = CameraSelector.LENS_FACING_BACK;
     private int flashMode = ImageCapture.FLASH_MODE_OFF;
+
+    // ── Auto-capture state ────────────────────────────────────────
+    private int consecutiveDetections = 0;
+    private int currentHintIndex = 0;
+    private long lastHintChangeTime = 0;
+    private boolean autoCaptureTriggered = false;
+    private boolean isAnalyzing = false;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     // ── Intent extras ─────────────────────────────────────────────
     private String selectedSheetType = null;
@@ -69,9 +117,10 @@ public class CameraActivity extends AppCompatActivity {
     private String activityId = null;
 
     // ── Camera provider held at instance level to avoid re-binding ─
-    // FIXED: Holding a reference to the provider lets flipCamera() rebind without
-    //        launching a new Activity — so the back stack never grows deeper than 1.
     private ProcessCameraProvider cameraProvider;
+
+    // ── OpenCV init flag ──────────────────────────────────────────
+    private boolean openCVReady = false;
 
     // ─────────────────────────────────────────────────────────────
     @Override
@@ -90,6 +139,12 @@ public class CameraActivity extends AppCompatActivity {
 
             Window window = getWindow();
             window.setStatusBarColor(ContextCompat.getColor(this, R.color.primary_blue));
+
+            // Initialize OpenCV
+            openCVReady = OpenCVLoader.initDebug();
+            if (!openCVReady) {
+                Log.e(TAG, "OpenCV initialization failed!");
+            }
 
             initializeViews();
             setupListeners();
@@ -113,13 +168,17 @@ public class CameraActivity extends AppCompatActivity {
 
     // ─────────────────────────────────────────────────────────────
     private void initializeViews() {
-        previewView    = findViewById(R.id.previewView);
-        btnCameraBack  = findViewById(R.id.btnCameraBack);
-        flashOverlay   = findViewById(R.id.flashOverlay);
-        gridOverlay    = findViewById(R.id.gridOverlay);
-        btnCapture     = findViewById(R.id.btnCapture);
-        btnFlash       = findViewById(R.id.btnFlash);
-        iconFlash      = findViewById(R.id.iconFlash);
+        previewView      = findViewById(R.id.previewView);
+        btnCameraBack    = findViewById(R.id.btnCameraBack);
+        flashOverlay     = findViewById(R.id.flashOverlay);
+        gridOverlay      = findViewById(R.id.gridOverlay);
+        btnCapture       = findViewById(R.id.btnCapture);
+        btnFlash         = findViewById(R.id.btnFlash);
+        iconFlash        = findViewById(R.id.iconFlash);
+        anchorOverlay    = findViewById(R.id.anchorOverlay);
+        anchorStatusText = findViewById(R.id.anchorStatusText);
+        anchorStatusIcon = findViewById(R.id.anchorStatusIcon);
+        floatingHintText = findViewById(R.id.floatingHintText);
 
         if (previewView   == null) Log.e(TAG, "previewView is null!");
         if (btnCapture    == null) Log.e(TAG, "btnCapture is null!");
@@ -167,7 +226,6 @@ public class CameraActivity extends AppCompatActivity {
 
         future.addListener(() -> {
             try {
-                // FIXED: store provider at instance level so flipCamera() can reuse it
                 cameraProvider = future.get();
                 bindCameraUseCases();
             } catch (Exception e) {
@@ -180,9 +238,8 @@ public class CameraActivity extends AppCompatActivity {
     }
 
     /**
-     * FIXED: Extracted binding logic so flipCamera() can call this directly
-     * without going through the ListenableFuture again, which was the root
-     * cause of the extra back-stack entries.
+     * Binds Preview, ImageCapture, AND ImageAnalysis use cases.
+     * ImageAnalysis runs anchor detection on each frame for real-time feedback.
      */
     private void bindCameraUseCases() {
         if (cameraProvider == null) return;
@@ -195,19 +252,333 @@ public class CameraActivity extends AppCompatActivity {
                 .setFlashMode(flashMode)
                 .build();
 
+        // ── ImageAnalysis for real-time anchor detection ──────────
+        imageAnalysis = new ImageAnalysis.Builder()
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .build();
+
+        imageAnalysis.setAnalyzer(cameraExecutor, this::analyzeFrame);
+
         CameraSelector cameraSelector = new CameraSelector.Builder()
                 .requireLensFacing(cameraFacing)
                 .build();
 
         cameraProvider.unbindAll();
-        camera = cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture);
+        camera = cameraProvider.bindToLifecycle(
+                this, cameraSelector, preview, imageCapture, imageAnalysis);
 
         cameraControl = camera.getCameraControl();
         cameraInfo    = camera.getCameraInfo();
 
         updateFlashButton();
 
-        Log.d(TAG, "Camera bound successfully, facing=" + cameraFacing);
+        Log.d(TAG, "Camera bound successfully with ImageAnalysis, facing=" + cameraFacing);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  REAL-TIME ANCHOR DETECTION
+    // ─────────────────────────────────────────────────────────────
+
+    @OptIn(markerClass = ExperimentalGetImage.class)
+    private void analyzeFrame(@NonNull ImageProxy imageProxy) {
+        // Skip if OpenCV not ready, already analyzing, or already auto-captured
+        if (!openCVReady || autoCaptureTriggered) {
+            imageProxy.close();
+            return;
+        }
+
+        try {
+            // Convert ImageProxy to Bitmap
+            Bitmap bitmap = imageProxyToBitmap(imageProxy);
+            if (bitmap == null) {
+                imageProxy.close();
+                onAnchorsNotDetected();
+                return;
+            }
+
+            // Run anchor detection
+            Point[] anchors = AnchorDetector.detectAnchors(bitmap);
+
+            if (anchors != null && anchors.length == 4) {
+                // Scale anchor points from bitmap coordinates to overlay view coordinates
+                PointF[] viewPoints = scaleAnchorsToView(anchors, bitmap.getWidth(), bitmap.getHeight());
+                onAnchorsDetected(viewPoints);
+            } else {
+                onAnchorsNotDetected();
+            }
+
+            bitmap.recycle();
+
+        } catch (Exception e) {
+            Log.e(TAG, "Error in frame analysis", e);
+            onAnchorsNotDetected();
+        } finally {
+            imageProxy.close();
+        }
+    }
+
+    /**
+     * Convert CameraX ImageProxy to a Bitmap.
+     */
+    @OptIn(markerClass = ExperimentalGetImage.class)
+    private Bitmap imageProxyToBitmap(ImageProxy imageProxy) {
+        try {
+            if (imageProxy.getImage() == null) return null;
+
+            ImageProxy.PlaneProxy[] planes = imageProxy.getPlanes();
+            if (planes.length < 1) return null;
+
+            // Get YUV data and convert to JPEG then Bitmap
+            int width = imageProxy.getWidth();
+            int height = imageProxy.getHeight();
+
+            // Use NV21 format for YuvImage
+            byte[] nv21 = yuv420ToNv21(imageProxy);
+            if (nv21 == null) return null;
+
+            YuvImage yuvImage = new YuvImage(nv21, ImageFormat.NV21, width, height, null);
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            yuvImage.compressToJpeg(new Rect(0, 0, width, height), 80, out);
+            byte[] jpegBytes = out.toByteArray();
+
+            Bitmap bitmap = BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.length);
+
+            // Apply rotation
+            int rotation = imageProxy.getImageInfo().getRotationDegrees();
+            if (rotation != 0 && bitmap != null) {
+                Matrix matrix = new Matrix();
+                matrix.postRotate(rotation);
+                Bitmap rotated = Bitmap.createBitmap(bitmap, 0, 0,
+                        bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+                bitmap.recycle();
+                return rotated;
+            }
+
+            return bitmap;
+        } catch (Exception e) {
+            Log.e(TAG, "Error converting ImageProxy to Bitmap", e);
+            return null;
+        }
+    }
+
+    /**
+     * Convert YUV_420_888 ImageProxy to NV21 byte array.
+     */
+    private byte[] yuv420ToNv21(ImageProxy image) {
+        try {
+            ImageProxy.PlaneProxy yPlane = image.getPlanes()[0];
+            ImageProxy.PlaneProxy uPlane = image.getPlanes()[1];
+            ImageProxy.PlaneProxy vPlane = image.getPlanes()[2];
+
+            ByteBuffer yBuffer = yPlane.getBuffer();
+            ByteBuffer uBuffer = uPlane.getBuffer();
+            ByteBuffer vBuffer = vPlane.getBuffer();
+
+            int ySize = yBuffer.remaining();
+            int uSize = uBuffer.remaining();
+            int vSize = vBuffer.remaining();
+
+            byte[] nv21 = new byte[ySize + uSize + vSize];
+
+            // Y plane
+            yBuffer.get(nv21, 0, ySize);
+
+            // Interleave V and U (NV21 = YYYYVUVU)
+            byte[] vBytes = new byte[vSize];
+            byte[] uBytes = new byte[uSize];
+            vBuffer.get(vBytes);
+            uBuffer.get(uBytes);
+
+            // If pixel stride is 2, the data is already interleaved
+            int pixelStride = vPlane.getPixelStride();
+            if (pixelStride == 2) {
+                // Already semi-planar, just copy V plane (which includes interleaved U)
+                System.arraycopy(vBytes, 0, nv21, ySize, vSize);
+            } else {
+                // Pixel stride is 1: manually interleave V and U
+                int uvIndex = ySize;
+                int uvSize = Math.min(vBytes.length, uBytes.length);
+                for (int i = 0; i < uvSize; i++) {
+                    nv21[uvIndex++] = vBytes[i];
+                    nv21[uvIndex++] = uBytes[i];
+                }
+            }
+
+            return nv21;
+        } catch (Exception e) {
+            Log.e(TAG, "Error converting YUV to NV21", e);
+            return null;
+        }
+    }
+
+    /**
+     * Scale anchor coordinates from bitmap space to overlay view space.
+     */
+    private PointF[] scaleAnchorsToView(Point[] anchors, int bitmapWidth, int bitmapHeight) {
+        PointF[] viewPoints = new PointF[4];
+
+        // The overlay is the same size as the preview view
+        int viewWidth = anchorOverlay != null ? anchorOverlay.getWidth() : 0;
+        int viewHeight = anchorOverlay != null ? anchorOverlay.getHeight() : 0;
+
+        if (viewWidth == 0 || viewHeight == 0) {
+            viewWidth = previewView.getWidth();
+            viewHeight = previewView.getHeight();
+        }
+
+        if (viewWidth == 0 || viewHeight == 0) {
+            // Fallback: just use bitmap coordinates
+            for (int i = 0; i < 4; i++) {
+                viewPoints[i] = new PointF((float) anchors[i].x, (float) anchors[i].y);
+            }
+            return viewPoints;
+        }
+
+        float scaleX = (float) viewWidth / bitmapWidth;
+        float scaleY = (float) viewHeight / bitmapHeight;
+
+        for (int i = 0; i < 4; i++) {
+            viewPoints[i] = new PointF(
+                    (float) anchors[i].x * scaleX,
+                    (float) anchors[i].y * scaleY
+            );
+        }
+
+        return viewPoints;
+    }
+
+    /**
+     * Called when anchors ARE detected in a frame.
+     */
+    private void onAnchorsDetected(PointF[] viewPoints) {
+        consecutiveDetections++;
+        lastHintChangeTime = 0; // Reset hint timer
+        Log.d(TAG, "Anchors detected! Consecutive count: " + consecutiveDetections);
+
+        mainHandler.post(() -> {
+            // Update overlay to show anchor boxes
+            if (anchorOverlay != null) {
+                anchorOverlay.setAnchors(viewPoints);
+            }
+
+            // Hide floating hint with fade-out
+            hideFloatingHint();
+
+            // Update status text
+            if (anchorStatusText != null) {
+                if (consecutiveDetections >= STABLE_FRAME_THRESHOLD && !autoCaptureTriggered) {
+                    anchorStatusText.setText("✓ Anchors detected! Capturing…");
+                    if (anchorStatusIcon != null) {
+                        anchorStatusIcon.setColorFilter(
+                                ContextCompat.getColor(this, R.color.green),
+                                android.graphics.PorterDuff.Mode.SRC_IN);
+                    }
+                } else {
+                    anchorStatusText.setText("✓ Anchors detected (" + consecutiveDetections + "/" + STABLE_FRAME_THRESHOLD + ")");
+                }
+            }
+
+            // Auto-capture after stable detections
+            if (consecutiveDetections >= STABLE_FRAME_THRESHOLD && !autoCaptureTriggered) {
+                autoCaptureTriggered = true;
+                Log.d(TAG, "Auto-capture triggered after " + consecutiveDetections + " stable frames");
+                takePhoto();
+            }
+        });
+    }
+
+    /**
+     * Called when anchors are NOT detected in a frame.
+     */
+    private void onAnchorsNotDetected() {
+        consecutiveDetections = 0;
+
+        // Cycle to next hint if enough time has passed
+        long now = System.currentTimeMillis();
+        if (now - lastHintChangeTime >= HINT_DISPLAY_DURATION_MS) {
+            currentHintIndex = (currentHintIndex + 1) % FLOATING_HINTS.length;
+            lastHintChangeTime = now;
+        }
+
+        mainHandler.post(() -> {
+            // Clear overlay
+            if (anchorOverlay != null) {
+                anchorOverlay.setAnchors(null);
+            }
+            // Reset status
+            if (anchorStatusText != null) {
+                anchorStatusText.setText("Scanning for anchors…");
+            }
+            if (anchorStatusIcon != null) {
+                anchorStatusIcon.setColorFilter(
+                        ContextCompat.getColor(this, R.color.yellow),
+                        android.graphics.PorterDuff.Mode.SRC_IN);
+            }
+
+            // Show / cycle floating hint
+            showFloatingHint(FLOATING_HINTS[currentHintIndex]);
+        });
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  FLOATING HINT HELPERS
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Show the floating hint pill with a fade-in + crossfade animation.
+     */
+    private void showFloatingHint(String message) {
+        if (floatingHintText == null) return;
+
+        String current = floatingHintText.getText().toString();
+
+        if (floatingHintText.getVisibility() != View.VISIBLE) {
+            // First appearance — fade in
+            floatingHintText.setText(message);
+            floatingHintText.setAlpha(0f);
+            floatingHintText.setVisibility(View.VISIBLE);
+            floatingHintText.animate()
+                    .alpha(1f)
+                    .setDuration(350)
+                    .start();
+        } else if (!current.equals(message)) {
+            // Crossfade to new hint
+            floatingHintText.animate()
+                    .alpha(0f)
+                    .setDuration(200)
+                    .setListener(new AnimatorListenerAdapter() {
+                        @Override
+                        public void onAnimationEnd(Animator animation) {
+                            floatingHintText.setText(message);
+                            floatingHintText.animate()
+                                    .alpha(1f)
+                                    .setDuration(200)
+                                    .setListener(null)
+                                    .start();
+                        }
+                    })
+                    .start();
+        }
+    }
+
+    /**
+     * Hide the floating hint pill with a fade-out animation.
+     */
+    private void hideFloatingHint() {
+        if (floatingHintText == null) return;
+        if (floatingHintText.getVisibility() == View.VISIBLE && floatingHintText.getAlpha() > 0) {
+            floatingHintText.animate()
+                    .alpha(0f)
+                    .setDuration(250)
+                    .setListener(new AnimatorListenerAdapter() {
+                        @Override
+                        public void onAnimationEnd(Animator animation) {
+                            floatingHintText.setVisibility(View.GONE);
+                            floatingHintText.animate().setListener(null);
+                        }
+                    })
+                    .start();
+        }
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -276,15 +647,29 @@ public class CameraActivity extends AppCompatActivity {
                     @Override
                     public void onError(@NonNull ImageCaptureException exception) {
                         Log.e(TAG, "Capture failed", exception);
-                        runOnUiThread(() ->
-                                Toast.makeText(CameraActivity.this,
-                                        "Capture failed: " + exception.getMessage(),
-                                        Toast.LENGTH_SHORT).show());
+                        runOnUiThread(() -> {
+                            Toast.makeText(CameraActivity.this,
+                                    "Capture failed: " + exception.getMessage(),
+                                    Toast.LENGTH_SHORT).show();
+                            // Reset auto-capture if it fails
+                            autoCaptureTriggered = false;
+                            consecutiveDetections = 0;
+                        });
                     }
                 });
     }
 
     // ─────────────────────────────────────────────────────────────
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Reset auto-capture state when returning to camera
+        autoCaptureTriggered = false;
+        consecutiveDetections = 0;
+        currentHintIndex = 0;
+        lastHintChangeTime = 0;
+    }
+
     @Override
     protected void onDestroy() {
         super.onDestroy();

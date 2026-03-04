@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Image Card Item Layout -->
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="6dp"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="1dp"
+    app:cardBackgroundColor="#FFFFFF">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <!-- Image Preview -->
+        <FrameLayout
+            android:id="@+id/imagePreviewContainer"
+            android:layout_width="match_parent"
+            android:layout_height="200dp"
+            android:background="#F1F5F9"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground">
+
+            <ImageView
+                android:id="@+id/thumbnailImage"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:contentDescription="@string/exam_paper_image"
+                tools:src="@drawable/placeholder_exam" />
+
+            <!-- Processing Overlay -->
+            <FrameLayout
+                android:id="@+id/processingOverlay"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="#80000000"
+                android:visibility="gone">
+
+                <ProgressBar
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:indeterminateTint="#FFFFFF" />
+            </FrameLayout>
+
+            <!-- Zoom Indicator -->
+            <ImageView
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_gravity="bottom|end"
+                android:layout_margin="8dp"
+                android:background="@drawable/bg_zoom_indicator"
+                android:src="@drawable/ic_expand"
+                android:padding="6dp"
+                app:tint="#FFFFFF"
+                android:contentDescription="@string/zoom_image" />
+        </FrameLayout>
+
+        <!-- Image Info -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="12dp">
+
+            <TextView
+                android:id="@+id/imageFilename"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/filename"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#1E293B"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:layout_marginBottom="4dp"
+                android:fontFamily="sans-serif-medium" />
+
+            <TextView
+                android:id="@+id/imageDate"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/date"
+                android:textSize="12sp"
+                android:textColor="#64748B" />
+        </LinearLayout>
+
+        <!-- Action Buttons -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <!-- Convert to CSV Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/convertButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/convert_to_csv"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:backgroundTint="#0038A8"
+                android:textColor="#FFFFFF"
+                app:icon="@drawable/ic_document_text"
+                app:iconTint="#FFFFFF"
+                app:iconSize="16dp"
+                app:cornerRadius="8dp"
+                android:layout_marginEnd="4dp"
+                android:visibility="visible" />
+
+            <!-- View CSV Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/viewButton"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/view"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="#0038A8"
+                app:icon="@drawable/ic_eye_outline"
+                app:iconTint="#0038A8"
+                app:iconSize="16dp"
+                app:strokeColor="#0038A8"
+                app:cornerRadius="8dp"
+                android:layout_marginEnd="4dp"
+                android:visibility="gone" />
+
+            <!-- Save CSV Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/saveButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/save"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:backgroundTint="#16A34A"
+                android:textColor="#FFFFFF"
+                app:icon="@drawable/ic_download_outline"
+                app:iconTint="#FFFFFF"
+                app:iconSize="16dp"
+                app:cornerRadius="8dp"
+                android:layout_marginEnd="4dp"
+                android:visibility="gone" />
+
+            <!-- Delete Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/deleteButton"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:minWidth="48dp"
+                android:minHeight="48dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:contentDescription="@string/delete_image"
+                android:backgroundTint="#FEF2F2"
+                app:icon="@drawable/ic_trash_outline"
+                app:iconTint="#CE1126"
+                app:iconSize="20dp"
+                app:iconPadding="0dp"
+                app:strokeColor="#FECACA"
+                app:strokeWidth="1dp"
+                app:cornerRadius="8dp" />
+        </LinearLayout>
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>

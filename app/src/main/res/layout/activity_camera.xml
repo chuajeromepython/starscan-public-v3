@@ -24,6 +24,12 @@
             android:layout_height="match_parent"
             app:scaleType="fillCenter" />
 
+        <!-- ── Anchor detection overlay ─────────────────────── -->
+        <com.example.omrscanner.camera.AnchorOverlayView
+            android:id="@+id/anchorOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
         <!-- ── Grid overlay ──────────────────────────────────── -->
         <FrameLayout
             android:id="@+id/gridOverlay"
@@ -82,7 +88,7 @@
                 android:background="@drawable/bg_cam_ctrl_inactive"
                 android:clickable="true"
                 android:focusable="true"
-                android:contentDescription="Toggle flash">
+                android:contentDescription="@string/toggle_desc">
                 <ImageView
                     android:id="@+id/iconFlash"
                     android:layout_width="20dp"
@@ -93,6 +99,58 @@
             </FrameLayout>
 
         </LinearLayout>
+
+        <!-- ── Anchor detection status hint ──────────────────────── -->
+        <LinearLayout
+            android:id="@+id/anchorStatusBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:background="#B3000000"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp">
+
+            <ImageView
+                android:id="@+id/anchorStatusIcon"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:layout_gravity="center_vertical"
+                android:layout_marginEnd="8dp"
+                android:src="@drawable/ic_focus"
+                app:tint="#FFC107" />
+
+            <TextView
+                android:id="@+id/anchorStatusText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Scanning for anchors…"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif-medium"
+                android:gravity="center" />
+
+        </LinearLayout>
+
+        <!-- ── Floating guidance hint (centered on preview) ──── -->
+        <TextView
+            android:id="@+id/floatingHintText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:background="@drawable/bg_floating_hint"
+            android:text="Point camera at the OMR sheet"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:maxWidth="280dp"
+            android:visibility="visible"
+            android:elevation="4dp" />
 
         <!-- ── Zoom slider bar removed ──────────────────────────────────── -->
 
@@ -118,7 +176,7 @@
             android:background="@drawable/bg_cam_btn_white"
             android:clickable="true"
             android:focusable="true"
-            android:contentDescription="Back">
+            android:contentDescription="@string/back">
             <ImageView
                 android:layout_width="20dp"
                 android:layout_height="20dp"
@@ -131,7 +189,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Camera Capture"
+            android:text="@string/camera_capture"
             android:textColor="#E6FFFFFF"
             android:textSize="16sp"
             android:textStyle="bold"
@@ -192,7 +250,7 @@
                     android:background="@drawable/bg_capture_disc"
                     android:clickable="true"
                     android:focusable="true"
-                    android:contentDescription="Capture">
+                    android:contentDescription="@string/capture_desc">
                     <ImageView
                         android:layout_width="24dp"
                         android:layout_height="24dp"

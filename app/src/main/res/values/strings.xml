@@ -5,6 +5,15 @@
     <string name="my_folders">My Folders</string>
     <string name="folder_name">Folder Name</string>
     <string name="item_count">(0)</string>
+    <string name="check_logo">✓</string>
+    <string name="csv_file_ready">CSV File Ready</string>
+    <string name="OMR_result">Your OMR results have been exported</string>
+    <string name="file_name">File: OMR_Results_20240101.csv</string>
+    <string name="Size">Size: 2.5 KB</string>
+    <string name="share_file">Share CSV File</string>
+    <string name="save_downloads">Save to Downloads</string>
+    <string name="done">Done</string>
+
 
     <!-- Stats -->
     <string name="folders">Folders</string>
@@ -54,4 +63,21 @@
     <string name="full_screen_exam_paper_image">Full screen exam paper image</string>
     <string name="close_image_viewer">Close image viewer</string>
     <string name="delete_image">Delete image</string>
+
+    <!--Camera -->
+    <string name="toggle_desc">Toggle flash</string>
+    <string name="back">Back</string>
+    <string name="camera_capture">Camera Capture</string>
+    <string name="capture_desc">Capture</string>
+
+    <!--Dashboard-->
+    <string name="sagotsuri_logo">SagotSuri Logo</string>
+    <string name="sagotsuri">SagotSuri</string>
+    <string name="classes_count">0 classes</string>
+    <string name="go_back">Go back</string>
+    <string name="classes">Classes</string>
+    <string name="arrow"> › </string>
+    <string name="four">4</string>
+    <string name="twenty_eight">28</string>
+    <string name="Activities">Activities</string>
 </resources>

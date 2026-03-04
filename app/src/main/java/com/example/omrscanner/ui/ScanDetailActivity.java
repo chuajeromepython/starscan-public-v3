@@ -23,7 +23,7 @@ import com.example.omrscanner.R;
 import com.example.omrscanner.models.ActivityFolder;
 import com.example.omrscanner.models.ClassFolder;
 import com.example.omrscanner.models.ScanEntry;
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.android.material.button.MaterialButton;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
@@ -72,7 +72,7 @@ public class ScanDetailActivity extends AppCompatActivity {
     private TextView          tvScore, tvDate, tvAnswerCount;
     private LinearLayout      answersContainer;
     private TextView          btnEditToggle, topBarTitle;
-    private FloatingActionButton fabSave;
+    private MaterialButton      btnSaveChanges;
     private ImageButton       btnBack;
 
     private boolean isEditing = false;
@@ -109,12 +109,12 @@ public class ScanDetailActivity extends AppCompatActivity {
         answersContainer = findViewById(R.id.answersContainer);
         btnEditToggle    = findViewById(R.id.btnEditToggle);
         topBarTitle      = findViewById(R.id.topBarTitle);
-        fabSave          = findViewById(R.id.fabSave);
+        btnSaveChanges   = findViewById(R.id.btnSaveChanges);
         btnBack          = findViewById(R.id.btnBack);
 
         btnBack.setOnClickListener(v -> finish());
         btnEditToggle.setOnClickListener(v -> toggleEditMode());
-        fabSave.setOnClickListener(v -> saveChanges());
+        btnSaveChanges.setOnClickListener(v -> saveChanges());
     }
 
     // ──────────────────────────────────────────────────────────
@@ -440,7 +440,7 @@ public class ScanDetailActivity extends AppCompatActivity {
                 : Color.TRANSPARENT);
         if (isEditing) etLrn.requestFocus();
 
-        fabSave.setVisibility(isEditing ? View.VISIBLE : View.GONE);
+        btnSaveChanges.setVisibility(isEditing ? View.VISIBLE : View.GONE);
 
         renderAnswers();
     }
@@ -470,7 +470,7 @@ public class ScanDetailActivity extends AppCompatActivity {
         btnEditToggle.setTextColor(Color.parseColor(COLOR_BLUE));
         etLrn.setEnabled(false);
         etLrn.setBackgroundColor(Color.TRANSPARENT);
-        fabSave.setVisibility(View.GONE);
+        btnSaveChanges.setVisibility(View.GONE);
 
         // Refresh score display + grid
         tvScore.setText(currentScan.getScore() + "/" + currentScan.getNumItems());

@@ -9,4 +9,6 @@
     <color name="bg_surface">#FFFFFF</color>
     <color name="bg_scan_text">#FFFFFF</color>
     <color name="error_red">#F44336</color>
+    <color name="green">#4CAF50</color>
+    <color name="yellow">#FFC107</color>
 </resources>
