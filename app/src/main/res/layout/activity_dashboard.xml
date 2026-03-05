@@ -19,8 +19,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/bg_root_gradient"
-    android:fitsSystemWindows="true">
+    android:background="@drawable/bg_root_gradient">
 
     <!-- ═══════════════════════════════════════════════════════
          HEADER  (Doc 1 visual: gradient bg, decorative circles,
