@@ -35,7 +35,7 @@ import com.example.omrscanner.models.ClassFolder;
 import com.example.omrscanner.models.ScanEntry;
 import com.example.omrscanner.ui.ScanDetailActivity;
 import com.google.android.material.card.MaterialCardView;
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
@@ -72,7 +72,8 @@ public class DashboardActivity extends AppCompatActivity {
     // Views
     private ImageButton btnBack;
     private TextView topBarTitle, topBarBadge;
-    private ScrollView screenHome, screenClass, screenActivity;
+    private View screenHome;
+    private ScrollView screenClass, screenActivity;
     private LinearLayout homeEmpty, homeClassList;
     private TextView classTeacherLabel;
     private LinearLayout classEmpty, classActivityList;
@@ -81,7 +82,7 @@ public class DashboardActivity extends AppCompatActivity {
 
     private LinearLayout scansHeader, activityScanList, activityScansEmpty;
     private TextView scansTotalCount, scanCtaSub;
-    private FloatingActionButton fab;
+    private ExtendedFloatingActionButton fab;
 
     // Breadcrumb
     private LinearLayout breadcrumbBar;
@@ -252,6 +253,7 @@ public class DashboardActivity extends AppCompatActivity {
                 topBarTitle.setText("SagotSuri");
                 topBarBadge.setText(classFolders.size() + " class"
                         + (classFolders.size() != 1 ? "es" : ""));
+                fab.setText("Class");
                 fab.setVisibility(View.VISIBLE);
                 breadcrumbBar.setVisibility(View.GONE);
                 breadcrumbDivider.setVisibility(View.GONE);
@@ -267,6 +269,7 @@ public class DashboardActivity extends AppCompatActivity {
                 btnBack.setVisibility(View.VISIBLE);
                 topBarTitle.setText(selectedClass.getDisplayName());
                 topBarBadge.setText("📁 " + selectedClass.getActivityCount());
+                fab.setText("Assessment");
                 fab.setVisibility(View.VISIBLE);
                 breadcrumbBar.setVisibility(View.VISIBLE);
                 breadcrumbDivider.setVisibility(View.VISIBLE);
