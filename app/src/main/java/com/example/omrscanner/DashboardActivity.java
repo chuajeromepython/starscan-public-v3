@@ -29,6 +29,9 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.cardview.widget.CardView;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.example.omrscanner.camera.CameraActivity;
 import com.example.omrscanner.models.ActivityFolder;
@@ -110,7 +113,8 @@ public class DashboardActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_dashboard);
 
-        getWindow().setStatusBarColor(Color.parseColor("#0038A8"));
+        // Full screen — hide status bar and navigation bar
+        enableFullScreen();
 
         initViews();
         initBackHandler(); // ← modern replacement for onBackPressed()
@@ -122,6 +126,7 @@ public class DashboardActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        enableFullScreen(); // Re-apply after returning from other activities
         loadData();
 
         if (selectedClass != null) {
@@ -144,6 +149,19 @@ public class DashboardActivity extends AppCompatActivity {
         } else {
             showScreen(SCREEN_HOME);
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // FULL SCREEN
+    // ═══════════════════════════════════════════════════════════════
+
+    private void enableFullScreen() {
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        WindowInsetsControllerCompat controller =
+                WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        controller.setSystemBarsBehavior(
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        controller.hide(WindowInsetsCompat.Type.systemBars());
     }
 
     // ═══════════════════════════════════════════════════════════════
