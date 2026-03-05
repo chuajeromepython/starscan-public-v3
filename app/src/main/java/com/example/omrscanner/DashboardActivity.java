@@ -2,13 +2,16 @@ package com.example.omrscanner;
 
 import android.app.Dialog;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
 import android.app.DatePickerDialog;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Handler;
 import android.os.Bundle;
+import android.os.Looper;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
@@ -22,7 +25,6 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.widget.ArrayAdapter;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
@@ -34,28 +36,33 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.example.omrscanner.camera.CameraActivity;
+import com.example.omrscanner.database.DataMapper;
+import com.example.omrscanner.database.OMRRepository;
+import com.example.omrscanner.database.entities.AssessmentEntity;
+import com.example.omrscanner.database.entities.ClassEntity;
+import com.example.omrscanner.database.entities.ScanEntity;
+import com.example.omrscanner.database.entities.TeacherEntity;
+import com.example.omrscanner.database.projections.AssessmentListRow;
+import com.example.omrscanner.database.projections.ClassListRow;
 import com.example.omrscanner.models.ActivityFolder;
 import com.example.omrscanner.models.ClassFolder;
 import com.example.omrscanner.models.ScanEntry;
 import com.example.omrscanner.ui.ScanDetailActivity;
 import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
 
-import java.lang.reflect.Type;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class DashboardActivity extends AppCompatActivity {
 
     private static final String TAG = "DashboardActivity";
-    private static final String PREFS_NAME = "omr_dashboard";
-    private static final String KEY_CLASSES = "class_folders";
-    private static final String KEY_TEACHER_NAME = "teacher_name";
 
     // Extras
     public static final String EXTRA_SHEET_TYPE = "sheet_type";
@@ -66,6 +73,21 @@ public class DashboardActivity extends AppCompatActivity {
     private static final String SCREEN_HOME = "home";
     private static final String SCREEN_CLASS = "class";
     private static final String SCREEN_ACTIVITY = "activity";
+    private static final String CLASS_SORT_NEWEST = "NEWEST";
+    private static final String CLASS_SORT_OLDEST = "OLDEST";
+    private static final String CLASS_SORT_GRADE_ASC = "GRADE_ASC";
+    private static final String CLASS_SORT_SECTION_ASC = "SECTION_ASC";
+    private static final String ASSESSMENT_SORT_NEWEST = "NEWEST";
+    private static final String ASSESSMENT_SORT_OLDEST = "OLDEST";
+    private static final String ASSESSMENT_SORT_NAME_ASC = "NAME_ASC";
+    private static final String ASSESSMENT_SORT_NAME_DESC = "NAME_DESC";
+    private static final String ASSESSMENT_SORT_EXAM_DATE_NEWEST = "EXAM_DATE_NEWEST";
+    private static final String ASSESSMENT_SORT_EXAM_DATE_OLDEST = "EXAM_DATE_OLDEST";
+
+    // ── Room database repository ─────────────────────────────────────────
+    private OMRRepository repo;
+    /** Room primary key of the single teacher row (-1 until loaded). */
+    private int currentTeacherId = -1;
 
     // State
     private String currentScreen = SCREEN_HOME;
@@ -75,6 +97,17 @@ public class DashboardActivity extends AppCompatActivity {
     private String selectedSheetType = null;
     private String selectedSheetFilter = null; // null = "All"
     private String globalTeacherName = "";
+    private String classSearchQuery = "";
+    private String selectedClassGradeFilter = null;
+    private String selectedClassSchoolYearFilter = null;
+    private String selectedClassSort = CLASS_SORT_NEWEST;
+    private String assessmentSearchQuery = "";
+    private String selectedAssessmentSort = ASSESSMENT_SORT_NEWEST;
+    private int homeQueryGeneration = 0;
+    private int assessmentQueryGeneration = 0;
+    private final Handler searchDebounceHandler = new Handler(Looper.getMainLooper());
+    private Runnable pendingHomeSearchRunnable;
+    private Runnable pendingAssessmentSearchRunnable;
 
     // Views
     private ImageButton btnBack;
@@ -84,10 +117,15 @@ public class DashboardActivity extends AppCompatActivity {
     private View screenHome;
     private ScrollView screenClass, screenActivity;
     private LinearLayout homeEmpty, homeClassList;
+    private EditText homeClassSearchInput;
+    private TextView homeClassSortPicker;
+    private LinearLayout homeGradeFilterChips, homeSchoolYearFilterChips;
     private TextView classTeacherLabel;
     private LinearLayout classEmpty, classActivityList;
     private LinearLayout classSheetTabs;
     private TextView classAssessmentCount;
+    private EditText classAssessmentSearchInput;
+    private TextView classAssessmentSortPicker;
 
     private CardView scanCtaCard;
 
@@ -102,7 +140,6 @@ public class DashboardActivity extends AppCompatActivity {
             breadcrumbSep2, breadcrumbActivity;
 
     private ActivityResultLauncher<String> galleryLauncher;
-    private final Gson gson = new Gson();
 
     // ═══════════════════════════════════════════════════════════════
     // LIFECYCLE
@@ -116,38 +153,32 @@ public class DashboardActivity extends AppCompatActivity {
         // Full screen — hide status bar and navigation bar
         enableFullScreen();
 
+        // Initialise Room repository
+        repo = new OMRRepository(this);
+
         initViews();
         initBackHandler(); // ← modern replacement for onBackPressed()
         initGalleryLauncher();
-        loadData();
-        showScreen(SCREEN_HOME);
+        loadDataFromDb(); // loads from Room, then showScreen(SCREEN_HOME)
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         enableFullScreen(); // Re-apply after returning from other activities
-        loadData();
 
-        if (selectedClass != null) {
-            selectedClass = findClassById(selectedClass.getId());
-            if (selectedClass != null && selectedActivity != null) {
-                ActivityFolder refreshed = null;
-                for (ActivityFolder act : selectedClass.getActivities()) {
-                    if (act.getId().equals(selectedActivity.getId())) {
-                        refreshed = act;
-                        break;
-                    }
-                }
-                selectedActivity = refreshed;
-                showScreen(currentScreen);
-            } else if (selectedClass != null) {
-                showScreen(SCREEN_CLASS);
-            } else {
-                showScreen(SCREEN_HOME);
-            }
-        } else {
-            showScreen(SCREEN_HOME);
+        // Reload from Room, then re-navigate to the current screen
+        loadDataFromDb();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (pendingHomeSearchRunnable != null) {
+            searchDebounceHandler.removeCallbacks(pendingHomeSearchRunnable);
+        }
+        if (pendingAssessmentSearchRunnable != null) {
+            searchDebounceHandler.removeCallbacks(pendingAssessmentSearchRunnable);
         }
     }
 
@@ -157,8 +188,8 @@ public class DashboardActivity extends AppCompatActivity {
 
     private void enableFullScreen() {
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
-        WindowInsetsControllerCompat controller =
-                WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(getWindow(),
+                getWindow().getDecorView());
         controller.setSystemBarsBehavior(
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
         controller.hide(WindowInsetsCompat.Type.systemBars());
@@ -211,12 +242,18 @@ public class DashboardActivity extends AppCompatActivity {
 
         homeEmpty = findViewById(R.id.homeEmpty);
         homeClassList = findViewById(R.id.homeClassList);
+        homeClassSearchInput = findViewById(R.id.homeClassSearchInput);
+        homeClassSortPicker = findViewById(R.id.homeClassSortPicker);
+        homeGradeFilterChips = findViewById(R.id.homeGradeFilterChips);
+        homeSchoolYearFilterChips = findViewById(R.id.homeSchoolYearFilterChips);
 
         classTeacherLabel = findViewById(R.id.classTeacherLabel);
         classEmpty = findViewById(R.id.classEmpty);
         classActivityList = findViewById(R.id.classActivityList);
         classSheetTabs = findViewById(R.id.classSheetTabs);
         classAssessmentCount = findViewById(R.id.classAssessmentCount);
+        classAssessmentSearchInput = findViewById(R.id.classAssessmentSearchInput);
+        classAssessmentSortPicker = findViewById(R.id.classAssessmentSortPicker);
 
         scanCtaCard = findViewById(R.id.scanCtaCard);
         scanCtaSub = findViewById(R.id.scanCtaSub);
@@ -255,6 +292,66 @@ public class DashboardActivity extends AppCompatActivity {
         });
 
         scanCtaCard.setOnClickListener(v -> showScanMethodDialog());
+
+        homeClassSearchInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                classSearchQuery = s != null ? s.toString().trim() : "";
+                scheduleHomeSearchRefresh();
+            }
+        });
+
+        classAssessmentSearchInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                assessmentSearchQuery = s != null ? s.toString().trim() : "";
+                scheduleAssessmentSearchRefresh();
+            }
+        });
+
+        homeClassSortPicker.setOnClickListener(v -> showClassSortDialog());
+        classAssessmentSortPicker.setOnClickListener(v -> showAssessmentSortDialog());
+        updateSortPickers();
+    }
+
+    private void scheduleHomeSearchRefresh() {
+        if (pendingHomeSearchRunnable != null) {
+            searchDebounceHandler.removeCallbacks(pendingHomeSearchRunnable);
+        }
+        pendingHomeSearchRunnable = () -> {
+            if (SCREEN_HOME.equals(currentScreen)) {
+                renderHomeScreen();
+            }
+        };
+        searchDebounceHandler.postDelayed(pendingHomeSearchRunnable, 220);
+    }
+
+    private void scheduleAssessmentSearchRefresh() {
+        if (pendingAssessmentSearchRunnable != null) {
+            searchDebounceHandler.removeCallbacks(pendingAssessmentSearchRunnable);
+        }
+        pendingAssessmentSearchRunnable = () -> {
+            if (SCREEN_CLASS.equals(currentScreen)) {
+                renderClassScreen();
+            }
+        };
+        searchDebounceHandler.postDelayed(pendingAssessmentSearchRunnable, 220);
     }
 
     private void initGalleryLauncher() {
@@ -285,6 +382,11 @@ public class DashboardActivity extends AppCompatActivity {
                 btnBack.setVisibility(View.GONE);
                 topBarTitle.setText("SagotSuri");
                 topBarBadge.setVisibility(View.GONE);
+                if (!classSearchQuery.equals(homeClassSearchInput.getText().toString())) {
+                    homeClassSearchInput.setText(classSearchQuery);
+                    homeClassSearchInput.setSelection(homeClassSearchInput.getText().length());
+                }
+                updateSortPickers();
                 // Refresh teacher name display in header
                 if (globalTeacherName != null && !globalTeacherName.isEmpty()) {
                     tvTeacherName.setText(globalTeacherName);
@@ -309,10 +411,14 @@ public class DashboardActivity extends AppCompatActivity {
                 }
                 screenClass.setVisibility(View.VISIBLE);
                 btnBack.setVisibility(View.VISIBLE);
-                selectedSheetFilter = null; // reset tab filter for new class
                 topBarTitle.setText(selectedClass.getDisplayName());
                 topBarBadge.setVisibility(View.VISIBLE);
                 topBarBadge.setText("📁 " + selectedClass.getActivityCount());
+                if (!assessmentSearchQuery.equals(classAssessmentSearchInput.getText().toString())) {
+                    classAssessmentSearchInput.setText(assessmentSearchQuery);
+                    classAssessmentSearchInput.setSelection(classAssessmentSearchInput.getText().length());
+                }
+                updateSortPickers();
                 fab.setText("Assessment");
                 fab.setVisibility(View.VISIBLE);
                 breadcrumbBar.setVisibility(View.VISIBLE);
@@ -405,21 +511,38 @@ public class DashboardActivity extends AppCompatActivity {
             statActivities.setText(String.valueOf(totalActivities));
         if (statScans != null)
             statScans.setText(String.valueOf(totalScans));
-        if (homeClassCount != null)
-            homeClassCount.setText(classFolders.size() + " total");
 
-        if (classFolders.isEmpty()) {
-            homeEmpty.setVisibility(View.VISIBLE);
-            homeClassList.setVisibility(View.GONE);
-        } else {
-            homeEmpty.setVisibility(View.GONE);
-            homeClassList.setVisibility(View.VISIBLE);
-            for (ClassFolder cls : classFolders)
-                homeClassList.addView(createClassCard(cls));
-        }
+        final int requestId = ++homeQueryGeneration;
+        repo.queryClassList(classSearchQuery, selectedClassGradeFilter, selectedClassSchoolYearFilter,
+                selectedClassSort, rows -> runOnUiThread(() -> {
+                    if (requestId != homeQueryGeneration || !SCREEN_HOME.equals(currentScreen)) {
+                        return;
+                    }
+
+                    if (buildHomeFilterChips(getDistinctGradesFromCache(), getDistinctSchoolYearsFromCache())) {
+                        return;
+                    }
+
+                    int rowCount = (rows != null) ? rows.size() : 0;
+                    if (homeClassCount != null) {
+                        homeClassCount.setText(rowCount + " total");
+                    }
+
+                    if (rowCount == 0) {
+                        homeEmpty.setVisibility(View.VISIBLE);
+                        homeClassList.setVisibility(View.GONE);
+                        return;
+                    }
+
+                    homeEmpty.setVisibility(View.GONE);
+                    homeClassList.setVisibility(View.VISIBLE);
+                    for (ClassListRow row : rows) {
+                        homeClassList.addView(createClassCard(row));
+                    }
+                }));
     }
 
-    private View createClassCard(ClassFolder cls) {
+    private View createClassCard(ClassListRow row) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(16), dp(16), dp(16), dp(16));
@@ -447,7 +570,7 @@ public class DashboardActivity extends AppCompatActivity {
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         TextView title = new TextView(this);
-        title.setText(cls.getDisplayName());
+        title.setText(row.getDisplayName());
         title.setTextColor(Color.parseColor("#1E293B"));
         title.setTextSize(15);
         title.setTypeface(null, Typeface.BOLD);
@@ -456,7 +579,7 @@ public class DashboardActivity extends AppCompatActivity {
         TextView teacher = new TextView(this);
         String displayTeacher = (globalTeacherName != null && !globalTeacherName.isEmpty())
                 ? globalTeacherName
-                : cls.getTeacher();
+                : "Unknown Teacher";
         teacher.setText("\uD83D\uDC64 " + displayTeacher);
         teacher.setTextColor(Color.parseColor("#64748B"));
         teacher.setTextSize(12);
@@ -475,11 +598,11 @@ public class DashboardActivity extends AppCompatActivity {
         card.addView(header);
 
         TextView meta = new TextView(this);
-        String schoolYearText = (cls.getSchoolYear() != null && !cls.getSchoolYear().isEmpty())
-                ? " · S.Y. " + cls.getSchoolYear()
+        String schoolYearText = (row.schoolYear != null && !row.schoolYear.isEmpty())
+                ? " · S.Y. " + row.schoolYear
                 : "";
-        meta.setText("📂 " + cls.getActivityCount() + " Assessment"
-                + (cls.getActivityCount() != 1 ? "s" : "")
+        meta.setText("\uD83D\uDCC2 " + row.assessmentCount + " Assessment"
+                + (row.assessmentCount != 1 ? "s" : "")
                 + schoolYearText);
         meta.setTextColor(Color.parseColor("#94A3B8"));
         meta.setTextSize(11);
@@ -490,11 +613,21 @@ public class DashboardActivity extends AppCompatActivity {
         card.addView(meta);
 
         card.setOnClickListener(v -> {
-            selectedClass = cls;
+            selectedClass = findClassById(row.id);
+            if (selectedClass == null) {
+                showErrorDialog("Class unavailable", "The selected class could not be loaded. Please try again.");
+                return;
+            }
+            selectedSheetFilter = null;
+            assessmentSearchQuery = "";
+            selectedAssessmentSort = ASSESSMENT_SORT_NEWEST;
             showScreen(SCREEN_CLASS);
         });
         card.setOnLongClickListener(v -> {
-            showClassOptionsDialog(cls);
+            ClassFolder cls = findClassById(row.id);
+            if (cls != null) {
+                showClassOptionsDialog(cls);
+            }
             return true;
         });
         return card;
@@ -517,33 +650,40 @@ public class DashboardActivity extends AppCompatActivity {
         // ── Build sheet-type filter tabs ──
         buildClassSheetTabs(activities);
 
-        // ── Apply filter ──
-        List<ActivityFolder> filtered = new ArrayList<>();
-        if (activities != null) {
-            for (ActivityFolder act : activities) {
-                if (selectedSheetFilter == null || act.getSheetType().equals(selectedSheetFilter)) {
-                    filtered.add(act);
-                }
-            }
-        }
+        final int requestId = ++assessmentQueryGeneration;
+        repo.queryAssessmentList(
+                selectedClass.getId(),
+                selectedSheetFilter,
+                assessmentSearchQuery,
+                selectedAssessmentSort,
+                rows -> runOnUiThread(() -> {
+                    if (requestId != assessmentQueryGeneration || !SCREEN_CLASS.equals(currentScreen)) {
+                        return;
+                    }
 
-        // Update count label
-        if (classAssessmentCount != null) {
-            classAssessmentCount.setText(filtered.size() + " total");
-        }
+                    int rowCount = (rows != null) ? rows.size() : 0;
+                    if (classAssessmentCount != null) {
+                        classAssessmentCount.setText(rowCount + " total");
+                    }
 
-        if (filtered.isEmpty()) {
-            classEmpty.setVisibility(View.VISIBLE);
-            classActivityList.setVisibility(View.GONE);
-        } else {
-            classEmpty.setVisibility(View.GONE);
-            classActivityList.setVisibility(View.VISIBLE);
-            for (ActivityFolder act : filtered)
-                classActivityList.addView(createActivityCard(act));
-        }
+                    if (rowCount == 0) {
+                        classEmpty.setVisibility(View.VISIBLE);
+                        classActivityList.setVisibility(View.GONE);
+                        return;
+                    }
+
+                    classEmpty.setVisibility(View.GONE);
+                    classActivityList.setVisibility(View.VISIBLE);
+                    for (AssessmentListRow row : rows) {
+                        classActivityList.addView(createActivityCard(row));
+                    }
+                }));
     }
 
-    /** Build the "All / ZPH30 / ZPH50 / ZPH60" filter tabs above the assessment list. */
+    /**
+     * Build the "All / ZPH30 / ZPH50 / ZPH60" filter tabs above the assessment
+     * list.
+     */
     private void buildClassSheetTabs(List<ActivityFolder> activities) {
         classSheetTabs.removeAllViews();
 
@@ -552,9 +692,15 @@ public class DashboardActivity extends AppCompatActivity {
         if (activities != null) {
             for (ActivityFolder act : activities) {
                 switch (act.getSheetType()) {
-                    case "ZPH30": countZPH30++; break;
-                    case "ZPH50": countZPH50++; break;
-                    case "ZPH60": countZPH60++; break;
+                    case "ZPH30":
+                        countZPH30++;
+                        break;
+                    case "ZPH50":
+                        countZPH50++;
+                        break;
+                    case "ZPH60":
+                        countZPH60++;
+                        break;
                 }
             }
         }
@@ -562,10 +708,10 @@ public class DashboardActivity extends AppCompatActivity {
 
         // Tab data: label, filter value (null = all), count
         Object[][] tabs = {
-                { "All",    null,    totalCount },
-                { "ZPH30",  "ZPH30", countZPH30 },
-                { "ZPH50",  "ZPH50", countZPH50 },
-                { "ZPH60",  "ZPH60", countZPH60 },
+                { "All", null, totalCount },
+                { "ZPH30", "ZPH30", countZPH30 },
+                { "ZPH50", "ZPH50", countZPH50 },
+                { "ZPH60", "ZPH60", countZPH60 },
         };
 
         for (int i = 0; i < tabs.length; i++) {
@@ -574,7 +720,8 @@ public class DashboardActivity extends AppCompatActivity {
             final int count = (int) tabs[i][2];
 
             // Only show a tab if it has assessments (always show "All")
-            if (filterVal != null && count == 0) continue;
+            if (filterVal != null && count == 0)
+                continue;
 
             boolean isActive = (selectedSheetFilter == null && filterVal == null)
                     || (selectedSheetFilter != null && selectedSheetFilter.equals(filterVal));
@@ -611,7 +758,7 @@ public class DashboardActivity extends AppCompatActivity {
         }
     }
 
-    private View createActivityCard(ActivityFolder act) {
+    private View createActivityCard(AssessmentListRow row) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(16), dp(16), dp(16), dp(16));
@@ -639,14 +786,14 @@ public class DashboardActivity extends AppCompatActivity {
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         TextView title = new TextView(this);
-        title.setText(act.getName());
+        title.setText(row.name);
         title.setTextColor(Color.parseColor("#1E293B"));
         title.setTextSize(15);
         title.setTypeface(null, Typeface.BOLD);
         leftCol.addView(title);
 
         TextView sub = new TextView(this);
-        sub.setText("Sheet: " + act.getSheetType());
+        sub.setText("Sheet: " + row.sheetType);
         sub.setTextColor(Color.parseColor("#64748B"));
         sub.setTextSize(12);
         LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
@@ -664,10 +811,12 @@ public class DashboardActivity extends AppCompatActivity {
         card.addView(header);
 
         TextView meta = new TextView(this);
-        String dateToShow = act.getExamDate() != null && !act.getExamDate().isEmpty() ? act.getExamDate()
-                : act.getFormattedDate();
-        meta.setText("�� " + act.getScanCount() + " scan"
-                + (act.getScanCount() != 1 ? "s" : "")
+        String dateToShow = (row.examDate != null && !row.examDate.isEmpty())
+                ? row.examDate
+                : new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
+                        .format(new java.util.Date(row.createdAt));
+        meta.setText("\uD83D\uDCC4 " + row.scanCount + " scan"
+                + (row.scanCount != 1 ? "s" : "")
                 + " · " + dateToShow);
         meta.setTextColor(Color.parseColor("#94A3B8"));
         meta.setTextSize(11);
@@ -678,14 +827,238 @@ public class DashboardActivity extends AppCompatActivity {
         card.addView(meta);
 
         card.setOnClickListener(v -> {
+            ActivityFolder act = findActivityById(selectedClass, row.id);
+            if (act == null) {
+                showErrorDialog("Assessment unavailable", "The selected assessment could not be loaded. Please try again.");
+                return;
+            }
             selectedActivity = act;
             showScreen(SCREEN_ACTIVITY);
         });
         card.setOnLongClickListener(v -> {
-            showActivityOptionsDialog(act);
+            ActivityFolder act = findActivityById(selectedClass, row.id);
+            if (act != null) {
+                showActivityOptionsDialog(act);
+            }
             return true;
         });
         return card;
+    }
+
+    private interface ChipSelectionHandler {
+        void onSelected(String value);
+    }
+
+    private List<String> getDistinctGradesFromCache() {
+        java.util.LinkedHashSet<String> set = new java.util.LinkedHashSet<>();
+        for (ClassFolder cls : classFolders) {
+            if (cls.getGrade() != null && !cls.getGrade().trim().isEmpty()) {
+                set.add(cls.getGrade().trim());
+            }
+        }
+        List<String> list = new ArrayList<>(set);
+        list.sort(String.CASE_INSENSITIVE_ORDER);
+        return list;
+    }
+
+    private List<String> getDistinctSchoolYearsFromCache() {
+        java.util.LinkedHashSet<String> set = new java.util.LinkedHashSet<>();
+        for (ClassFolder cls : classFolders) {
+            if (cls.getSchoolYear() != null && !cls.getSchoolYear().trim().isEmpty()) {
+                set.add(cls.getSchoolYear().trim());
+            }
+        }
+        List<String> list = new ArrayList<>(set);
+        list.sort((a, b) -> b.compareToIgnoreCase(a));
+        return list;
+    }
+
+    private boolean buildHomeFilterChips(List<String> grades, List<String> years) {
+        boolean selectionChanged = false;
+        if (selectedClassGradeFilter != null && (grades == null || !grades.contains(selectedClassGradeFilter))) {
+            selectedClassGradeFilter = null;
+            selectionChanged = true;
+        }
+        if (selectedClassSchoolYearFilter != null
+                && (years == null || !years.contains(selectedClassSchoolYearFilter))) {
+            selectedClassSchoolYearFilter = null;
+            selectionChanged = true;
+        }
+
+        if (selectionChanged && SCREEN_HOME.equals(currentScreen)) {
+            renderHomeScreen();
+            return true;
+        }
+
+        buildFilterChipRow(homeGradeFilterChips, grades, selectedClassGradeFilter, value -> {
+            selectedClassGradeFilter = value;
+            if (SCREEN_HOME.equals(currentScreen)) {
+                renderHomeScreen();
+            }
+        });
+        buildFilterChipRow(homeSchoolYearFilterChips, years, selectedClassSchoolYearFilter, value -> {
+            selectedClassSchoolYearFilter = value;
+            if (SCREEN_HOME.equals(currentScreen)) {
+                renderHomeScreen();
+            }
+        });
+        return false;
+    }
+
+    private void buildFilterChipRow(LinearLayout container, List<String> values, String selectedValue,
+            ChipSelectionHandler handler) {
+        container.removeAllViews();
+        container.addView(createFilterChip("All", selectedValue == null, () -> handler.onSelected(null)));
+        if (values == null) {
+            return;
+        }
+        for (String value : values) {
+            if (value == null || value.trim().isEmpty()) {
+                continue;
+            }
+            boolean isActive = value.equals(selectedValue);
+            container.addView(createFilterChip(value, isActive, () -> handler.onSelected(value)));
+        }
+    }
+
+    private View createFilterChip(String label, boolean isActive, Runnable action) {
+        TextView chip = new TextView(this);
+        chip.setText(label);
+        chip.setTextSize(12);
+        chip.setPadding(dp(12), dp(7), dp(12), dp(7));
+        chip.setClickable(true);
+        chip.setFocusable(true);
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(dp(16));
+        if (isActive) {
+            bg.setColor(Color.parseColor("#0038A8"));
+            chip.setTextColor(Color.WHITE);
+        } else {
+            bg.setColor(Color.parseColor("#F8FAFC"));
+            bg.setStroke(dp(1), Color.parseColor("#E2E8F0"));
+            chip.setTextColor(Color.parseColor("#64748B"));
+        }
+        chip.setBackground(bg);
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.rightMargin = dp(8);
+        chip.setLayoutParams(lp);
+        chip.setOnClickListener(v -> action.run());
+        return chip;
+    }
+
+    private void showClassSortDialog() {
+        final String[] labels = {
+                "Newest",
+                "Oldest",
+                "Grade A-Z",
+                "Section A-Z"
+        };
+        final String[] keys = {
+                CLASS_SORT_NEWEST,
+                CLASS_SORT_OLDEST,
+                CLASS_SORT_GRADE_ASC,
+                CLASS_SORT_SECTION_ASC
+        };
+        int checked = indexOfSortKey(keys, selectedClassSort);
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Sort Classes")
+                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                    selectedClassSort = keys[which];
+                    updateSortPickers();
+                    dialog.dismiss();
+                    if (SCREEN_HOME.equals(currentScreen)) {
+                        renderHomeScreen();
+                    }
+                })
+                .show();
+    }
+
+    private void showAssessmentSortDialog() {
+        final String[] labels = {
+                "Newest",
+                "Oldest",
+                "Name A-Z",
+                "Name Z-A",
+                "Exam Date (Newest)",
+                "Exam Date (Oldest)"
+        };
+        final String[] keys = {
+                ASSESSMENT_SORT_NEWEST,
+                ASSESSMENT_SORT_OLDEST,
+                ASSESSMENT_SORT_NAME_ASC,
+                ASSESSMENT_SORT_NAME_DESC,
+                ASSESSMENT_SORT_EXAM_DATE_NEWEST,
+                ASSESSMENT_SORT_EXAM_DATE_OLDEST
+        };
+        int checked = indexOfSortKey(keys, selectedAssessmentSort);
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Sort Assessments")
+                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                    selectedAssessmentSort = keys[which];
+                    updateSortPickers();
+                    dialog.dismiss();
+                    if (SCREEN_CLASS.equals(currentScreen)) {
+                        renderClassScreen();
+                    }
+                })
+                .show();
+    }
+
+    private int indexOfSortKey(String[] keys, String selected) {
+        if (selected == null) {
+            return 0;
+        }
+        for (int i = 0; i < keys.length; i++) {
+            if (selected.equals(keys[i])) {
+                return i;
+            }
+        }
+        return 0;
+    }
+
+    private void updateSortPickers() {
+        if (homeClassSortPicker != null) {
+            homeClassSortPicker.setText(getClassSortLabel(selectedClassSort) + " \u25be");
+        }
+        if (classAssessmentSortPicker != null) {
+            classAssessmentSortPicker.setText(getAssessmentSortLabel(selectedAssessmentSort) + " \u25be");
+        }
+    }
+
+    private String getClassSortLabel(String key) {
+        if (CLASS_SORT_OLDEST.equals(key)) {
+            return "Oldest";
+        }
+        if (CLASS_SORT_GRADE_ASC.equals(key)) {
+            return "Grade A-Z";
+        }
+        if (CLASS_SORT_SECTION_ASC.equals(key)) {
+            return "Section A-Z";
+        }
+        return "Newest";
+    }
+
+    private String getAssessmentSortLabel(String key) {
+        if (ASSESSMENT_SORT_OLDEST.equals(key)) {
+            return "Oldest";
+        }
+        if (ASSESSMENT_SORT_NAME_ASC.equals(key)) {
+            return "Name A-Z";
+        }
+        if (ASSESSMENT_SORT_NAME_DESC.equals(key)) {
+            return "Name Z-A";
+        }
+        if (ASSESSMENT_SORT_EXAM_DATE_NEWEST.equals(key)) {
+            return "Exam Date ↓";
+        }
+        if (ASSESSMENT_SORT_EXAM_DATE_OLDEST.equals(key)) {
+            return "Exam Date ↑";
+        }
+        return "Newest";
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -938,7 +1311,8 @@ public class DashboardActivity extends AppCompatActivity {
         int editCurrentYr = Calendar.getInstance().get(Calendar.YEAR);
         String editDefaultSY = editCurrentYr + "-" + (editCurrentYr + 1);
         String currentSY = (cls.getSchoolYear() != null && !cls.getSchoolYear().isEmpty())
-                ? cls.getSchoolYear() : editDefaultSY;
+                ? cls.getSchoolYear()
+                : editDefaultSY;
         final String[] selectedSchoolYear = { currentSY };
         TextView schoolYearPicker = createDropdownField(currentSY);
         schoolYearPicker.setTextColor(Color.parseColor("#1E293B"));
@@ -987,10 +1361,20 @@ public class DashboardActivity extends AppCompatActivity {
             cls.setGrade(grade);
             cls.setSection(section);
             cls.setSchoolYear(selectedSchoolYear[0]);
-            saveData();
-            dialog.dismiss();
-            showToast("Class updated ✓");
-            renderHomeScreen();
+            ensureTeacherId(teacherId -> {
+                if (teacherId <= 0) {
+                    runOnUiThread(() -> showErrorDialog("Save Failed",
+                            "Teacher profile is not ready yet. Please try again."));
+                    return;
+                }
+
+                ClassEntity updatedEntity = DataMapper.toClassEntity(cls, teacherId);
+                repo.updateClass(updatedEntity, ignored -> runOnUiThread(() -> {
+                    dialog.dismiss();
+                    showToast("Class updated ✓");
+                    loadDataFromDb();
+                }));
+            });
         });
 
         dialog.setContentView(root);
@@ -1034,11 +1418,21 @@ public class DashboardActivity extends AppCompatActivity {
         btnDelete.setBackground(delBg);
         btnDelete.setTextColor(Color.WHITE);
         btnDelete.setOnClickListener(v -> {
-            classFolders.remove(cls);
-            saveData();
-            renderHomeScreen();
-            dialog.dismiss();
-            showToast("Class deleted");
+            repo.getClassById(cls.getId(), classEntity -> {
+                if (classEntity == null) {
+                    runOnUiThread(() -> {
+                        dialog.dismiss();
+                        loadDataFromDb();
+                    });
+                    return;
+                }
+
+                repo.deleteClass(classEntity, ignored -> runOnUiThread(() -> {
+                    dialog.dismiss();
+                    showToast("Class deleted");
+                    loadDataFromDb();
+                }));
+            });
         });
         actions.addView(btnDelete);
         root.addView(actions);
@@ -1105,23 +1499,29 @@ public class DashboardActivity extends AppCompatActivity {
                     .setMessage("Are you sure you want to change the teacher name to \""
                             + newName + "\"?\n\nThis will apply to all class folders.")
                     .setPositiveButton("Confirm", (alertDialog, which) -> {
-                        globalTeacherName = newName;
-                        // Update teacher on all existing classes so data stays consistent
-                        for (ClassFolder cls : classFolders) {
-                            cls.setTeacher(globalTeacherName);
-                        }
-                        saveData();
-                        // Refresh the teacher name label in the header
-                        tvTeacherName.setText(globalTeacherName);
-                        tvTeacherName.setTextColor(Color.parseColor("#FFFFFF"));
-                        tvTeacherName.setTypeface(null, Typeface.BOLD);
-                        // If currently on class screen, refresh teacher label there too
-                        if (SCREEN_CLASS.equals(currentScreen) && selectedClass != null) {
-                            classTeacherLabel.setText("Teacher: " + globalTeacherName);
-                        }
-                        renderHomeScreen();
-                        dialog.dismiss();
-                        showToast("Teacher name updated ✓");
+                        repo.upsertTeacher(newName, savedTeacher -> runOnUiThread(() -> {
+                            globalTeacherName = savedTeacher != null && savedTeacher.name != null
+                                    ? savedTeacher.name
+                                    : newName;
+                            if (savedTeacher != null) {
+                                currentTeacherId = savedTeacher.id;
+                            }
+
+                            for (ClassFolder cls : classFolders) {
+                                cls.setTeacher(globalTeacherName);
+                            }
+
+                            tvTeacherName.setText(globalTeacherName);
+                            tvTeacherName.setTextColor(Color.parseColor("#FFFFFF"));
+                            tvTeacherName.setTypeface(null, Typeface.BOLD);
+                            if (SCREEN_CLASS.equals(currentScreen) && selectedClass != null) {
+                                classTeacherLabel.setText("Teacher: " + globalTeacherName);
+                            }
+
+                            dialog.dismiss();
+                            showToast("Teacher name updated ✓");
+                            loadDataFromDb();
+                        }));
                     })
                     .setNegativeButton("Cancel", null)
                     .show();
@@ -1236,11 +1636,20 @@ public class DashboardActivity extends AppCompatActivity {
                 }
             }
             act.setName(name);
-            act.setExamDate(dateInput.getText().toString().trim());
-            saveData();
-            dialog.dismiss();
-            showToast("Assessment updated ✓");
-            renderClassScreen();
+            String examDate = dateInput.getText().toString().trim();
+            act.setExamDate(examDate);
+            act.setExamDateEpoch(parseExamDateToEpoch(examDate, act.getCreatedAt()));
+            if (selectedClass == null) {
+                showErrorDialog("Save Failed", "No class selected.");
+                return;
+            }
+
+            AssessmentEntity updatedEntity = DataMapper.toAssessmentEntity(act, selectedClass.getId());
+            repo.updateAssessment(updatedEntity, ignored -> runOnUiThread(() -> {
+                dialog.dismiss();
+                showToast("Assessment updated ✓");
+                loadDataFromDb();
+            }));
         });
 
         dialog.setContentView(root);
@@ -1285,12 +1694,21 @@ public class DashboardActivity extends AppCompatActivity {
         btnDelete.setTextColor(Color.WHITE);
         btnDelete.setOnClickListener(v -> {
             if (selectedClass != null && selectedClass.getActivities() != null) {
-                selectedClass.getActivities().remove(act);
-                saveData();
-                renderClassScreen();
-                topBarBadge.setText("📁 " + selectedClass.getActivityCount());
-                dialog.dismiss();
-                showToast("Assessment deleted");
+                repo.getAssessmentById(act.getId(), assessmentEntity -> {
+                    if (assessmentEntity == null) {
+                        runOnUiThread(() -> {
+                            dialog.dismiss();
+                            loadDataFromDb();
+                        });
+                        return;
+                    }
+
+                    repo.deleteAssessment(assessmentEntity, ignored -> runOnUiThread(() -> {
+                        dialog.dismiss();
+                        showToast("Assessment deleted");
+                        loadDataFromDb();
+                    }));
+                });
             }
         });
         actions.addView(btnDelete);
@@ -1333,7 +1751,10 @@ public class DashboardActivity extends AppCompatActivity {
         // Find position of the current SY in the array (fallback to first)
         int defaultIdx = 0;
         for (int i = 0; i < schoolYearOptions.length; i++) {
-            if (schoolYearOptions[i].equals(defaultSY)) { defaultIdx = i; break; }
+            if (schoolYearOptions[i].equals(defaultSY)) {
+                defaultIdx = i;
+                break;
+            }
         }
         final String[] selectedSchoolYear = { schoolYearOptions[defaultIdx] };
         TextView schoolYearPicker = createDropdownField(schoolYearOptions[defaultIdx]);
@@ -1385,11 +1806,21 @@ public class DashboardActivity extends AppCompatActivity {
                     ? globalTeacherName
                     : "Unknown Teacher";
             ClassFolder cls = new ClassFolder(teacher, grade, section, schoolYear);
-            classFolders.add(cls);
-            saveData();
-            dialog.dismiss();
-            showScreen(SCREEN_HOME);
-            showToast("Class folder created ✓");
+            ensureTeacherId(teacherId -> {
+                if (teacherId <= 0) {
+                    runOnUiThread(() -> showErrorDialog("Create Failed",
+                            "Teacher profile is not ready yet. Please try again."));
+                    return;
+                }
+
+                ClassEntity entity = DataMapper.toClassEntity(cls, teacherId);
+                repo.insertClass(entity, ignored -> runOnUiThread(() -> {
+                    dialog.dismiss();
+                    showScreen(SCREEN_HOME);
+                    showToast("Class folder created ✓");
+                    loadDataFromDb();
+                }));
+            });
         });
 
         dialog.setContentView(root);
@@ -1489,12 +1920,16 @@ public class DashboardActivity extends AppCompatActivity {
                 }
             }
             ActivityFolder act = new ActivityFolder(name, selectedType[0]);
-            act.setExamDate(dateInput.getText().toString().trim());
-            selectedClass.addActivity(act);
-            saveData();
-            dialog.dismiss();
-            showScreen(SCREEN_CLASS);
-            showToast("Assessment folder created ✓");
+            String examDate = dateInput.getText().toString().trim();
+            act.setExamDate(examDate);
+            act.setExamDateEpoch(parseExamDateToEpoch(examDate, System.currentTimeMillis()));
+            AssessmentEntity entity = DataMapper.toAssessmentEntity(act, selectedClass.getId());
+            repo.insertAssessment(entity, ignored -> runOnUiThread(() -> {
+                dialog.dismiss();
+                showScreen(SCREEN_CLASS);
+                showToast("Assessment folder created ✓");
+                loadDataFromDb();
+            }));
         });
 
         dialog.setContentView(root);
@@ -1710,7 +2145,7 @@ public class DashboardActivity extends AppCompatActivity {
                 }
 
                 StringBuilder actCsv = new StringBuilder("LRN,Score");
-                for (int i = 1; i   <= act.getNumItems(); i++)
+                for (int i = 1; i <= act.getNumItems(); i++)
                     actCsv.append(",Q").append(i);
                 actCsv.append("\n");
                 for (ScanEntry scan : scans) {
@@ -1914,90 +2349,226 @@ public class DashboardActivity extends AppCompatActivity {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // PERSISTENCE
+    // PERSISTENCE — Room Database
     // ═══════════════════════════════════════════════════════════════
 
-    private void saveData() {
-        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                .putString(KEY_CLASSES, gson.toJson(classFolders))
-                .putString(KEY_TEACHER_NAME, globalTeacherName != null ? globalTeacherName : "")
-                .apply();
-        Log.d(TAG, "Saved " + classFolders.size() + " classes");
+    /**
+     * Load all data from Room in one chained background call.
+     * 1. Teacher → set globalTeacherName + currentTeacherId.
+     * 2. Classes → for each class, load its Assessments.
+     * 3. Assessments → for each assessment, load its Scans.
+     * 4. Scans → for each scan, load its Answers.
+     * When the chain is complete we jump back to the UI thread and
+     * re-navigate to the same screen the user was on before.
+     *
+     * NOTE: We do the entire load on the repo's single background thread
+     * by nesting callbacks. No concurrency conflicts because the repo's
+     * ExecutorService is single-threaded.
+     */
+    private void loadDataFromDb() {
+        // Snapshot the selected IDs so the lambdas don't hold mutable refs
+        final String prevClassId = (selectedClass != null) ? selectedClass.getId() : null;
+        final String prevActivityId = (selectedActivity != null) ? selectedActivity.getId() : null;
+        final String prevScreen = currentScreen;
+
+        repo.getFirstTeacher(teacher -> {
+            if (teacher != null) {
+                globalTeacherName = teacher.name != null ? teacher.name : "";
+                currentTeacherId = teacher.id;
+                loadClassesFromDb(prevClassId, prevActivityId, prevScreen);
+                return;
+            }
+
+            // Ensure a teacher row exists so class inserts always have a valid FK.
+            repo.upsertTeacher("", ensuredTeacher -> {
+                if (ensuredTeacher != null) {
+                    globalTeacherName = ensuredTeacher.name != null ? ensuredTeacher.name : "";
+                    currentTeacherId = ensuredTeacher.id;
+                } else {
+                    globalTeacherName = "";
+                    currentTeacherId = -1;
+                }
+                loadClassesFromDb(prevClassId, prevActivityId, prevScreen);
+            });
+        });
     }
 
-    private void loadData() {
-        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        String json = prefs.getString(KEY_CLASSES, "[]");
-        globalTeacherName = prefs.getString(KEY_TEACHER_NAME, "");
-        Type type = new TypeToken<List<ClassFolder>>() {
-        }.getType();
-        classFolders = gson.fromJson(json, type);
-        if (classFolders == null)
-            classFolders = new ArrayList<>();
-        Log.d(TAG, "Loaded " + classFolders.size() + " classes");
-    }
+    private void loadClassesFromDb(String prevClassId, String prevActivityId, String prevScreen) {
+        repo.getAllClasses(classEntities -> {
+            List<ClassFolder> loadedClasses = new ArrayList<>();
+            if (classEntities == null || classEntities.isEmpty()) {
+                publishResult(loadedClasses, prevClassId, prevActivityId, prevScreen);
+                return;
+            }
 
-    public static boolean isLrnExists(android.content.Context context, String classId, String activityId, String lrn) {
-        if (classId == null || activityId == null || lrn == null) return false;
-        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        Gson g = new Gson();
-        String json = prefs.getString(KEY_CLASSES, "[]");
-        Type type = new TypeToken<List<ClassFolder>>() {}.getType();
-        List<ClassFolder> classes = g.fromJson(json, type);
-        if (classes != null) {
-            for (ClassFolder cls : classes) {
-                if (cls.getId().equals(classId)) {
-                    for (ActivityFolder act : cls.getActivities()) {
-                        if (act.getId().equals(activityId)) {
-                            if (act.getScans() != null) {
-                                for (ScanEntry entry : act.getScans()) {
-                                    if (lrn.equals(entry.getLrn())) {
-                                        return true;
+            // We need to load assessments for every class, then scans for
+            // every assessment. Use an AtomicInteger to track completion.
+            AtomicInteger classCountdown = new AtomicInteger(classEntities.size());
+
+            for (ClassEntity ce : classEntities) {
+                ClassFolder cf = DataMapper.toClassFolder(ce, globalTeacherName);
+
+                // ── Step 3: load assessments for this class ─────────────
+                repo.getAssessmentsByClass(ce.id, assessmentEntities -> {
+                    List<ActivityFolder> activities = new ArrayList<>();
+
+                    if (assessmentEntities == null || assessmentEntities.isEmpty()) {
+                        cf.setActivities(activities);
+                        loadedClasses.add(cf);
+                        if (classCountdown.decrementAndGet() == 0) {
+                            publishResult(loadedClasses, prevClassId, prevActivityId, prevScreen);
+                        }
+                        return;
+                    }
+
+                    AtomicInteger assessmentCountdown = new AtomicInteger(assessmentEntities.size());
+
+                    for (AssessmentEntity ae : assessmentEntities) {
+                        ActivityFolder af = DataMapper.toActivityFolder(ae);
+
+                        // ── Step 4: load scans for this assessment ──────
+                        repo.getScansByAssessment(ae.id, scanEntities -> {
+                            List<ScanEntry> scanEntries = new ArrayList<>();
+
+                            if (scanEntities == null || scanEntities.isEmpty()) {
+                                af.setScans(scanEntries);
+                                activities.add(af);
+                                if (assessmentCountdown.decrementAndGet() == 0) {
+                                    cf.setActivities(activities);
+                                    loadedClasses.add(cf);
+                                    if (classCountdown.decrementAndGet() == 0) {
+                                        publishResult(loadedClasses, prevClassId,
+                                                prevActivityId, prevScreen);
                                     }
                                 }
+                                return;
                             }
-                            return false;
-                        }
+
+                            AtomicInteger scanCountdown = new AtomicInteger(scanEntities.size());
+
+                            for (ScanEntity se : scanEntities) {
+                                // ── Step 5: load answers for this scan ──
+                                repo.getAnswersByScan(se.id, answerEntities -> {
+                                    Map<Integer, String> answers = DataMapper.toAnswerMap(answerEntities);
+                                    scanEntries.add(DataMapper.toScanEntry(se, answers));
+
+                                    if (scanCountdown.decrementAndGet() == 0) {
+                                        af.setScans(scanEntries);
+                                        activities.add(af);
+                                        if (assessmentCountdown.decrementAndGet() == 0) {
+                                            cf.setActivities(activities);
+                                            loadedClasses.add(cf);
+                                            if (classCountdown.decrementAndGet() == 0) {
+                                                publishResult(loadedClasses, prevClassId,
+                                                        prevActivityId, prevScreen);
+                                            }
+                                        }
+                                    }
+                                });
+                            }
+                        });
                     }
-                }
+                });
             }
-        }
-        return false;
+        });
     }
 
+    private void ensureTeacherId(OMRRepository.Callback<Integer> callback) {
+        if (callback == null) {
+            return;
+        }
+
+        if (currentTeacherId > 0) {
+            callback.onResult(currentTeacherId);
+            return;
+        }
+
+        String fallbackName = globalTeacherName != null ? globalTeacherName : "";
+        repo.upsertTeacher(fallbackName, teacher -> {
+            if (teacher != null) {
+                currentTeacherId = teacher.id;
+                globalTeacherName = teacher.name != null ? teacher.name : "";
+                callback.onResult(currentTeacherId);
+            } else {
+                callback.onResult(-1);
+            }
+        });
+    }
+
+    /**
+     * Called on the repo background thread once all data has been loaded.
+     * Switches back to the main thread, sets the in-memory list, and
+     * restores the previously active screen.
+     */
+    private void publishResult(List<ClassFolder> loaded,
+            String prevClassId, String prevActivityId, String prevScreen) {
+        runOnUiThread(() -> {
+            classFolders = loaded;
+            Log.d(TAG, "Loaded " + classFolders.size() + " classes from Room");
+
+            // Re-resolve the selected class / activity by ID so that after
+            // a reload the correct objects are referenced.
+            if (prevClassId != null) {
+                selectedClass = findClassById(prevClassId);
+                if (selectedClass != null && prevActivityId != null) {
+                    selectedActivity = findActivityById(selectedClass, prevActivityId);
+                } else {
+                    selectedActivity = null;
+                }
+            }
+            showScreen(prevScreen != null ? prevScreen : SCREEN_HOME);
+        });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Static helpers for other Activities (CameraActivity / PreviewActivity)
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Check whether an LRN already has a scan in a given assessment.
+     * <p>
+     * Must be called from a <em>background</em> thread — Room cannot run on
+     * the main thread and this method blocks.
+     */
+    public static boolean isLrnExists(android.content.Context context,
+            String classId, String activityId, String lrn) {
+        if (activityId == null || lrn == null)
+            return false;
+        OMRRepository r = new OMRRepository(context);
+        return r.isLrnExistsSync(activityId, lrn);
+    }
+
+    /**
+     * Persist a scan result to Room.
+     * <p>
+     * Must be called from a <em>background</em> thread. If {@code replace}
+     * is true and a scan with the same LRN already exists in the assessment,
+     * the existing row is updated instead of inserting a new one.
+     */
     public static void saveScanResult(android.content.Context context,
             String classId, String activityId,
             ScanEntry scanEntry, boolean replace) {
-        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        Gson g = new Gson();
-        String json = prefs.getString(KEY_CLASSES, "[]");
-        Type type = new TypeToken<List<ClassFolder>>() {
-        }.getType();
-        List<ClassFolder> classes = g.fromJson(json, type);
-        if (classes != null) {
-            for (ClassFolder cls : classes) {
-                if (cls.getId().equals(classId)) {
-                    for (ActivityFolder act : cls.getActivities()) {
-                        if (act.getId().equals(activityId)) {
-                            if (replace && act.getScans() != null) {
-                                for (int i = 0; i < act.getScans().size(); i++) {
-                                    if (act.getScans().get(i).getLrn() != null &&
-                                        act.getScans().get(i).getLrn().equals(scanEntry.getLrn())) {
-                                        act.getScans().set(i, scanEntry);
-                                        prefs.edit().putString(KEY_CLASSES, g.toJson(classes)).apply();
-                                        return;
-                                    }
-                                }
-                            }
-                            act.addScan(scanEntry);
-                            prefs.edit().putString(KEY_CLASSES, g.toJson(classes)).apply();
-                            return;
-                        }
-                    }
-                    break;
+        if (activityId == null || scanEntry == null)
+            return;
+        OMRRepository r = new OMRRepository(context);
+        ScanEntity existing = (replace && scanEntry.getLrn() != null)
+                ? r.getScanByAssessmentAndLrnSync(activityId, scanEntry.getLrn())
+                : null;
+
+        ScanEntity entity = DataMapper.toScanEntity(scanEntry, activityId);
+        if (existing != null) {
+            entity.id = existing.id; // keep the original PK so Room does an UPDATE
+            r.updateScan(entity, null);
+            // Re-save answers: delete old ones first, then insert new
+            r.deleteAnswersByScan(existing.id,
+                    done -> r.insertAnswersFromMap(existing.id, scanEntry.getAnswers(), null));
+        } else {
+            // insertScan returns the new row ID; use it to store answers
+            r.insertScan(entity, newId -> {
+                if (newId != null && newId > 0) {
+                    r.insertAnswersFromMap(newId.intValue(), scanEntry.getAnswers(), null);
                 }
-            }
-            prefs.edit().putString(KEY_CLASSES, g.toJson(classes)).apply();
+            });
         }
     }
 
@@ -2007,6 +2578,15 @@ public class DashboardActivity extends AppCompatActivity {
         for (ClassFolder cls : classFolders)
             if (cls.getId().equals(classId))
                 return cls;
+        return null;
+    }
+
+    private ActivityFolder findActivityById(ClassFolder cls, String activityId) {
+        if (cls == null || activityId == null || cls.getActivities() == null)
+            return null;
+        for (ActivityFolder act : cls.getActivities())
+            if (act.getId().equals(activityId))
+                return act;
         return null;
     }
 
@@ -2237,7 +2817,9 @@ public class DashboardActivity extends AppCompatActivity {
     // SCHOOL YEAR HELPERS
     // ═══════════════════════════════════════════════════════════════
 
-    /** Build an array of school-year strings centred on the current calendar year. */
+    /**
+     * Build an array of school-year strings centred on the current calendar year.
+     */
     private String[] buildSchoolYearOptions() {
         int currentYear = Calendar.getInstance().get(Calendar.YEAR);
         // Range: 5 years before … 4 years after (10 options total)
@@ -2257,7 +2839,7 @@ public class DashboardActivity extends AppCompatActivity {
     private TextView createDropdownField(String initialText) {
         TextView tv = new TextView(this);
         tv.setText(initialText + "  ▾");
-        tv.setTag(initialText);             // keep raw value in tag
+        tv.setTag(initialText); // keep raw value in tag
         tv.setHint("Select…");
         tv.setHintTextColor(Color.parseColor("#CBD5E1"));
         tv.setTextColor(Color.parseColor("#94A3B8"));
@@ -2275,6 +2857,22 @@ public class DashboardActivity extends AppCompatActivity {
         lp.bottomMargin = dp(16);
         tv.setLayoutParams(lp);
         return tv;
+    }
+
+    private long parseExamDateToEpoch(String examDate, long fallback) {
+        if (examDate == null || examDate.trim().isEmpty()) {
+            return fallback;
+        }
+        try {
+            SimpleDateFormat sdf = new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault());
+            sdf.setLenient(false);
+            java.util.Date parsed = sdf.parse(examDate.trim());
+            if (parsed != null) {
+                return parsed.getTime();
+            }
+        } catch (Exception ignored) {
+        }
+        return fallback;
     }
 
     // ═══════════════════════════════════════════════════════════════

@@ -24,18 +24,16 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.example.omrscanner.R;
+import com.example.omrscanner.database.DataMapper;
+import com.example.omrscanner.database.OMRRepository;
+import com.example.omrscanner.database.entities.ScanEntity;
 import com.example.omrscanner.models.ActivityFolder;
 import com.example.omrscanner.models.ClassFolder;
 import com.example.omrscanner.models.ScanEntry;
 import com.google.android.material.button.MaterialButton;
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
 
 import java.io.File;
-import java.lang.reflect.Type;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 public class ScanDetailActivity extends AppCompatActivity {
@@ -64,10 +62,11 @@ public class ScanDetailActivity extends AppCompatActivity {
     private String classId, activityId;
     private int scanIndex;
 
-    private List<ClassFolder> classFolders;
     private ClassFolder    currentClass;
     private ActivityFolder currentActivity;
     private ScanEntry      currentScan;
+    private ScanEntity     currentScanEntity;
+    private OMRRepository  repo;
 
     // ── Views ──────────────────────────────────────────────────
     private ImageView         scanImage;
@@ -81,7 +80,6 @@ public class ScanDetailActivity extends AppCompatActivity {
 
     private boolean isEditing = false;
     private Map<Integer, String> editedAnswers = new LinkedHashMap<>();
-    private Gson gson = new Gson();
 
     // ──────────────────────────────────────────────────────────
     @Override
@@ -98,6 +96,7 @@ public class ScanDetailActivity extends AppCompatActivity {
         controller.hide(WindowInsetsCompat.Type.systemBars());
 
         initViews();
+        repo = new OMRRepository(this);
 
         if (getIntent() != null) {
             classId    = getIntent().getStringExtra(EXTRA_CLASS_ID);
@@ -130,33 +129,50 @@ public class ScanDetailActivity extends AppCompatActivity {
     // DATA
     // ──────────────────────────────────────────────────────────
     private void loadData() {
-        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        String json = prefs.getString(KEY_CLASSES, "[]");
-        Type type   = new TypeToken<List<ClassFolder>>(){}.getType();
-        classFolders = gson.fromJson(json, type);
-
-        if (classFolders == null) { showError("Failed to load data"); return; }
-
-        for (ClassFolder cls : classFolders) {
-            if (cls.getId().equals(classId)) { currentClass = cls; break; }
-        }
-        if (currentClass == null) { showError("Class not found"); return; }
-
-        for (ActivityFolder act : currentClass.getActivities()) {
-            if (act.getId().equals(activityId)) { currentActivity = act; break; }
-        }
-        if (currentActivity == null) { showError("Activity not found"); return; }
-
-        if (scanIndex < 0 || scanIndex >= currentActivity.getScans().size()) {
-            showError("Scan not found"); return;
+        if (classId == null || activityId == null || scanIndex < 0) {
+            showError("Invalid scan data");
+            return;
         }
 
-        currentScan = currentActivity.getScans().get(scanIndex);
+        repo.getClassById(classId, classEntity -> {
+            if (classEntity == null) {
+                runOnUiThread(() -> showError("Class not found"));
+                return;
+            }
+            repo.getFirstTeacher(teacherEntity -> {
+                String teacherName = (teacherEntity != null && teacherEntity.name != null) ? teacherEntity.name : "Unknown";
+                currentClass = DataMapper.toClassFolder(classEntity, teacherName);
 
-        editedAnswers.clear();
-        if (currentScan.getAnswers() != null) editedAnswers.putAll(currentScan.getAnswers());
+                repo.getAssessmentById(activityId, assessmentEntity -> {
+                    if (assessmentEntity == null) {
+                        runOnUiThread(() -> showError("Activity not found"));
+                        return;
+                    }
+                    currentActivity = DataMapper.toActivityFolder(assessmentEntity);
 
-        populateUI();
+                    repo.getScansByAssessment(activityId, scanEntities -> {
+                        if (scanIndex < 0 || scanIndex >= scanEntities.size()) {
+                            runOnUiThread(() -> showError("Scan not found"));
+                            return;
+                        }
+
+                        currentScanEntity = scanEntities.get(scanIndex);
+
+                        repo.getAnswersByScan(currentScanEntity.id, answerEntities -> {
+                            Map<Integer, String> answers = DataMapper.toAnswerMap(answerEntities);
+                            currentScan = DataMapper.toScanEntry(currentScanEntity, answers);
+
+                            editedAnswers.clear();
+                            if (currentScan.getAnswers() != null) {
+                                editedAnswers.putAll(currentScan.getAnswers());
+                            }
+
+                            runOnUiThread(this::populateUI);
+                        });
+                    });
+                });
+            });
+        });
     }
 
     private void populateUI() {
@@ -465,26 +481,31 @@ public class ScanDetailActivity extends AppCompatActivity {
         // 3. Recalculate detected answer count
         currentScan.setScore(currentScan.getAnsweredCount());
 
-        // 4. Update list in memory
-        currentActivity.getScans().set(scanIndex, currentScan);
+        currentScanEntity.studentLrn = currentScan.getLrn();
+        currentScanEntity.score = currentScan.getScore();
+        currentScanEntity.detectedBubbles = currentScan.getScore();
 
-        // 5. Persist
-        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        prefs.edit().putString(KEY_CLASSES, gson.toJson(classFolders)).apply();
+        // 4. Update scan in DB
+        repo.updateScan(currentScanEntity, ignored1 -> {
+            // 5. Update individual answers map in DB
+            repo.insertAnswersFromMap(currentScanEntity.id, editedAnswers, ignored2 -> {
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Changes saved", Toast.LENGTH_SHORT).show();
 
-        Toast.makeText(this, "Changes saved", Toast.LENGTH_SHORT).show();
+                    // Exit edit mode
+                    isEditing = false;
+                    btnEditToggle.setText("EDIT");
+                    btnEditToggle.setTextColor(Color.parseColor(COLOR_BLUE));
+                    etLrn.setEnabled(false);
+                    etLrn.setBackgroundColor(Color.TRANSPARENT);
+                    btnSaveChanges.setVisibility(View.GONE);
 
-        // Exit edit mode
-        isEditing = false;
-        btnEditToggle.setText("EDIT");
-        btnEditToggle.setTextColor(Color.parseColor(COLOR_BLUE));
-        etLrn.setEnabled(false);
-        etLrn.setBackgroundColor(Color.TRANSPARENT);
-        btnSaveChanges.setVisibility(View.GONE);
-
-        // Refresh detected count display + grid
-        tvScore.setText(currentScan.getScore() + "/" + currentScan.getNumItems());
-        renderAnswers();
+                    // Refresh detected count display + grid
+                    tvScore.setText(currentScan.getScore() + "/" + currentScan.getNumItems());
+                    renderAnswers();
+                });
+            });
+        });
     }
 
     private void showError(String msg) {
