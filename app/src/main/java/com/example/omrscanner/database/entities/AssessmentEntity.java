@@ -13,7 +13,11 @@ import androidx.room.PrimaryKey;
  * e.g. name="hs", sheetType="ZPH50"
  */
 @Entity(tableName = "assessments", foreignKeys = @ForeignKey(entity = ClassEntity.class, parentColumns = "id", childColumns = "class_id", onDelete = ForeignKey.CASCADE), indices = {
-    @Index("class_id") })
+    @Index("class_id"),
+    @Index("sheet_type"),
+    @Index("created_at"),
+    @Index("exam_date_epoch")
+})
 public class AssessmentEntity {
 
   @PrimaryKey
@@ -34,6 +38,9 @@ public class AssessmentEntity {
   @ColumnInfo(name = "exam_date")
   public String examDate; // e.g. "Mar 05, 2026"
 
+  @ColumnInfo(name = "exam_date_epoch")
+  public long examDateEpoch; // millis at local midnight, used for reliable sorting
+
   @ColumnInfo(name = "created_at")
   public long createdAt;
 
@@ -50,6 +57,7 @@ public class AssessmentEntity {
     this.name = name;
     this.sheetType = sheetType;
     this.examDate = examDate;
+    this.examDateEpoch = 0L;
     this.createdAt = System.currentTimeMillis();
     this.updatedAt = System.currentTimeMillis();
   }

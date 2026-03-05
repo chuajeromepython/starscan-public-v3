@@ -15,6 +15,7 @@ public class ActivityFolder {
     private List<ScanEntry> scans;
     private long createdAt;
     private String examDate; // Date when the activity was taken
+    private long examDateEpoch; // millis at local midnight, used for sorting
 
     public ActivityFolder() {
         // Default constructor for deserialization
@@ -28,6 +29,7 @@ public class ActivityFolder {
         this.scans = new ArrayList<>();
         this.createdAt = System.currentTimeMillis();
         this.examDate = getFormattedDate(); // Default to creation date
+        this.examDateEpoch = this.createdAt;
     }
 
     // Getters and Setters
@@ -77,6 +79,14 @@ public class ActivityFolder {
 
     public void setExamDate(String examDate) {
         this.examDate = examDate;
+    }
+
+    public long getExamDateEpoch() {
+        return examDateEpoch;
+    }
+
+    public void setExamDateEpoch(long examDateEpoch) {
+        this.examDateEpoch = examDateEpoch;
     }
 
     public void addScan(ScanEntry scan) {

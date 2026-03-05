@@ -541,6 +541,106 @@
                                     android:textColor="#94A3B8" />
                             </LinearLayout>
 
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="12dp"
+                                android:background="@drawable/bg_filter_panel"
+                                android:orientation="vertical"
+                                android:padding="12dp">
+
+                                <EditText
+                                    android:id="@+id/homeClassSearchInput"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginBottom="10dp"
+                                    android:background="@drawable/input_modern_bg"
+                                    android:hint="Search class, section, school year..."
+                                    android:imeOptions="actionDone"
+                                    android:inputType="text"
+                                    android:maxLines="1"
+                                    android:paddingStart="12dp"
+                                    android:paddingTop="10dp"
+                                    android:paddingEnd="12dp"
+                                    android:paddingBottom="10dp"
+                                    android:textColor="#1E293B"
+                                    android:textColorHint="#94A3B8"
+                                    android:textSize="13sp" />
+
+                                <LinearLayout
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginBottom="8dp"
+                                    android:gravity="center_vertical"
+                                    android:orientation="horizontal">
+
+                                    <TextView
+                                        android:layout_width="0dp"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:text="Sort"
+                                        android:textColor="#64748B"
+                                        android:textSize="12sp"
+                                        android:textStyle="bold" />
+
+                                    <TextView
+                                        android:id="@+id/homeClassSortPicker"
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:background="@drawable/bg_sort_pill"
+                                        android:paddingStart="10dp"
+                                        android:paddingTop="6dp"
+                                        android:paddingEnd="10dp"
+                                        android:paddingBottom="6dp"
+                                        android:text="Newest ▾"
+                                        android:textColor="#1E293B"
+                                        android:textSize="12sp" />
+                                </LinearLayout>
+
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginBottom="6dp"
+                                    android:text="Filter Grade"
+                                    android:textColor="#64748B"
+                                    android:textSize="11sp"
+                                    android:textStyle="bold" />
+
+                                <HorizontalScrollView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginBottom="8dp"
+                                    android:scrollbars="none">
+
+                                    <LinearLayout
+                                        android:id="@+id/homeGradeFilterChips"
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:orientation="horizontal" />
+                                </HorizontalScrollView>
+
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginBottom="6dp"
+                                    android:text="Filter School Year"
+                                    android:textColor="#64748B"
+                                    android:textSize="11sp"
+                                    android:textStyle="bold" />
+
+                                <HorizontalScrollView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:scrollbars="none">
+
+                                    <LinearLayout
+                                        android:id="@+id/homeSchoolYearFilterChips"
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:orientation="horizontal" />
+                                </HorizontalScrollView>
+                            </LinearLayout>
+
                             <!-- Class list — populated by Java -->
                             <LinearLayout
                                 android:id="@+id/homeClassList"
@@ -759,6 +859,62 @@
                                 android:layout_height="wrap_content"
                                 android:orientation="horizontal" />
                         </HorizontalScrollView>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="12dp"
+                            android:background="@drawable/bg_filter_panel"
+                            android:orientation="vertical"
+                            android:padding="12dp">
+
+                            <EditText
+                                android:id="@+id/classAssessmentSearchInput"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="10dp"
+                                android:background="@drawable/input_modern_bg"
+                                android:hint="Search assessment, sheet, date..."
+                                android:imeOptions="actionDone"
+                                android:inputType="text"
+                                android:maxLines="1"
+                                android:paddingStart="12dp"
+                                android:paddingTop="10dp"
+                                android:paddingEnd="12dp"
+                                android:paddingBottom="10dp"
+                                android:textColor="#1E293B"
+                                android:textColorHint="#94A3B8"
+                                android:textSize="13sp" />
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="Sort"
+                                    android:textColor="#64748B"
+                                    android:textSize="12sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:id="@+id/classAssessmentSortPicker"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:background="@drawable/bg_sort_pill"
+                                    android:paddingStart="10dp"
+                                    android:paddingTop="6dp"
+                                    android:paddingEnd="10dp"
+                                    android:paddingBottom="6dp"
+                                    android:text="Newest ▾"
+                                    android:textColor="#1E293B"
+                                    android:textSize="12sp" />
+                            </LinearLayout>
+                        </LinearLayout>
 
                         <!-- Activity cards — populated by Java -->
                         <LinearLayout

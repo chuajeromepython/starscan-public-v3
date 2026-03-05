@@ -7,6 +7,8 @@ import com.example.omrscanner.database.entities.AssessmentEntity;
 import com.example.omrscanner.database.entities.ClassEntity;
 import com.example.omrscanner.database.entities.ScanEntity;
 import com.example.omrscanner.database.entities.TeacherEntity;
+import com.example.omrscanner.database.projections.AssessmentListRow;
+import com.example.omrscanner.database.projections.ClassListRow;
 
 import java.util.List;
 import java.util.Map;
@@ -139,6 +141,32 @@ public class OMRRepository {
     });
   }
 
+  public void queryClassList(String search, String gradeFilter, String schoolYearFilter, String sortKey,
+      Callback<List<ClassListRow>> callback) {
+    executor.execute(() -> {
+      List<ClassListRow> list = db.classDao().queryClassList(search, gradeFilter, schoolYearFilter,
+          sortKey);
+      if (callback != null)
+        callback.onResult(list);
+    });
+  }
+
+  public void getDistinctClassGrades(Callback<List<String>> callback) {
+    executor.execute(() -> {
+      List<String> list = db.classDao().getDistinctGrades();
+      if (callback != null)
+        callback.onResult(list);
+    });
+  }
+
+  public void getDistinctClassSchoolYears(Callback<List<String>> callback) {
+    executor.execute(() -> {
+      List<String> list = db.classDao().getDistinctSchoolYears();
+      if (callback != null)
+        callback.onResult(list);
+    });
+  }
+
   // ═════════════════════════════════════════════════════════════════════════
   // ASSESSMENT
   // ═════════════════════════════════════════════════════════════════════════
@@ -197,6 +225,16 @@ public class OMRRepository {
       int count = db.assessmentDao().countAll();
       if (callback != null)
         callback.onResult(count);
+    });
+  }
+
+  public void queryAssessmentList(String classId, String sheetTypeFilter, String search, String sortKey,
+      Callback<List<AssessmentListRow>> callback) {
+    executor.execute(() -> {
+      List<AssessmentListRow> list = db.assessmentDao().queryAssessmentList(classId, sheetTypeFilter,
+          search, sortKey);
+      if (callback != null)
+        callback.onResult(list);
     });
   }
 

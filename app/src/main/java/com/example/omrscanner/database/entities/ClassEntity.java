@@ -13,7 +13,11 @@ import androidx.room.PrimaryKey;
  * Named ClassEntity to avoid conflict with Java's built-in Class keyword.
  */
 @Entity(tableName = "classes", foreignKeys = @ForeignKey(entity = TeacherEntity.class, parentColumns = "id", childColumns = "teacher_id", onDelete = ForeignKey.CASCADE), indices = {
-    @Index("teacher_id") })
+    @Index("teacher_id"),
+    @Index("grade"),
+    @Index("school_year"),
+    @Index("created_at")
+})
 public class ClassEntity {
 
   @PrimaryKey

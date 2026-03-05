@@ -7,7 +7,11 @@ import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
 import android.app.DatePickerDialog;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Handler;
 import android.os.Bundle;
+import android.os.Looper;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
@@ -21,7 +25,6 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.widget.ArrayAdapter;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
@@ -39,6 +42,8 @@ import com.example.omrscanner.database.entities.AssessmentEntity;
 import com.example.omrscanner.database.entities.ClassEntity;
 import com.example.omrscanner.database.entities.ScanEntity;
 import com.example.omrscanner.database.entities.TeacherEntity;
+import com.example.omrscanner.database.projections.AssessmentListRow;
+import com.example.omrscanner.database.projections.ClassListRow;
 import com.example.omrscanner.models.ActivityFolder;
 import com.example.omrscanner.models.ClassFolder;
 import com.example.omrscanner.models.ScanEntry;
@@ -68,6 +73,16 @@ public class DashboardActivity extends AppCompatActivity {
     private static final String SCREEN_HOME = "home";
     private static final String SCREEN_CLASS = "class";
     private static final String SCREEN_ACTIVITY = "activity";
+    private static final String CLASS_SORT_NEWEST = "NEWEST";
+    private static final String CLASS_SORT_OLDEST = "OLDEST";
+    private static final String CLASS_SORT_GRADE_ASC = "GRADE_ASC";
+    private static final String CLASS_SORT_SECTION_ASC = "SECTION_ASC";
+    private static final String ASSESSMENT_SORT_NEWEST = "NEWEST";
+    private static final String ASSESSMENT_SORT_OLDEST = "OLDEST";
+    private static final String ASSESSMENT_SORT_NAME_ASC = "NAME_ASC";
+    private static final String ASSESSMENT_SORT_NAME_DESC = "NAME_DESC";
+    private static final String ASSESSMENT_SORT_EXAM_DATE_NEWEST = "EXAM_DATE_NEWEST";
+    private static final String ASSESSMENT_SORT_EXAM_DATE_OLDEST = "EXAM_DATE_OLDEST";
 
     // ── Room database repository ─────────────────────────────────────────
     private OMRRepository repo;
@@ -82,6 +97,17 @@ public class DashboardActivity extends AppCompatActivity {
     private String selectedSheetType = null;
     private String selectedSheetFilter = null; // null = "All"
     private String globalTeacherName = "";
+    private String classSearchQuery = "";
+    private String selectedClassGradeFilter = null;
+    private String selectedClassSchoolYearFilter = null;
+    private String selectedClassSort = CLASS_SORT_NEWEST;
+    private String assessmentSearchQuery = "";
+    private String selectedAssessmentSort = ASSESSMENT_SORT_NEWEST;
+    private int homeQueryGeneration = 0;
+    private int assessmentQueryGeneration = 0;
+    private final Handler searchDebounceHandler = new Handler(Looper.getMainLooper());
+    private Runnable pendingHomeSearchRunnable;
+    private Runnable pendingAssessmentSearchRunnable;
 
     // Views
     private ImageButton btnBack;
@@ -91,10 +117,15 @@ public class DashboardActivity extends AppCompatActivity {
     private View screenHome;
     private ScrollView screenClass, screenActivity;
     private LinearLayout homeEmpty, homeClassList;
+    private EditText homeClassSearchInput;
+    private TextView homeClassSortPicker;
+    private LinearLayout homeGradeFilterChips, homeSchoolYearFilterChips;
     private TextView classTeacherLabel;
     private LinearLayout classEmpty, classActivityList;
     private LinearLayout classSheetTabs;
     private TextView classAssessmentCount;
+    private EditText classAssessmentSearchInput;
+    private TextView classAssessmentSortPicker;
 
     private CardView scanCtaCard;
 
@@ -138,6 +169,17 @@ public class DashboardActivity extends AppCompatActivity {
 
         // Reload from Room, then re-navigate to the current screen
         loadDataFromDb();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (pendingHomeSearchRunnable != null) {
+            searchDebounceHandler.removeCallbacks(pendingHomeSearchRunnable);
+        }
+        if (pendingAssessmentSearchRunnable != null) {
+            searchDebounceHandler.removeCallbacks(pendingAssessmentSearchRunnable);
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -200,12 +242,18 @@ public class DashboardActivity extends AppCompatActivity {
 
         homeEmpty = findViewById(R.id.homeEmpty);
         homeClassList = findViewById(R.id.homeClassList);
+        homeClassSearchInput = findViewById(R.id.homeClassSearchInput);
+        homeClassSortPicker = findViewById(R.id.homeClassSortPicker);
+        homeGradeFilterChips = findViewById(R.id.homeGradeFilterChips);
+        homeSchoolYearFilterChips = findViewById(R.id.homeSchoolYearFilterChips);
 
         classTeacherLabel = findViewById(R.id.classTeacherLabel);
         classEmpty = findViewById(R.id.classEmpty);
         classActivityList = findViewById(R.id.classActivityList);
         classSheetTabs = findViewById(R.id.classSheetTabs);
         classAssessmentCount = findViewById(R.id.classAssessmentCount);
+        classAssessmentSearchInput = findViewById(R.id.classAssessmentSearchInput);
+        classAssessmentSortPicker = findViewById(R.id.classAssessmentSortPicker);
 
         scanCtaCard = findViewById(R.id.scanCtaCard);
         scanCtaSub = findViewById(R.id.scanCtaSub);
@@ -244,6 +292,66 @@ public class DashboardActivity extends AppCompatActivity {
         });
 
         scanCtaCard.setOnClickListener(v -> showScanMethodDialog());
+
+        homeClassSearchInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                classSearchQuery = s != null ? s.toString().trim() : "";
+                scheduleHomeSearchRefresh();
+            }
+        });
+
+        classAssessmentSearchInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                assessmentSearchQuery = s != null ? s.toString().trim() : "";
+                scheduleAssessmentSearchRefresh();
+            }
+        });
+
+        homeClassSortPicker.setOnClickListener(v -> showClassSortDialog());
+        classAssessmentSortPicker.setOnClickListener(v -> showAssessmentSortDialog());
+        updateSortPickers();
+    }
+
+    private void scheduleHomeSearchRefresh() {
+        if (pendingHomeSearchRunnable != null) {
+            searchDebounceHandler.removeCallbacks(pendingHomeSearchRunnable);
+        }
+        pendingHomeSearchRunnable = () -> {
+            if (SCREEN_HOME.equals(currentScreen)) {
+                renderHomeScreen();
+            }
+        };
+        searchDebounceHandler.postDelayed(pendingHomeSearchRunnable, 220);
+    }
+
+    private void scheduleAssessmentSearchRefresh() {
+        if (pendingAssessmentSearchRunnable != null) {
+            searchDebounceHandler.removeCallbacks(pendingAssessmentSearchRunnable);
+        }
+        pendingAssessmentSearchRunnable = () -> {
+            if (SCREEN_CLASS.equals(currentScreen)) {
+                renderClassScreen();
+            }
+        };
+        searchDebounceHandler.postDelayed(pendingAssessmentSearchRunnable, 220);
     }
 
     private void initGalleryLauncher() {
@@ -274,6 +382,11 @@ public class DashboardActivity extends AppCompatActivity {
                 btnBack.setVisibility(View.GONE);
                 topBarTitle.setText("SagotSuri");
                 topBarBadge.setVisibility(View.GONE);
+                if (!classSearchQuery.equals(homeClassSearchInput.getText().toString())) {
+                    homeClassSearchInput.setText(classSearchQuery);
+                    homeClassSearchInput.setSelection(homeClassSearchInput.getText().length());
+                }
+                updateSortPickers();
                 // Refresh teacher name display in header
                 if (globalTeacherName != null && !globalTeacherName.isEmpty()) {
                     tvTeacherName.setText(globalTeacherName);
@@ -298,10 +411,14 @@ public class DashboardActivity extends AppCompatActivity {
                 }
                 screenClass.setVisibility(View.VISIBLE);
                 btnBack.setVisibility(View.VISIBLE);
-                selectedSheetFilter = null; // reset tab filter for new class
                 topBarTitle.setText(selectedClass.getDisplayName());
                 topBarBadge.setVisibility(View.VISIBLE);
                 topBarBadge.setText("📁 " + selectedClass.getActivityCount());
+                if (!assessmentSearchQuery.equals(classAssessmentSearchInput.getText().toString())) {
+                    classAssessmentSearchInput.setText(assessmentSearchQuery);
+                    classAssessmentSearchInput.setSelection(classAssessmentSearchInput.getText().length());
+                }
+                updateSortPickers();
                 fab.setText("Assessment");
                 fab.setVisibility(View.VISIBLE);
                 breadcrumbBar.setVisibility(View.VISIBLE);
@@ -394,21 +511,38 @@ public class DashboardActivity extends AppCompatActivity {
             statActivities.setText(String.valueOf(totalActivities));
         if (statScans != null)
             statScans.setText(String.valueOf(totalScans));
-        if (homeClassCount != null)
-            homeClassCount.setText(classFolders.size() + " total");
 
-        if (classFolders.isEmpty()) {
-            homeEmpty.setVisibility(View.VISIBLE);
-            homeClassList.setVisibility(View.GONE);
-        } else {
-            homeEmpty.setVisibility(View.GONE);
-            homeClassList.setVisibility(View.VISIBLE);
-            for (ClassFolder cls : classFolders)
-                homeClassList.addView(createClassCard(cls));
-        }
+        final int requestId = ++homeQueryGeneration;
+        repo.queryClassList(classSearchQuery, selectedClassGradeFilter, selectedClassSchoolYearFilter,
+                selectedClassSort, rows -> runOnUiThread(() -> {
+                    if (requestId != homeQueryGeneration || !SCREEN_HOME.equals(currentScreen)) {
+                        return;
+                    }
+
+                    if (buildHomeFilterChips(getDistinctGradesFromCache(), getDistinctSchoolYearsFromCache())) {
+                        return;
+                    }
+
+                    int rowCount = (rows != null) ? rows.size() : 0;
+                    if (homeClassCount != null) {
+                        homeClassCount.setText(rowCount + " total");
+                    }
+
+                    if (rowCount == 0) {
+                        homeEmpty.setVisibility(View.VISIBLE);
+                        homeClassList.setVisibility(View.GONE);
+                        return;
+                    }
+
+                    homeEmpty.setVisibility(View.GONE);
+                    homeClassList.setVisibility(View.VISIBLE);
+                    for (ClassListRow row : rows) {
+                        homeClassList.addView(createClassCard(row));
+                    }
+                }));
     }
 
-    private View createClassCard(ClassFolder cls) {
+    private View createClassCard(ClassListRow row) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(16), dp(16), dp(16), dp(16));
@@ -436,7 +570,7 @@ public class DashboardActivity extends AppCompatActivity {
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         TextView title = new TextView(this);
-        title.setText(cls.getDisplayName());
+        title.setText(row.getDisplayName());
         title.setTextColor(Color.parseColor("#1E293B"));
         title.setTextSize(15);
         title.setTypeface(null, Typeface.BOLD);
@@ -445,7 +579,7 @@ public class DashboardActivity extends AppCompatActivity {
         TextView teacher = new TextView(this);
         String displayTeacher = (globalTeacherName != null && !globalTeacherName.isEmpty())
                 ? globalTeacherName
-                : cls.getTeacher();
+                : "Unknown Teacher";
         teacher.setText("\uD83D\uDC64 " + displayTeacher);
         teacher.setTextColor(Color.parseColor("#64748B"));
         teacher.setTextSize(12);
@@ -464,11 +598,11 @@ public class DashboardActivity extends AppCompatActivity {
         card.addView(header);
 
         TextView meta = new TextView(this);
-        String schoolYearText = (cls.getSchoolYear() != null && !cls.getSchoolYear().isEmpty())
-                ? " · S.Y. " + cls.getSchoolYear()
+        String schoolYearText = (row.schoolYear != null && !row.schoolYear.isEmpty())
+                ? " · S.Y. " + row.schoolYear
                 : "";
-        meta.setText("📂 " + cls.getActivityCount() + " Assessment"
-                + (cls.getActivityCount() != 1 ? "s" : "")
+        meta.setText("\uD83D\uDCC2 " + row.assessmentCount + " Assessment"
+                + (row.assessmentCount != 1 ? "s" : "")
                 + schoolYearText);
         meta.setTextColor(Color.parseColor("#94A3B8"));
         meta.setTextSize(11);
@@ -479,11 +613,21 @@ public class DashboardActivity extends AppCompatActivity {
         card.addView(meta);
 
         card.setOnClickListener(v -> {
-            selectedClass = cls;
+            selectedClass = findClassById(row.id);
+            if (selectedClass == null) {
+                showErrorDialog("Class unavailable", "The selected class could not be loaded. Please try again.");
+                return;
+            }
+            selectedSheetFilter = null;
+            assessmentSearchQuery = "";
+            selectedAssessmentSort = ASSESSMENT_SORT_NEWEST;
             showScreen(SCREEN_CLASS);
         });
         card.setOnLongClickListener(v -> {
-            showClassOptionsDialog(cls);
+            ClassFolder cls = findClassById(row.id);
+            if (cls != null) {
+                showClassOptionsDialog(cls);
+            }
             return true;
         });
         return card;
@@ -506,30 +650,34 @@ public class DashboardActivity extends AppCompatActivity {
         // ── Build sheet-type filter tabs ──
         buildClassSheetTabs(activities);
 
-        // ── Apply filter ──
-        List<ActivityFolder> filtered = new ArrayList<>();
-        if (activities != null) {
-            for (ActivityFolder act : activities) {
-                if (selectedSheetFilter == null || act.getSheetType().equals(selectedSheetFilter)) {
-                    filtered.add(act);
-                }
-            }
-        }
+        final int requestId = ++assessmentQueryGeneration;
+        repo.queryAssessmentList(
+                selectedClass.getId(),
+                selectedSheetFilter,
+                assessmentSearchQuery,
+                selectedAssessmentSort,
+                rows -> runOnUiThread(() -> {
+                    if (requestId != assessmentQueryGeneration || !SCREEN_CLASS.equals(currentScreen)) {
+                        return;
+                    }
 
-        // Update count label
-        if (classAssessmentCount != null) {
-            classAssessmentCount.setText(filtered.size() + " total");
-        }
+                    int rowCount = (rows != null) ? rows.size() : 0;
+                    if (classAssessmentCount != null) {
+                        classAssessmentCount.setText(rowCount + " total");
+                    }
 
-        if (filtered.isEmpty()) {
-            classEmpty.setVisibility(View.VISIBLE);
-            classActivityList.setVisibility(View.GONE);
-        } else {
-            classEmpty.setVisibility(View.GONE);
-            classActivityList.setVisibility(View.VISIBLE);
-            for (ActivityFolder act : filtered)
-                classActivityList.addView(createActivityCard(act));
-        }
+                    if (rowCount == 0) {
+                        classEmpty.setVisibility(View.VISIBLE);
+                        classActivityList.setVisibility(View.GONE);
+                        return;
+                    }
+
+                    classEmpty.setVisibility(View.GONE);
+                    classActivityList.setVisibility(View.VISIBLE);
+                    for (AssessmentListRow row : rows) {
+                        classActivityList.addView(createActivityCard(row));
+                    }
+                }));
     }
 
     /**
@@ -610,7 +758,7 @@ public class DashboardActivity extends AppCompatActivity {
         }
     }
 
-    private View createActivityCard(ActivityFolder act) {
+    private View createActivityCard(AssessmentListRow row) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(16), dp(16), dp(16), dp(16));
@@ -638,14 +786,14 @@ public class DashboardActivity extends AppCompatActivity {
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         TextView title = new TextView(this);
-        title.setText(act.getName());
+        title.setText(row.name);
         title.setTextColor(Color.parseColor("#1E293B"));
         title.setTextSize(15);
         title.setTypeface(null, Typeface.BOLD);
         leftCol.addView(title);
 
         TextView sub = new TextView(this);
-        sub.setText("Sheet: " + act.getSheetType());
+        sub.setText("Sheet: " + row.sheetType);
         sub.setTextColor(Color.parseColor("#64748B"));
         sub.setTextSize(12);
         LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
@@ -663,10 +811,12 @@ public class DashboardActivity extends AppCompatActivity {
         card.addView(header);
 
         TextView meta = new TextView(this);
-        String dateToShow = act.getExamDate() != null && !act.getExamDate().isEmpty() ? act.getExamDate()
-                : act.getFormattedDate();
-        meta.setText("�� " + act.getScanCount() + " scan"
-                + (act.getScanCount() != 1 ? "s" : "")
+        String dateToShow = (row.examDate != null && !row.examDate.isEmpty())
+                ? row.examDate
+                : new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
+                        .format(new java.util.Date(row.createdAt));
+        meta.setText("\uD83D\uDCC4 " + row.scanCount + " scan"
+                + (row.scanCount != 1 ? "s" : "")
                 + " · " + dateToShow);
         meta.setTextColor(Color.parseColor("#94A3B8"));
         meta.setTextSize(11);
@@ -677,14 +827,238 @@ public class DashboardActivity extends AppCompatActivity {
         card.addView(meta);
 
         card.setOnClickListener(v -> {
+            ActivityFolder act = findActivityById(selectedClass, row.id);
+            if (act == null) {
+                showErrorDialog("Assessment unavailable", "The selected assessment could not be loaded. Please try again.");
+                return;
+            }
             selectedActivity = act;
             showScreen(SCREEN_ACTIVITY);
         });
         card.setOnLongClickListener(v -> {
-            showActivityOptionsDialog(act);
+            ActivityFolder act = findActivityById(selectedClass, row.id);
+            if (act != null) {
+                showActivityOptionsDialog(act);
+            }
             return true;
         });
         return card;
+    }
+
+    private interface ChipSelectionHandler {
+        void onSelected(String value);
+    }
+
+    private List<String> getDistinctGradesFromCache() {
+        java.util.LinkedHashSet<String> set = new java.util.LinkedHashSet<>();
+        for (ClassFolder cls : classFolders) {
+            if (cls.getGrade() != null && !cls.getGrade().trim().isEmpty()) {
+                set.add(cls.getGrade().trim());
+            }
+        }
+        List<String> list = new ArrayList<>(set);
+        list.sort(String.CASE_INSENSITIVE_ORDER);
+        return list;
+    }
+
+    private List<String> getDistinctSchoolYearsFromCache() {
+        java.util.LinkedHashSet<String> set = new java.util.LinkedHashSet<>();
+        for (ClassFolder cls : classFolders) {
+            if (cls.getSchoolYear() != null && !cls.getSchoolYear().trim().isEmpty()) {
+                set.add(cls.getSchoolYear().trim());
+            }
+        }
+        List<String> list = new ArrayList<>(set);
+        list.sort((a, b) -> b.compareToIgnoreCase(a));
+        return list;
+    }
+
+    private boolean buildHomeFilterChips(List<String> grades, List<String> years) {
+        boolean selectionChanged = false;
+        if (selectedClassGradeFilter != null && (grades == null || !grades.contains(selectedClassGradeFilter))) {
+            selectedClassGradeFilter = null;
+            selectionChanged = true;
+        }
+        if (selectedClassSchoolYearFilter != null
+                && (years == null || !years.contains(selectedClassSchoolYearFilter))) {
+            selectedClassSchoolYearFilter = null;
+            selectionChanged = true;
+        }
+
+        if (selectionChanged && SCREEN_HOME.equals(currentScreen)) {
+            renderHomeScreen();
+            return true;
+        }
+
+        buildFilterChipRow(homeGradeFilterChips, grades, selectedClassGradeFilter, value -> {
+            selectedClassGradeFilter = value;
+            if (SCREEN_HOME.equals(currentScreen)) {
+                renderHomeScreen();
+            }
+        });
+        buildFilterChipRow(homeSchoolYearFilterChips, years, selectedClassSchoolYearFilter, value -> {
+            selectedClassSchoolYearFilter = value;
+            if (SCREEN_HOME.equals(currentScreen)) {
+                renderHomeScreen();
+            }
+        });
+        return false;
+    }
+
+    private void buildFilterChipRow(LinearLayout container, List<String> values, String selectedValue,
+            ChipSelectionHandler handler) {
+        container.removeAllViews();
+        container.addView(createFilterChip("All", selectedValue == null, () -> handler.onSelected(null)));
+        if (values == null) {
+            return;
+        }
+        for (String value : values) {
+            if (value == null || value.trim().isEmpty()) {
+                continue;
+            }
+            boolean isActive = value.equals(selectedValue);
+            container.addView(createFilterChip(value, isActive, () -> handler.onSelected(value)));
+        }
+    }
+
+    private View createFilterChip(String label, boolean isActive, Runnable action) {
+        TextView chip = new TextView(this);
+        chip.setText(label);
+        chip.setTextSize(12);
+        chip.setPadding(dp(12), dp(7), dp(12), dp(7));
+        chip.setClickable(true);
+        chip.setFocusable(true);
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(dp(16));
+        if (isActive) {
+            bg.setColor(Color.parseColor("#0038A8"));
+            chip.setTextColor(Color.WHITE);
+        } else {
+            bg.setColor(Color.parseColor("#F8FAFC"));
+            bg.setStroke(dp(1), Color.parseColor("#E2E8F0"));
+            chip.setTextColor(Color.parseColor("#64748B"));
+        }
+        chip.setBackground(bg);
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.rightMargin = dp(8);
+        chip.setLayoutParams(lp);
+        chip.setOnClickListener(v -> action.run());
+        return chip;
+    }
+
+    private void showClassSortDialog() {
+        final String[] labels = {
+                "Newest",
+                "Oldest",
+                "Grade A-Z",
+                "Section A-Z"
+        };
+        final String[] keys = {
+                CLASS_SORT_NEWEST,
+                CLASS_SORT_OLDEST,
+                CLASS_SORT_GRADE_ASC,
+                CLASS_SORT_SECTION_ASC
+        };
+        int checked = indexOfSortKey(keys, selectedClassSort);
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Sort Classes")
+                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                    selectedClassSort = keys[which];
+                    updateSortPickers();
+                    dialog.dismiss();
+                    if (SCREEN_HOME.equals(currentScreen)) {
+                        renderHomeScreen();
+                    }
+                })
+                .show();
+    }
+
+    private void showAssessmentSortDialog() {
+        final String[] labels = {
+                "Newest",
+                "Oldest",
+                "Name A-Z",
+                "Name Z-A",
+                "Exam Date (Newest)",
+                "Exam Date (Oldest)"
+        };
+        final String[] keys = {
+                ASSESSMENT_SORT_NEWEST,
+                ASSESSMENT_SORT_OLDEST,
+                ASSESSMENT_SORT_NAME_ASC,
+                ASSESSMENT_SORT_NAME_DESC,
+                ASSESSMENT_SORT_EXAM_DATE_NEWEST,
+                ASSESSMENT_SORT_EXAM_DATE_OLDEST
+        };
+        int checked = indexOfSortKey(keys, selectedAssessmentSort);
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Sort Assessments")
+                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                    selectedAssessmentSort = keys[which];
+                    updateSortPickers();
+                    dialog.dismiss();
+                    if (SCREEN_CLASS.equals(currentScreen)) {
+                        renderClassScreen();
+                    }
+                })
+                .show();
+    }
+
+    private int indexOfSortKey(String[] keys, String selected) {
+        if (selected == null) {
+            return 0;
+        }
+        for (int i = 0; i < keys.length; i++) {
+            if (selected.equals(keys[i])) {
+                return i;
+            }
+        }
+        return 0;
+    }
+
+    private void updateSortPickers() {
+        if (homeClassSortPicker != null) {
+            homeClassSortPicker.setText(getClassSortLabel(selectedClassSort) + " \u25be");
+        }
+        if (classAssessmentSortPicker != null) {
+            classAssessmentSortPicker.setText(getAssessmentSortLabel(selectedAssessmentSort) + " \u25be");
+        }
+    }
+
+    private String getClassSortLabel(String key) {
+        if (CLASS_SORT_OLDEST.equals(key)) {
+            return "Oldest";
+        }
+        if (CLASS_SORT_GRADE_ASC.equals(key)) {
+            return "Grade A-Z";
+        }
+        if (CLASS_SORT_SECTION_ASC.equals(key)) {
+            return "Section A-Z";
+        }
+        return "Newest";
+    }
+
+    private String getAssessmentSortLabel(String key) {
+        if (ASSESSMENT_SORT_OLDEST.equals(key)) {
+            return "Oldest";
+        }
+        if (ASSESSMENT_SORT_NAME_ASC.equals(key)) {
+            return "Name A-Z";
+        }
+        if (ASSESSMENT_SORT_NAME_DESC.equals(key)) {
+            return "Name Z-A";
+        }
+        if (ASSESSMENT_SORT_EXAM_DATE_NEWEST.equals(key)) {
+            return "Exam Date ↓";
+        }
+        if (ASSESSMENT_SORT_EXAM_DATE_OLDEST.equals(key)) {
+            return "Exam Date ↑";
+        }
+        return "Newest";
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -1262,7 +1636,9 @@ public class DashboardActivity extends AppCompatActivity {
                 }
             }
             act.setName(name);
-            act.setExamDate(dateInput.getText().toString().trim());
+            String examDate = dateInput.getText().toString().trim();
+            act.setExamDate(examDate);
+            act.setExamDateEpoch(parseExamDateToEpoch(examDate, act.getCreatedAt()));
             if (selectedClass == null) {
                 showErrorDialog("Save Failed", "No class selected.");
                 return;
@@ -1544,7 +1920,9 @@ public class DashboardActivity extends AppCompatActivity {
                 }
             }
             ActivityFolder act = new ActivityFolder(name, selectedType[0]);
-            act.setExamDate(dateInput.getText().toString().trim());
+            String examDate = dateInput.getText().toString().trim();
+            act.setExamDate(examDate);
+            act.setExamDateEpoch(parseExamDateToEpoch(examDate, System.currentTimeMillis()));
             AssessmentEntity entity = DataMapper.toAssessmentEntity(act, selectedClass.getId());
             repo.insertAssessment(entity, ignored -> runOnUiThread(() -> {
                 dialog.dismiss();
@@ -2479,6 +2857,22 @@ public class DashboardActivity extends AppCompatActivity {
         lp.bottomMargin = dp(16);
         tv.setLayoutParams(lp);
         return tv;
+    }
+
+    private long parseExamDateToEpoch(String examDate, long fallback) {
+        if (examDate == null || examDate.trim().isEmpty()) {
+            return fallback;
+        }
+        try {
+            SimpleDateFormat sdf = new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault());
+            sdf.setLenient(false);
+            java.util.Date parsed = sdf.parse(examDate.trim());
+            if (parsed != null) {
+                return parsed.getTime();
+            }
+        } catch (Exception ignored) {
+        }
+        return fallback;
     }
 
     // ═══════════════════════════════════════════════════════════════

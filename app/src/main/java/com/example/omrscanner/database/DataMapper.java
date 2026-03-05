@@ -88,6 +88,9 @@ public final class DataMapper {
         entity.createdAt = act.getCreatedAt() > 0
                 ? act.getCreatedAt()
                 : System.currentTimeMillis();
+        entity.examDateEpoch = act.getExamDateEpoch() > 0
+                ? act.getExamDateEpoch()
+                : entity.createdAt;
         entity.updatedAt = System.currentTimeMillis();
         return entity;
     }
@@ -103,6 +106,7 @@ public final class DataMapper {
         act.setSheetType(entity.sheetType);
         act.setExamDate(entity.examDate);
         act.setCreatedAt(entity.createdAt);
+        act.setExamDateEpoch(entity.examDateEpoch > 0 ? entity.examDateEpoch : entity.createdAt);
         return act;
     }
 
