@@ -131,7 +131,7 @@
                 android:textColor="#FFFFFF"
                 android:textSize="12sp"
                 android:textStyle="bold"
-                android:fontFamily="sans-serif-medium"
+                android:fontFamily="@font/poppins_medium"
                 android:gravity="center" />
 
         </LinearLayout>
@@ -146,7 +146,7 @@
             android:text="Point camera at the OMR sheet"
             android:textColor="#FFFFFF"
             android:textSize="13sp"
-            android:fontFamily="sans-serif-medium"
+            android:fontFamily="@font/poppins_medium"
             android:gravity="center"
             android:maxWidth="280dp"
             android:visibility="visible"
@@ -305,7 +305,7 @@
             android:textColor="#FFFFFF"
             android:textSize="20sp"
             android:textStyle="bold"
-            android:fontFamily="sans-serif-medium"
+            android:fontFamily="@font/poppins_medium"
             android:gravity="center"
             android:layout_marginBottom="8dp" />
 
@@ -315,7 +315,7 @@
             android:text="Hold your phone in landscape mode\nto scan the OMR sheet"
             android:textColor="#B3FFFFFF"
             android:textSize="14sp"
-            android:fontFamily="sans-serif"
+            android:fontFamily="@font/poppins"
             android:gravity="center"
             android:lineSpacingExtra="4dp" />
 

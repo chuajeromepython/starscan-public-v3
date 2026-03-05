@@ -9,6 +9,9 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.view.Window;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.core.content.FileProvider;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -39,9 +42,13 @@ public class CSVFileActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_csv_file);
 
-        // Set status bar color
-        Window window = getWindow();
-        window.setStatusBarColor(ContextCompat.getColor(this, R.color.primary_blue));
+        // Full screen — hide status bar and navigation bar
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        WindowInsetsControllerCompat insetsController =
+                WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        insetsController.setSystemBarsBehavior(
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        insetsController.hide(WindowInsetsCompat.Type.systemBars());
 
         // Initialize views
         tvFilePath = findViewById(R.id.tvFilePath);

@@ -5,8 +5,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000000"
-    android:fitsSystemWindows="true">
+    android:background="#000000">
 
     <!-- Zoomable Image View (full screen behind everything) -->
     <com.example.omrscanner.ui.widgets.ZoomableImageView
@@ -57,7 +56,7 @@
                 android:textColor="#FFFFFF"
                 android:textSize="18sp"
                 android:textStyle="bold"
-                android:fontFamily="sans-serif-black"
+                android:fontFamily="@font/poppins_black"
                 android:singleLine="true"
                 android:ellipsize="end"
                 android:layout_marginStart="8dp"
@@ -107,7 +106,7 @@
                 android:textStyle="bold"
                 android:textColor="#1E293B"
                 android:layout_marginBottom="6dp"
-                android:fontFamily="sans-serif-medium" />
+                android:fontFamily="@font/poppins_medium" />
 
             <TextView
                 android:id="@+id/tvDate"
@@ -116,7 +115,7 @@
                 android:text="@string/date"
                 android:textSize="14sp"
                 android:textColor="#64748B"
-                android:fontFamily="sans-serif" />
+                android:fontFamily="@font/poppins" />
 
             <!-- Footer credit, matching dashboard footer -->
             <TextView
@@ -127,7 +126,7 @@
                 android:textColor="#94A3B8"
                 android:textSize="11sp"
                 android:textAlignment="center"
-                android:fontFamily="sans-serif-medium" />
+                android:fontFamily="@font/poppins_medium" />
 
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>

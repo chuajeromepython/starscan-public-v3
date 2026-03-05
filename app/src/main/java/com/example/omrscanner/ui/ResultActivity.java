@@ -16,6 +16,9 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.view.Window;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.material.button.MaterialButton;
@@ -68,9 +71,13 @@ public class ResultActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_result);
 
-        // Set status bar color to blue
-        Window window = getWindow();
-        window.setStatusBarColor(ContextCompat.getColor(this, R.color.primary_blue));
+        // Full screen — hide status bar and navigation bar
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        WindowInsetsControllerCompat insetsController =
+                WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        insetsController.setSystemBarsBehavior(
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        insetsController.hide(WindowInsetsCompat.Type.systemBars());
 
         // Initialize OpenCV
         if (!OpenCVLoader.initDebug()) {
@@ -388,6 +395,23 @@ public class ResultActivity extends AppCompatActivity {
             return;
         }
 
+        if (classId != null && activityId != null && scanResult.lnr != null) {
+            boolean exists = DashboardActivity.isLrnExists(this, classId, activityId, scanResult.lnr);
+            if (exists) {
+                new android.app.AlertDialog.Builder(this)
+                        .setTitle("Duplicate LRN detected")
+                        .setMessage("A scan with LRN " + scanResult.lnr + " already exists in this assessment. Do you want to replace it?")
+                        .setPositiveButton("Replace", (dialog, which) -> proceedWithExport(true))
+                        .setNegativeButton("Cancel", null)
+                        .show();
+                return;
+            }
+        }
+
+        proceedWithExport(false);
+    }
+
+    private void proceedWithExport(boolean replace) {
         showLoading(true);
 
         new Thread(() -> {
@@ -400,7 +424,7 @@ public class ResultActivity extends AppCompatActivity {
 
                 // Save scan result to the class/activity folder structure
                 if (classId != null && activityId != null) {
-                    saveScanToFolder(csvFilePath);
+                    saveScanToFolder(csvFilePath, replace);
                 }
 
                 if (csvFilePath != null) {
@@ -444,7 +468,7 @@ public class ResultActivity extends AppCompatActivity {
      * Save the scan result into the class/activity folder structure
      * so it appears in the Dashboard's activity scan list.
      */
-    private void saveScanToFolder(String csvFilePath) {
+    private void saveScanToFolder(String csvFilePath, boolean replace) {
         try {
             // Convert ScanResult answers to the ScanEntry format
             Map<Integer, String> answersMap = new LinkedHashMap<>();
@@ -481,7 +505,7 @@ public class ResultActivity extends AppCompatActivity {
                 }
             }
 
-            DashboardActivity.saveScanResult(this, classId, activityId, entry);
+            DashboardActivity.saveScanResult(this, classId, activityId, entry, replace);
             Log.d(TAG, "Scan result saved to folder: classId=" + classId + ", activityId=" + activityId);
 
         } catch (Exception e) {

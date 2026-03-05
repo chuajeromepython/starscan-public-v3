@@ -8,6 +8,9 @@ import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.example.omrscanner.R;
 import com.example.omrscanner.ui.widgets.ZoomableImageView;
@@ -29,9 +32,13 @@ public class FullImageViewerActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_full_image_viewer);
 
-        // Set status bar color to black
-        Window window = getWindow();
-        window.setStatusBarColor(ContextCompat.getColor(this, android.R.color.black));
+        // Full screen — hide status bar and navigation bar
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        WindowInsetsControllerCompat insetsController =
+                WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        insetsController.setSystemBarsBehavior(
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        insetsController.hide(WindowInsetsCompat.Type.systemBars());
 
         // Initialize views
         fullScreenImage = findViewById(R.id.fullScreenImage);

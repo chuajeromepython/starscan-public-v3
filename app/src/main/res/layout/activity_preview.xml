@@ -4,8 +4,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FFFFFF"
-    android:fitsSystemWindows="true">
+    android:background="#FFFFFF">
 
     <!-- Header with Status Bar Padding -->
     <TextView
@@ -14,7 +13,7 @@
         android:layout_height="70dp"
         android:background="#0038A8"
         android:elevation="4dp"
-        android:fontFamily="sans-serif-medium"
+        android:fontFamily="@font/poppins_medium"
         android:gravity="center"
         android:paddingTop="8dp"
         android:text="Image Preview"

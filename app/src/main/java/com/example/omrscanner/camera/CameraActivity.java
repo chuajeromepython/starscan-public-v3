@@ -42,6 +42,9 @@ import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.example.omrscanner.DashboardActivity;
 import com.example.omrscanner.R;
@@ -154,8 +157,13 @@ public class CameraActivity extends AppCompatActivity {
             activityId = getIntent().getStringExtra(DashboardActivity.EXTRA_ACTIVITY_ID);
             Log.d(TAG, "Received sheet type: " + selectedSheetType + ", classId: " + classId);
 
-            Window window = getWindow();
-            window.setStatusBarColor(ContextCompat.getColor(this, R.color.primary_blue));
+            // Full screen — hide status bar and navigation bar
+            WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+            WindowInsetsControllerCompat insetsController =
+                    WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+            insetsController.setSystemBarsBehavior(
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            insetsController.hide(WindowInsetsCompat.Type.systemBars());
 
             // Initialize OpenCV
             openCVReady = OpenCVLoader.initDebug();
