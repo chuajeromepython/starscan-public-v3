@@ -2,7 +2,6 @@ package com.example.omrscanner;
 
 import android.app.Dialog;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
@@ -34,28 +33,31 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.example.omrscanner.camera.CameraActivity;
+import com.example.omrscanner.database.DataMapper;
+import com.example.omrscanner.database.OMRRepository;
+import com.example.omrscanner.database.entities.AssessmentEntity;
+import com.example.omrscanner.database.entities.ClassEntity;
+import com.example.omrscanner.database.entities.ScanEntity;
+import com.example.omrscanner.database.entities.TeacherEntity;
 import com.example.omrscanner.models.ActivityFolder;
 import com.example.omrscanner.models.ClassFolder;
 import com.example.omrscanner.models.ScanEntry;
 import com.example.omrscanner.ui.ScanDetailActivity;
 import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
 
-import java.lang.reflect.Type;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class DashboardActivity extends AppCompatActivity {
 
     private static final String TAG = "DashboardActivity";
-    private static final String PREFS_NAME = "omr_dashboard";
-    private static final String KEY_CLASSES = "class_folders";
-    private static final String KEY_TEACHER_NAME = "teacher_name";
 
     // Extras
     public static final String EXTRA_SHEET_TYPE = "sheet_type";
@@ -66,6 +68,11 @@ public class DashboardActivity extends AppCompatActivity {
     private static final String SCREEN_HOME = "home";
     private static final String SCREEN_CLASS = "class";
     private static final String SCREEN_ACTIVITY = "activity";
+
+    // ── Room database repository ─────────────────────────────────────────
+    private OMRRepository repo;
+    /** Room primary key of the single teacher row (-1 until loaded). */
+    private int currentTeacherId = -1;
 
     // State
     private String currentScreen = SCREEN_HOME;
@@ -102,7 +109,6 @@ public class DashboardActivity extends AppCompatActivity {
             breadcrumbSep2, breadcrumbActivity;
 
     private ActivityResultLauncher<String> galleryLauncher;
-    private final Gson gson = new Gson();
 
     // ═══════════════════════════════════════════════════════════════
     // LIFECYCLE
@@ -116,39 +122,22 @@ public class DashboardActivity extends AppCompatActivity {
         // Full screen — hide status bar and navigation bar
         enableFullScreen();
 
+        // Initialise Room repository
+        repo = new OMRRepository(this);
+
         initViews();
         initBackHandler(); // ← modern replacement for onBackPressed()
         initGalleryLauncher();
-        loadData();
-        showScreen(SCREEN_HOME);
+        loadDataFromDb(); // loads from Room, then showScreen(SCREEN_HOME)
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         enableFullScreen(); // Re-apply after returning from other activities
-        loadData();
 
-        if (selectedClass != null) {
-            selectedClass = findClassById(selectedClass.getId());
-            if (selectedClass != null && selectedActivity != null) {
-                ActivityFolder refreshed = null;
-                for (ActivityFolder act : selectedClass.getActivities()) {
-                    if (act.getId().equals(selectedActivity.getId())) {
-                        refreshed = act;
-                        break;
-                    }
-                }
-                selectedActivity = refreshed;
-                showScreen(currentScreen);
-            } else if (selectedClass != null) {
-                showScreen(SCREEN_CLASS);
-            } else {
-                showScreen(SCREEN_HOME);
-            }
-        } else {
-            showScreen(SCREEN_HOME);
-        }
+        // Reload from Room, then re-navigate to the current screen
+        loadDataFromDb();
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -157,8 +146,8 @@ public class DashboardActivity extends AppCompatActivity {
 
     private void enableFullScreen() {
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
-        WindowInsetsControllerCompat controller =
-                WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(getWindow(),
+                getWindow().getDecorView());
         controller.setSystemBarsBehavior(
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
         controller.hide(WindowInsetsCompat.Type.systemBars());
@@ -543,7 +532,10 @@ public class DashboardActivity extends AppCompatActivity {
         }
     }
 
-    /** Build the "All / ZPH30 / ZPH50 / ZPH60" filter tabs above the assessment list. */
+    /**
+     * Build the "All / ZPH30 / ZPH50 / ZPH60" filter tabs above the assessment
+     * list.
+     */
     private void buildClassSheetTabs(List<ActivityFolder> activities) {
         classSheetTabs.removeAllViews();
 
@@ -552,9 +544,15 @@ public class DashboardActivity extends AppCompatActivity {
         if (activities != null) {
             for (ActivityFolder act : activities) {
                 switch (act.getSheetType()) {
-                    case "ZPH30": countZPH30++; break;
-                    case "ZPH50": countZPH50++; break;
-                    case "ZPH60": countZPH60++; break;
+                    case "ZPH30":
+                        countZPH30++;
+                        break;
+                    case "ZPH50":
+                        countZPH50++;
+                        break;
+                    case "ZPH60":
+                        countZPH60++;
+                        break;
                 }
             }
         }
@@ -562,10 +560,10 @@ public class DashboardActivity extends AppCompatActivity {
 
         // Tab data: label, filter value (null = all), count
         Object[][] tabs = {
-                { "All",    null,    totalCount },
-                { "ZPH30",  "ZPH30", countZPH30 },
-                { "ZPH50",  "ZPH50", countZPH50 },
-                { "ZPH60",  "ZPH60", countZPH60 },
+                { "All", null, totalCount },
+                { "ZPH30", "ZPH30", countZPH30 },
+                { "ZPH50", "ZPH50", countZPH50 },
+                { "ZPH60", "ZPH60", countZPH60 },
         };
 
         for (int i = 0; i < tabs.length; i++) {
@@ -574,7 +572,8 @@ public class DashboardActivity extends AppCompatActivity {
             final int count = (int) tabs[i][2];
 
             // Only show a tab if it has assessments (always show "All")
-            if (filterVal != null && count == 0) continue;
+            if (filterVal != null && count == 0)
+                continue;
 
             boolean isActive = (selectedSheetFilter == null && filterVal == null)
                     || (selectedSheetFilter != null && selectedSheetFilter.equals(filterVal));
@@ -938,7 +937,8 @@ public class DashboardActivity extends AppCompatActivity {
         int editCurrentYr = Calendar.getInstance().get(Calendar.YEAR);
         String editDefaultSY = editCurrentYr + "-" + (editCurrentYr + 1);
         String currentSY = (cls.getSchoolYear() != null && !cls.getSchoolYear().isEmpty())
-                ? cls.getSchoolYear() : editDefaultSY;
+                ? cls.getSchoolYear()
+                : editDefaultSY;
         final String[] selectedSchoolYear = { currentSY };
         TextView schoolYearPicker = createDropdownField(currentSY);
         schoolYearPicker.setTextColor(Color.parseColor("#1E293B"));
@@ -987,10 +987,20 @@ public class DashboardActivity extends AppCompatActivity {
             cls.setGrade(grade);
             cls.setSection(section);
             cls.setSchoolYear(selectedSchoolYear[0]);
-            saveData();
-            dialog.dismiss();
-            showToast("Class updated ✓");
-            renderHomeScreen();
+            ensureTeacherId(teacherId -> {
+                if (teacherId <= 0) {
+                    runOnUiThread(() -> showErrorDialog("Save Failed",
+                            "Teacher profile is not ready yet. Please try again."));
+                    return;
+                }
+
+                ClassEntity updatedEntity = DataMapper.toClassEntity(cls, teacherId);
+                repo.updateClass(updatedEntity, ignored -> runOnUiThread(() -> {
+                    dialog.dismiss();
+                    showToast("Class updated ✓");
+                    loadDataFromDb();
+                }));
+            });
         });
 
         dialog.setContentView(root);
@@ -1034,11 +1044,21 @@ public class DashboardActivity extends AppCompatActivity {
         btnDelete.setBackground(delBg);
         btnDelete.setTextColor(Color.WHITE);
         btnDelete.setOnClickListener(v -> {
-            classFolders.remove(cls);
-            saveData();
-            renderHomeScreen();
-            dialog.dismiss();
-            showToast("Class deleted");
+            repo.getClassById(cls.getId(), classEntity -> {
+                if (classEntity == null) {
+                    runOnUiThread(() -> {
+                        dialog.dismiss();
+                        loadDataFromDb();
+                    });
+                    return;
+                }
+
+                repo.deleteClass(classEntity, ignored -> runOnUiThread(() -> {
+                    dialog.dismiss();
+                    showToast("Class deleted");
+                    loadDataFromDb();
+                }));
+            });
         });
         actions.addView(btnDelete);
         root.addView(actions);
@@ -1105,23 +1125,29 @@ public class DashboardActivity extends AppCompatActivity {
                     .setMessage("Are you sure you want to change the teacher name to \""
                             + newName + "\"?\n\nThis will apply to all class folders.")
                     .setPositiveButton("Confirm", (alertDialog, which) -> {
-                        globalTeacherName = newName;
-                        // Update teacher on all existing classes so data stays consistent
-                        for (ClassFolder cls : classFolders) {
-                            cls.setTeacher(globalTeacherName);
-                        }
-                        saveData();
-                        // Refresh the teacher name label in the header
-                        tvTeacherName.setText(globalTeacherName);
-                        tvTeacherName.setTextColor(Color.parseColor("#FFFFFF"));
-                        tvTeacherName.setTypeface(null, Typeface.BOLD);
-                        // If currently on class screen, refresh teacher label there too
-                        if (SCREEN_CLASS.equals(currentScreen) && selectedClass != null) {
-                            classTeacherLabel.setText("Teacher: " + globalTeacherName);
-                        }
-                        renderHomeScreen();
-                        dialog.dismiss();
-                        showToast("Teacher name updated ✓");
+                        repo.upsertTeacher(newName, savedTeacher -> runOnUiThread(() -> {
+                            globalTeacherName = savedTeacher != null && savedTeacher.name != null
+                                    ? savedTeacher.name
+                                    : newName;
+                            if (savedTeacher != null) {
+                                currentTeacherId = savedTeacher.id;
+                            }
+
+                            for (ClassFolder cls : classFolders) {
+                                cls.setTeacher(globalTeacherName);
+                            }
+
+                            tvTeacherName.setText(globalTeacherName);
+                            tvTeacherName.setTextColor(Color.parseColor("#FFFFFF"));
+                            tvTeacherName.setTypeface(null, Typeface.BOLD);
+                            if (SCREEN_CLASS.equals(currentScreen) && selectedClass != null) {
+                                classTeacherLabel.setText("Teacher: " + globalTeacherName);
+                            }
+
+                            dialog.dismiss();
+                            showToast("Teacher name updated ✓");
+                            loadDataFromDb();
+                        }));
                     })
                     .setNegativeButton("Cancel", null)
                     .show();
@@ -1237,10 +1263,17 @@ public class DashboardActivity extends AppCompatActivity {
             }
             act.setName(name);
             act.setExamDate(dateInput.getText().toString().trim());
-            saveData();
-            dialog.dismiss();
-            showToast("Assessment updated ✓");
-            renderClassScreen();
+            if (selectedClass == null) {
+                showErrorDialog("Save Failed", "No class selected.");
+                return;
+            }
+
+            AssessmentEntity updatedEntity = DataMapper.toAssessmentEntity(act, selectedClass.getId());
+            repo.updateAssessment(updatedEntity, ignored -> runOnUiThread(() -> {
+                dialog.dismiss();
+                showToast("Assessment updated ✓");
+                loadDataFromDb();
+            }));
         });
 
         dialog.setContentView(root);
@@ -1285,12 +1318,21 @@ public class DashboardActivity extends AppCompatActivity {
         btnDelete.setTextColor(Color.WHITE);
         btnDelete.setOnClickListener(v -> {
             if (selectedClass != null && selectedClass.getActivities() != null) {
-                selectedClass.getActivities().remove(act);
-                saveData();
-                renderClassScreen();
-                topBarBadge.setText("📁 " + selectedClass.getActivityCount());
-                dialog.dismiss();
-                showToast("Assessment deleted");
+                repo.getAssessmentById(act.getId(), assessmentEntity -> {
+                    if (assessmentEntity == null) {
+                        runOnUiThread(() -> {
+                            dialog.dismiss();
+                            loadDataFromDb();
+                        });
+                        return;
+                    }
+
+                    repo.deleteAssessment(assessmentEntity, ignored -> runOnUiThread(() -> {
+                        dialog.dismiss();
+                        showToast("Assessment deleted");
+                        loadDataFromDb();
+                    }));
+                });
             }
         });
         actions.addView(btnDelete);
@@ -1333,7 +1375,10 @@ public class DashboardActivity extends AppCompatActivity {
         // Find position of the current SY in the array (fallback to first)
         int defaultIdx = 0;
         for (int i = 0; i < schoolYearOptions.length; i++) {
-            if (schoolYearOptions[i].equals(defaultSY)) { defaultIdx = i; break; }
+            if (schoolYearOptions[i].equals(defaultSY)) {
+                defaultIdx = i;
+                break;
+            }
         }
         final String[] selectedSchoolYear = { schoolYearOptions[defaultIdx] };
         TextView schoolYearPicker = createDropdownField(schoolYearOptions[defaultIdx]);
@@ -1385,11 +1430,21 @@ public class DashboardActivity extends AppCompatActivity {
                     ? globalTeacherName
                     : "Unknown Teacher";
             ClassFolder cls = new ClassFolder(teacher, grade, section, schoolYear);
-            classFolders.add(cls);
-            saveData();
-            dialog.dismiss();
-            showScreen(SCREEN_HOME);
-            showToast("Class folder created ✓");
+            ensureTeacherId(teacherId -> {
+                if (teacherId <= 0) {
+                    runOnUiThread(() -> showErrorDialog("Create Failed",
+                            "Teacher profile is not ready yet. Please try again."));
+                    return;
+                }
+
+                ClassEntity entity = DataMapper.toClassEntity(cls, teacherId);
+                repo.insertClass(entity, ignored -> runOnUiThread(() -> {
+                    dialog.dismiss();
+                    showScreen(SCREEN_HOME);
+                    showToast("Class folder created ✓");
+                    loadDataFromDb();
+                }));
+            });
         });
 
         dialog.setContentView(root);
@@ -1490,11 +1545,13 @@ public class DashboardActivity extends AppCompatActivity {
             }
             ActivityFolder act = new ActivityFolder(name, selectedType[0]);
             act.setExamDate(dateInput.getText().toString().trim());
-            selectedClass.addActivity(act);
-            saveData();
-            dialog.dismiss();
-            showScreen(SCREEN_CLASS);
-            showToast("Assessment folder created ✓");
+            AssessmentEntity entity = DataMapper.toAssessmentEntity(act, selectedClass.getId());
+            repo.insertAssessment(entity, ignored -> runOnUiThread(() -> {
+                dialog.dismiss();
+                showScreen(SCREEN_CLASS);
+                showToast("Assessment folder created ✓");
+                loadDataFromDb();
+            }));
         });
 
         dialog.setContentView(root);
@@ -1710,7 +1767,7 @@ public class DashboardActivity extends AppCompatActivity {
                 }
 
                 StringBuilder actCsv = new StringBuilder("LRN,Score");
-                for (int i = 1; i   <= act.getNumItems(); i++)
+                for (int i = 1; i <= act.getNumItems(); i++)
                     actCsv.append(",Q").append(i);
                 actCsv.append("\n");
                 for (ScanEntry scan : scans) {
@@ -1914,90 +1971,226 @@ public class DashboardActivity extends AppCompatActivity {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // PERSISTENCE
+    // PERSISTENCE — Room Database
     // ═══════════════════════════════════════════════════════════════
 
-    private void saveData() {
-        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                .putString(KEY_CLASSES, gson.toJson(classFolders))
-                .putString(KEY_TEACHER_NAME, globalTeacherName != null ? globalTeacherName : "")
-                .apply();
-        Log.d(TAG, "Saved " + classFolders.size() + " classes");
+    /**
+     * Load all data from Room in one chained background call.
+     * 1. Teacher → set globalTeacherName + currentTeacherId.
+     * 2. Classes → for each class, load its Assessments.
+     * 3. Assessments → for each assessment, load its Scans.
+     * 4. Scans → for each scan, load its Answers.
+     * When the chain is complete we jump back to the UI thread and
+     * re-navigate to the same screen the user was on before.
+     *
+     * NOTE: We do the entire load on the repo's single background thread
+     * by nesting callbacks. No concurrency conflicts because the repo's
+     * ExecutorService is single-threaded.
+     */
+    private void loadDataFromDb() {
+        // Snapshot the selected IDs so the lambdas don't hold mutable refs
+        final String prevClassId = (selectedClass != null) ? selectedClass.getId() : null;
+        final String prevActivityId = (selectedActivity != null) ? selectedActivity.getId() : null;
+        final String prevScreen = currentScreen;
+
+        repo.getFirstTeacher(teacher -> {
+            if (teacher != null) {
+                globalTeacherName = teacher.name != null ? teacher.name : "";
+                currentTeacherId = teacher.id;
+                loadClassesFromDb(prevClassId, prevActivityId, prevScreen);
+                return;
+            }
+
+            // Ensure a teacher row exists so class inserts always have a valid FK.
+            repo.upsertTeacher("", ensuredTeacher -> {
+                if (ensuredTeacher != null) {
+                    globalTeacherName = ensuredTeacher.name != null ? ensuredTeacher.name : "";
+                    currentTeacherId = ensuredTeacher.id;
+                } else {
+                    globalTeacherName = "";
+                    currentTeacherId = -1;
+                }
+                loadClassesFromDb(prevClassId, prevActivityId, prevScreen);
+            });
+        });
     }
 
-    private void loadData() {
-        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        String json = prefs.getString(KEY_CLASSES, "[]");
-        globalTeacherName = prefs.getString(KEY_TEACHER_NAME, "");
-        Type type = new TypeToken<List<ClassFolder>>() {
-        }.getType();
-        classFolders = gson.fromJson(json, type);
-        if (classFolders == null)
-            classFolders = new ArrayList<>();
-        Log.d(TAG, "Loaded " + classFolders.size() + " classes");
-    }
+    private void loadClassesFromDb(String prevClassId, String prevActivityId, String prevScreen) {
+        repo.getAllClasses(classEntities -> {
+            List<ClassFolder> loadedClasses = new ArrayList<>();
+            if (classEntities == null || classEntities.isEmpty()) {
+                publishResult(loadedClasses, prevClassId, prevActivityId, prevScreen);
+                return;
+            }
 
-    public static boolean isLrnExists(android.content.Context context, String classId, String activityId, String lrn) {
-        if (classId == null || activityId == null || lrn == null) return false;
-        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        Gson g = new Gson();
-        String json = prefs.getString(KEY_CLASSES, "[]");
-        Type type = new TypeToken<List<ClassFolder>>() {}.getType();
-        List<ClassFolder> classes = g.fromJson(json, type);
-        if (classes != null) {
-            for (ClassFolder cls : classes) {
-                if (cls.getId().equals(classId)) {
-                    for (ActivityFolder act : cls.getActivities()) {
-                        if (act.getId().equals(activityId)) {
-                            if (act.getScans() != null) {
-                                for (ScanEntry entry : act.getScans()) {
-                                    if (lrn.equals(entry.getLrn())) {
-                                        return true;
+            // We need to load assessments for every class, then scans for
+            // every assessment. Use an AtomicInteger to track completion.
+            AtomicInteger classCountdown = new AtomicInteger(classEntities.size());
+
+            for (ClassEntity ce : classEntities) {
+                ClassFolder cf = DataMapper.toClassFolder(ce, globalTeacherName);
+
+                // ── Step 3: load assessments for this class ─────────────
+                repo.getAssessmentsByClass(ce.id, assessmentEntities -> {
+                    List<ActivityFolder> activities = new ArrayList<>();
+
+                    if (assessmentEntities == null || assessmentEntities.isEmpty()) {
+                        cf.setActivities(activities);
+                        loadedClasses.add(cf);
+                        if (classCountdown.decrementAndGet() == 0) {
+                            publishResult(loadedClasses, prevClassId, prevActivityId, prevScreen);
+                        }
+                        return;
+                    }
+
+                    AtomicInteger assessmentCountdown = new AtomicInteger(assessmentEntities.size());
+
+                    for (AssessmentEntity ae : assessmentEntities) {
+                        ActivityFolder af = DataMapper.toActivityFolder(ae);
+
+                        // ── Step 4: load scans for this assessment ──────
+                        repo.getScansByAssessment(ae.id, scanEntities -> {
+                            List<ScanEntry> scanEntries = new ArrayList<>();
+
+                            if (scanEntities == null || scanEntities.isEmpty()) {
+                                af.setScans(scanEntries);
+                                activities.add(af);
+                                if (assessmentCountdown.decrementAndGet() == 0) {
+                                    cf.setActivities(activities);
+                                    loadedClasses.add(cf);
+                                    if (classCountdown.decrementAndGet() == 0) {
+                                        publishResult(loadedClasses, prevClassId,
+                                                prevActivityId, prevScreen);
                                     }
                                 }
+                                return;
                             }
-                            return false;
-                        }
+
+                            AtomicInteger scanCountdown = new AtomicInteger(scanEntities.size());
+
+                            for (ScanEntity se : scanEntities) {
+                                // ── Step 5: load answers for this scan ──
+                                repo.getAnswersByScan(se.id, answerEntities -> {
+                                    Map<Integer, String> answers = DataMapper.toAnswerMap(answerEntities);
+                                    scanEntries.add(DataMapper.toScanEntry(se, answers));
+
+                                    if (scanCountdown.decrementAndGet() == 0) {
+                                        af.setScans(scanEntries);
+                                        activities.add(af);
+                                        if (assessmentCountdown.decrementAndGet() == 0) {
+                                            cf.setActivities(activities);
+                                            loadedClasses.add(cf);
+                                            if (classCountdown.decrementAndGet() == 0) {
+                                                publishResult(loadedClasses, prevClassId,
+                                                        prevActivityId, prevScreen);
+                                            }
+                                        }
+                                    }
+                                });
+                            }
+                        });
                     }
-                }
+                });
             }
-        }
-        return false;
+        });
     }
 
+    private void ensureTeacherId(OMRRepository.Callback<Integer> callback) {
+        if (callback == null) {
+            return;
+        }
+
+        if (currentTeacherId > 0) {
+            callback.onResult(currentTeacherId);
+            return;
+        }
+
+        String fallbackName = globalTeacherName != null ? globalTeacherName : "";
+        repo.upsertTeacher(fallbackName, teacher -> {
+            if (teacher != null) {
+                currentTeacherId = teacher.id;
+                globalTeacherName = teacher.name != null ? teacher.name : "";
+                callback.onResult(currentTeacherId);
+            } else {
+                callback.onResult(-1);
+            }
+        });
+    }
+
+    /**
+     * Called on the repo background thread once all data has been loaded.
+     * Switches back to the main thread, sets the in-memory list, and
+     * restores the previously active screen.
+     */
+    private void publishResult(List<ClassFolder> loaded,
+            String prevClassId, String prevActivityId, String prevScreen) {
+        runOnUiThread(() -> {
+            classFolders = loaded;
+            Log.d(TAG, "Loaded " + classFolders.size() + " classes from Room");
+
+            // Re-resolve the selected class / activity by ID so that after
+            // a reload the correct objects are referenced.
+            if (prevClassId != null) {
+                selectedClass = findClassById(prevClassId);
+                if (selectedClass != null && prevActivityId != null) {
+                    selectedActivity = findActivityById(selectedClass, prevActivityId);
+                } else {
+                    selectedActivity = null;
+                }
+            }
+            showScreen(prevScreen != null ? prevScreen : SCREEN_HOME);
+        });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Static helpers for other Activities (CameraActivity / PreviewActivity)
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Check whether an LRN already has a scan in a given assessment.
+     * <p>
+     * Must be called from a <em>background</em> thread — Room cannot run on
+     * the main thread and this method blocks.
+     */
+    public static boolean isLrnExists(android.content.Context context,
+            String classId, String activityId, String lrn) {
+        if (activityId == null || lrn == null)
+            return false;
+        OMRRepository r = new OMRRepository(context);
+        return r.isLrnExistsSync(activityId, lrn);
+    }
+
+    /**
+     * Persist a scan result to Room.
+     * <p>
+     * Must be called from a <em>background</em> thread. If {@code replace}
+     * is true and a scan with the same LRN already exists in the assessment,
+     * the existing row is updated instead of inserting a new one.
+     */
     public static void saveScanResult(android.content.Context context,
             String classId, String activityId,
             ScanEntry scanEntry, boolean replace) {
-        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        Gson g = new Gson();
-        String json = prefs.getString(KEY_CLASSES, "[]");
-        Type type = new TypeToken<List<ClassFolder>>() {
-        }.getType();
-        List<ClassFolder> classes = g.fromJson(json, type);
-        if (classes != null) {
-            for (ClassFolder cls : classes) {
-                if (cls.getId().equals(classId)) {
-                    for (ActivityFolder act : cls.getActivities()) {
-                        if (act.getId().equals(activityId)) {
-                            if (replace && act.getScans() != null) {
-                                for (int i = 0; i < act.getScans().size(); i++) {
-                                    if (act.getScans().get(i).getLrn() != null &&
-                                        act.getScans().get(i).getLrn().equals(scanEntry.getLrn())) {
-                                        act.getScans().set(i, scanEntry);
-                                        prefs.edit().putString(KEY_CLASSES, g.toJson(classes)).apply();
-                                        return;
-                                    }
-                                }
-                            }
-                            act.addScan(scanEntry);
-                            prefs.edit().putString(KEY_CLASSES, g.toJson(classes)).apply();
-                            return;
-                        }
-                    }
-                    break;
+        if (activityId == null || scanEntry == null)
+            return;
+        OMRRepository r = new OMRRepository(context);
+        ScanEntity existing = (replace && scanEntry.getLrn() != null)
+                ? r.getScanByAssessmentAndLrnSync(activityId, scanEntry.getLrn())
+                : null;
+
+        ScanEntity entity = DataMapper.toScanEntity(scanEntry, activityId);
+        if (existing != null) {
+            entity.id = existing.id; // keep the original PK so Room does an UPDATE
+            r.updateScan(entity, null);
+            // Re-save answers: delete old ones first, then insert new
+            r.deleteAnswersByScan(existing.id,
+                    done -> r.insertAnswersFromMap(existing.id, scanEntry.getAnswers(), null));
+        } else {
+            // insertScan returns the new row ID; use it to store answers
+            r.insertScan(entity, newId -> {
+                if (newId != null && newId > 0) {
+                    r.insertAnswersFromMap(newId.intValue(), scanEntry.getAnswers(), null);
                 }
-            }
-            prefs.edit().putString(KEY_CLASSES, g.toJson(classes)).apply();
+            });
         }
     }
 
@@ -2007,6 +2200,15 @@ public class DashboardActivity extends AppCompatActivity {
         for (ClassFolder cls : classFolders)
             if (cls.getId().equals(classId))
                 return cls;
+        return null;
+    }
+
+    private ActivityFolder findActivityById(ClassFolder cls, String activityId) {
+        if (cls == null || activityId == null || cls.getActivities() == null)
+            return null;
+        for (ActivityFolder act : cls.getActivities())
+            if (act.getId().equals(activityId))
+                return act;
         return null;
     }
 
@@ -2237,7 +2439,9 @@ public class DashboardActivity extends AppCompatActivity {
     // SCHOOL YEAR HELPERS
     // ═══════════════════════════════════════════════════════════════
 
-    /** Build an array of school-year strings centred on the current calendar year. */
+    /**
+     * Build an array of school-year strings centred on the current calendar year.
+     */
     private String[] buildSchoolYearOptions() {
         int currentYear = Calendar.getInstance().get(Calendar.YEAR);
         // Range: 5 years before … 4 years after (10 options total)
@@ -2257,7 +2461,7 @@ public class DashboardActivity extends AppCompatActivity {
     private TextView createDropdownField(String initialText) {
         TextView tv = new TextView(this);
         tv.setText(initialText + "  ▾");
-        tv.setTag(initialText);             // keep raw value in tag
+        tv.setTag(initialText); // keep raw value in tag
         tv.setHint("Select…");
         tv.setHintTextColor(Color.parseColor("#CBD5E1"));
         tv.setTextColor(Color.parseColor("#94A3B8"));

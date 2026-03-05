@@ -396,16 +396,22 @@ public class ResultActivity extends AppCompatActivity {
         }
 
         if (classId != null && activityId != null && scanResult.lnr != null) {
-            boolean exists = DashboardActivity.isLrnExists(this, classId, activityId, scanResult.lnr);
-            if (exists) {
-                new android.app.AlertDialog.Builder(this)
-                        .setTitle("Duplicate LRN detected")
-                        .setMessage("A scan with LRN " + scanResult.lnr + " already exists in this assessment. Do you want to replace it?")
-                        .setPositiveButton("Replace", (dialog, which) -> proceedWithExport(true))
-                        .setNegativeButton("Cancel", null)
-                        .show();
-                return;
-            }
+            new Thread(() -> {
+                boolean exists = DashboardActivity.isLrnExists(this, classId, activityId, scanResult.lnr);
+                runOnUiThread(() -> {
+                    if (exists) {
+                        new android.app.AlertDialog.Builder(this)
+                                .setTitle("Duplicate LRN detected")
+                                .setMessage("A scan with LRN " + scanResult.lnr + " already exists in this assessment. Do you want to replace it?")
+                                .setPositiveButton("Replace", (dialog, which) -> proceedWithExport(true))
+                                .setNegativeButton("Cancel", null)
+                                .show();
+                    } else {
+                        proceedWithExport(false);
+                    }
+                });
+            }).start();
+            return;
         }
 
         proceedWithExport(false);
