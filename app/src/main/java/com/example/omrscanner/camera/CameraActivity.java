@@ -64,7 +64,7 @@ public class CameraActivity extends AppCompatActivity {
     private static final String TAG = "CameraActivity";
 
     // Number of consecutive frames with anchors before auto-capture
-    private static final int STABLE_FRAME_THRESHOLD = 3;
+    private static final int STABLE_FRAME_THRESHOLD = 5;
 
     // How long each hint stays visible before cycling (milliseconds)
     private static final long HINT_DISPLAY_DURATION_MS = 5000;
@@ -117,6 +117,16 @@ public class CameraActivity extends AppCompatActivity {
     private boolean autoCaptureTriggered = false;
     private boolean isAnalyzing = false;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    
+    // ── Anchor Smoothing State ────────────────────────────────────
+    private PointF[] smoothedAnchors = null;
+    private int missingFramesCount = 0;
+    private static final int MAX_MISSING_FRAMES = 8;
+    private static final float SMOOTHING_FACTOR = 0.25f;
+
+    // ── Frame skipping ───────────────────────────────────────────
+    private int frameSkipCounter = 0;
+    private static final int FRAME_SKIP_COUNT = 2; // analyze every 3rd frame
 
     // ── Intent extras ─────────────────────────────────────────────
     private String selectedSheetType = null;
@@ -295,6 +305,14 @@ public class CameraActivity extends AppCompatActivity {
             return;
         }
 
+        // ── Frame skipping: only analyze every (FRAME_SKIP_COUNT + 1)th frame ──
+        frameSkipCounter++;
+        if (frameSkipCounter <= FRAME_SKIP_COUNT) {
+            imageProxy.close();
+            return;
+        }
+        frameSkipCounter = 0;
+
         try {
             // Convert ImageProxy to Bitmap
             Bitmap bitmap = imageProxyToBitmap(imageProxy);
@@ -459,14 +477,58 @@ public class CameraActivity extends AppCompatActivity {
      * Called when anchors ARE detected in a frame.
      */
     private void onAnchorsDetected(PointF[] viewPoints) {
+        missingFramesCount = 0; // reset missing counter
+
+        if (smoothedAnchors == null) {
+            smoothedAnchors = new PointF[4];
+            for (int i = 0; i < 4; i++) {
+                smoothedAnchors[i] = new PointF(viewPoints[i].x, viewPoints[i].y);
+            }
+        } else {
+            // Compute view diagonal for relative jump threshold
+            int viewW = anchorOverlay != null ? anchorOverlay.getWidth() : previewView.getWidth();
+            int viewH = anchorOverlay != null ? anchorOverlay.getHeight() : previewView.getHeight();
+            float diagonal = (float) Math.sqrt(viewW * viewW + viewH * viewH);
+            float maxAllowedJump = diagonal * 0.20f; // 20% of diagonal
+
+            // Apply Exponential Moving Average (EMA) for smoothing
+            // Detect drastic jumps (e.g. from rapid camera movement)
+            float maxJump = 0;
+            for (int i = 0; i < 4; i++) {
+                float dx = viewPoints[i].x - smoothedAnchors[i].x;
+                float dy = viewPoints[i].y - smoothedAnchors[i].y;
+                float dist = (float) Math.sqrt(dx * dx + dy * dy);
+                if (dist > maxJump) maxJump = dist;
+            }
+
+            if (maxJump > maxAllowedJump) {
+                // If the anchors jump significantly, reset smoothing to avoid sliding effect
+                for (int i = 0; i < 4; i++) {
+                    smoothedAnchors[i] = new PointF(viewPoints[i].x, viewPoints[i].y);
+                }
+            } else {
+                // Smooth points based on factor
+                for (int i = 0; i < 4; i++) {
+                    smoothedAnchors[i].x = smoothedAnchors[i].x * (1.0f - SMOOTHING_FACTOR) + viewPoints[i].x * SMOOTHING_FACTOR;
+                    smoothedAnchors[i].y = smoothedAnchors[i].y * (1.0f - SMOOTHING_FACTOR) + viewPoints[i].y * SMOOTHING_FACTOR;
+                }
+            }
+        }
+
         consecutiveDetections++;
         lastHintChangeTime = 0; // Reset hint timer
         Log.d(TAG, "Anchors detected! Consecutive count: " + consecutiveDetections);
 
+        // Make a final copy so we don't pass reference directly to UI thread
+        final PointF[] finalAnchors = new PointF[4];
+        for (int i = 0; i < 4; i++) {
+            finalAnchors[i] = new PointF(smoothedAnchors[i].x, smoothedAnchors[i].y);
+        }
+
         mainHandler.post(() -> {
             // Update overlay to show anchor boxes
             if (anchorOverlay != null) {
-                anchorOverlay.setAnchors(viewPoints);
+                anchorOverlay.setAnchors(finalAnchors);
             }
 
             // Hide floating hint with fade-out
@@ -499,6 +561,37 @@ public class CameraActivity extends AppCompatActivity {
      * Called when anchors are NOT detected in a frame.
      */
     private void onAnchorsNotDetected() {
+        missingFramesCount++;
+
+        if (missingFramesCount <= MAX_MISSING_FRAMES && smoothedAnchors != null) {
+            // Keep drawing the last smoothed anchors to avoid flickering.
+            // IMPORTANT: Do NOT reset consecutiveDetections here.
+            // This allows the counter to resume when detection comes back,
+            // instead of starting over from 0 every time there's a brief gap.
+
+            final PointF[] finalAnchors = new PointF[4];
+            for (int i = 0; i < 4; i++) {
+                finalAnchors[i] = new PointF(smoothedAnchors[i].x, smoothedAnchors[i].y);
+            }
+
+            mainHandler.post(() -> {
+                if (anchorOverlay != null) {
+                    anchorOverlay.setAnchors(finalAnchors);
+                }
+                if (anchorStatusText != null) {
+                    anchorStatusText.setText("Tracking anchors... (" + consecutiveDetections + "/" + STABLE_FRAME_THRESHOLD + ")");
+                }
+                if (anchorStatusIcon != null) {
+                    anchorStatusIcon.setColorFilter(
+                            ContextCompat.getColor(this, R.color.green),
+                            android.graphics.PorterDuff.Mode.SRC_IN);
+                }
+            });
+            return;
+        }
+
+        // Only clear if missing for too many frames
+        smoothedAnchors = null;
         consecutiveDetections = 0;
 
         // Cycle to next hint if enough time has passed
@@ -730,6 +823,9 @@ public class CameraActivity extends AppCompatActivity {
         consecutiveDetections = 0;
         currentHintIndex = 0;
         lastHintChangeTime = 0;
+        smoothedAnchors = null;
+        missingFramesCount = 0;
+        frameSkipCounter = 0;
 
         // Check current orientation immediately and show guide if portrait
         int rotation = getWindowManager().getDefaultDisplay().getRotation();

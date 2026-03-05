@@ -48,10 +48,10 @@ public class AnchorDetector {
     private static final double MIN_SOLIDITY = 0.65;
 
     // Maximum mean grayscale intensity for a "dark" filled square
-    private static final double MAX_DARKNESS_MEAN = 130;
+    private static final double MAX_DARKNESS_MEAN = 150;
 
     // Minimum distance between corners as ratio of image's smaller dimension
-    private static final double MIN_CORNER_DISTANCE_RATIO = 0.20;
+    private static final double MIN_CORNER_DISTANCE_RATIO = 0.15;
 
     /**
      * Detect the 4 corner anchor squares using contour-based analysis.
@@ -78,7 +78,7 @@ public class AnchorDetector {
 
         // ====== STEP 2: Gaussian Blur (removes paper grain/noise) ======
         Mat blurred = new Mat();
-        Imgproc.GaussianBlur(gray, blurred, new Size(5, 5), 0);
+        Imgproc.GaussianBlur(gray, blurred, new Size(7, 7), 0);
 
         // ====== STEP 3: Adaptive Threshold ======
         // BINARY_INV: dark ink (squares) becomes WHITE, paper becomes BLACK.
@@ -90,14 +90,14 @@ public class AnchorDetector {
                 255.0,
                 Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C,
                 Imgproc.THRESH_BINARY_INV,
-                11,  // Block size
-                2.0  // Constant subtracted from mean
+                15, // Block size (larger = less sensitive to local noise)
+                4.0  // Constant subtracted from mean (higher = less false positives)
         );
 
         // ====== STEP 4: Morphological Close ======
         // Fills small white gaps INSIDE the black squares caused by
         // printer glare or paper texture ("hollow square" problem fix).
-        Mat kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(5, 5));
+        Mat kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(7, 7));
         Mat closed = new Mat();
         Imgproc.morphologyEx(thresh, closed, Imgproc.MORPH_CLOSE, kernel);
 
@@ -163,8 +163,8 @@ public class AnchorDetector {
             MatOfPoint2f approx = new MatOfPoint2f();
             Imgproc.approxPolyDP(contour2f, approx, 0.02 * perimeter, true);
 
-            // Must have exactly 4 vertices (quadrilateral)
-            if (approx.total() != 4) {
+            // Must have 4-6 vertices (real squares may get 5 or 6 due to rounded/chipped corners)
+            if (approx.total() < 4 || approx.total() > 6) {
                 contour2f.release();
                 approx.release();
                 continue;
