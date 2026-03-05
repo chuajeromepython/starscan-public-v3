@@ -69,6 +69,7 @@
     <string name="back">Back</string>
     <string name="camera_capture">Camera Capture</string>
     <string name="capture_desc">Capture</string>
+    <string name="rotate_phone_desc">Rotate phone to landscape</string>
 
     <!--Dashboard-->
     <string name="sagotsuri_logo">SagotSuri Logo</string>
@@ -79,5 +80,5 @@
     <string name="arrow"> › </string>
     <string name="four">4</string>
     <string name="twenty_eight">28</string>
-    <string name="Activities">Activities</string>
+    <string name="Assessments">Assessments</string>
 </resources>
