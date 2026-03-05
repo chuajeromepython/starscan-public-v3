@@ -51,6 +51,7 @@ public class DashboardActivity extends AppCompatActivity {
     private static final String TAG = "DashboardActivity";
     private static final String PREFS_NAME = "omr_dashboard";
     private static final String KEY_CLASSES = "class_folders";
+    private static final String KEY_TEACHER_NAME = "teacher_name";
 
     // Extras
     public static final String EXTRA_SHEET_TYPE = "sheet_type";
@@ -68,10 +69,13 @@ public class DashboardActivity extends AppCompatActivity {
     private ClassFolder selectedClass = null;
     private ActivityFolder selectedActivity = null;
     private String selectedSheetType = null;
+    private String globalTeacherName = "";
 
     // Views
     private ImageButton btnBack;
     private TextView topBarTitle, topBarBadge;
+    private TextView tvTeacherName;
+    private LinearLayout teacherNameRow;
     private View screenHome;
     private ScrollView screenClass, screenActivity;
     private LinearLayout homeEmpty, homeClassList;
@@ -176,6 +180,8 @@ public class DashboardActivity extends AppCompatActivity {
         btnBack = findViewById(R.id.btnBack);
         topBarTitle = findViewById(R.id.topBarTitle);
         topBarBadge = findViewById(R.id.topBarBadge);
+        tvTeacherName = findViewById(R.id.tvTeacherName);
+        teacherNameRow = findViewById(R.id.teacherNameRow);
 
         screenHome = findViewById(R.id.screenHome);
         screenClass = findViewById(R.id.screenClass);
@@ -207,6 +213,9 @@ public class DashboardActivity extends AppCompatActivity {
 
         btnBack.setOnClickListener(v -> navigateBack());
         fab.setOnClickListener(v -> onFabClicked());
+
+        // Teacher name row click → edit dialog
+        teacherNameRow.setOnClickListener(v -> showEditTeacherNameDialog());
 
         breadcrumbRoot.setOnClickListener(v -> {
             selectedClass = null;
@@ -253,6 +262,12 @@ public class DashboardActivity extends AppCompatActivity {
                 topBarTitle.setText("SagotSuri");
                 topBarBadge.setText(classFolders.size() + " class"
                         + (classFolders.size() != 1 ? "es" : ""));
+                // Refresh teacher name display in header
+                if (globalTeacherName != null && !globalTeacherName.isEmpty()) {
+                    tvTeacherName.setText("\uD83D\uDC64 " + globalTeacherName);
+                } else {
+                    tvTeacherName.setText("\uD83D\uDC64 Tap to set teacher name");
+                }
                 fab.setText("Class");
                 fab.setVisibility(View.VISIBLE);
                 breadcrumbBar.setVisibility(View.GONE);
@@ -409,7 +424,10 @@ public class DashboardActivity extends AppCompatActivity {
         leftCol.addView(title);
 
         TextView teacher = new TextView(this);
-        teacher.setText("👤 " + cls.getTeacher());
+        String displayTeacher = (globalTeacherName != null && !globalTeacherName.isEmpty())
+                ? globalTeacherName
+                : cls.getTeacher();
+        teacher.setText("\uD83D\uDC64 " + displayTeacher);
         teacher.setTextColor(Color.parseColor("#64748B"));
         teacher.setTextSize(12);
         LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
@@ -458,7 +476,11 @@ public class DashboardActivity extends AppCompatActivity {
 
     private void renderClassScreen() {
         classActivityList.removeAllViews();
-        classTeacherLabel.setText("Teacher: " + selectedClass.getTeacher());
+        // Use global teacher name; fall back to class-level if not set
+        String displayTeacher = (globalTeacherName != null && !globalTeacherName.isEmpty())
+                ? globalTeacherName
+                : selectedClass.getTeacher();
+        classTeacherLabel.setText("Teacher: " + displayTeacher);
 
         List<ActivityFolder> activities = selectedClass.getActivities();
         if (activities == null || activities.isEmpty()) {
@@ -791,10 +813,7 @@ public class DashboardActivity extends AppCompatActivity {
         root.addView(createDialogHandle());
         root.addView(buildSheetTitle("✏️ Edit Class Folder", "#0038A8", Gravity.START, 20));
 
-        root.addView(createFieldLabel("TEACHER NAME"));
-        EditText teacherInput = createLightInput("e.g. Mr. Cruz");
-        teacherInput.setText(cls.getTeacher());
-        root.addView(teacherInput);
+        // Teacher name field removed — teacher name is managed globally in the header
 
         root.addView(createFieldLabel("GRADE *"));
         EditText gradeInput = createLightInput("e.g. Grade 10");
@@ -823,7 +842,6 @@ public class DashboardActivity extends AppCompatActivity {
         btnSave.setOnClickListener(v -> {
             String grade = gradeInput.getText().toString().trim();
             String section = sectionInput.getText().toString().trim();
-            String teacher = teacherInput.getText().toString().trim();
             if (grade.isEmpty() || section.isEmpty()) {
                 showErrorDialog("Missing Fields", "Grade and Section are required to save this class.");
                 return;
@@ -838,7 +856,10 @@ public class DashboardActivity extends AppCompatActivity {
                     return;
                 }
             }
-            cls.setTeacher(teacher.isEmpty() ? "Unknown Teacher" : teacher);
+            // Keep global teacher name on the class model for consistency
+            cls.setTeacher(globalTeacherName != null && !globalTeacherName.isEmpty()
+                    ? globalTeacherName
+                    : cls.getTeacher());
             cls.setGrade(grade);
             cls.setSection(section);
             cls.setSchoolYear(schoolYearInput.getText().toString().trim());
@@ -897,6 +918,88 @@ public class DashboardActivity extends AppCompatActivity {
         });
         actions.addView(btnDelete);
         root.addView(actions);
+
+        dialog.setContentView(root);
+        configureBottomDialog(dialog);
+        dialog.show();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // DIALOGS — TEACHER NAME
+    // ═══════════════════════════════════════════════════════════════
+
+    private void showEditTeacherNameDialog() {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setCancelable(true);
+
+        LinearLayout root = buildSheet();
+        root.addView(createDialogHandle());
+        root.addView(buildSheetTitle("✏️ Teacher Name", "#0038A8", Gravity.START, 16));
+
+        // Info note
+        TextView note = new TextView(this);
+        note.setText("This name will appear on all class folders.");
+        note.setTextColor(Color.parseColor("#64748B"));
+        note.setTextSize(13);
+        LinearLayout.LayoutParams noteLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        noteLp.bottomMargin = dp(16);
+        note.setLayoutParams(noteLp);
+        root.addView(note);
+
+        root.addView(createFieldLabel("TEACHER NAME"));
+        EditText nameInput = createLightInput("e.g. Mr. Cruz");
+        if (globalTeacherName != null && !globalTeacherName.isEmpty()) {
+            nameInput.setText(globalTeacherName);
+            nameInput.setSelection(globalTeacherName.length());
+        }
+        root.addView(nameInput);
+
+        LinearLayout actions = buildActionsRow(dp(20));
+        TextView btnCancel = createDialogButton("Cancel", false);
+        TextView btnSave = createDialogButton("Save", true);
+        actions.addView(btnCancel);
+        actions.addView(spacer(dp(10)));
+        actions.addView(btnSave);
+        root.addView(actions);
+
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+        btnSave.setOnClickListener(v -> {
+            String newName = nameInput.getText().toString().trim();
+            if (newName.isEmpty()) {
+                showErrorDialog("Name Required", "Please enter a teacher name.");
+                return;
+            }
+            if (newName.equals(globalTeacherName)) {
+                dialog.dismiss();
+                return;
+            }
+            // Confirmation alert dialog
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("Change Teacher Name?")
+                    .setMessage("Are you sure you want to change the teacher name to \""
+                            + newName + "\"?\n\nThis will apply to all class folders.")
+                    .setPositiveButton("Confirm", (alertDialog, which) -> {
+                        globalTeacherName = newName;
+                        // Update teacher on all existing classes so data stays consistent
+                        for (ClassFolder cls : classFolders) {
+                            cls.setTeacher(globalTeacherName);
+                        }
+                        saveData();
+                        // Refresh the teacher name label in the header
+                        tvTeacherName.setText("\uD83D\uDC64 " + globalTeacherName);
+                        // If currently on class screen, refresh teacher label there too
+                        if (SCREEN_CLASS.equals(currentScreen) && selectedClass != null) {
+                            classTeacherLabel.setText("Teacher: " + globalTeacherName);
+                        }
+                        renderHomeScreen();
+                        dialog.dismiss();
+                        showToast("Teacher name updated ✓");
+                    })
+                    .setNegativeButton("Cancel", null)
+                    .show();
+        });
 
         dialog.setContentView(root);
         configureBottomDialog(dialog);
@@ -1086,9 +1189,7 @@ public class DashboardActivity extends AppCompatActivity {
         root.addView(createDialogHandle());
         root.addView(buildSheetTitle("⊕ New Class Folder", "#0038A8", Gravity.START, 20));
 
-        root.addView(createFieldLabel("TEACHER NAME"));
-        EditText teacherInput = createLightInput("e.g. Mr. Cruz");
-        root.addView(teacherInput);
+        // Teacher name field removed — teacher name is set globally in the header
 
         root.addView(createFieldLabel("GRADE *"));
         EditText gradeInput = createLightInput("e.g. Grade 10");
@@ -1114,7 +1215,6 @@ public class DashboardActivity extends AppCompatActivity {
         btnDone.setOnClickListener(v -> {
             String grade = gradeInput.getText().toString().trim();
             String section = sectionInput.getText().toString().trim();
-            String teacher = teacherInput.getText().toString().trim();
             if (grade.isEmpty() || section.isEmpty()) {
                 showErrorDialog("Missing Fields", "Grade and Section are required to create a class.");
                 return;
@@ -1129,8 +1229,11 @@ public class DashboardActivity extends AppCompatActivity {
                 }
             }
             String schoolYear = schoolYearInput.getText().toString().trim();
-            ClassFolder cls = new ClassFolder(
-                    teacher.isEmpty() ? "Unknown Teacher" : teacher, grade, section, schoolYear);
+            // Use the global teacher name when creating the class
+            String teacher = (globalTeacherName != null && !globalTeacherName.isEmpty())
+                    ? globalTeacherName
+                    : "Unknown Teacher";
+            ClassFolder cls = new ClassFolder(teacher, grade, section, schoolYear);
             classFolders.add(cls);
             saveData();
             dialog.dismiss();
@@ -1665,13 +1768,16 @@ public class DashboardActivity extends AppCompatActivity {
 
     private void saveData() {
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                .putString(KEY_CLASSES, gson.toJson(classFolders)).apply();
+                .putString(KEY_CLASSES, gson.toJson(classFolders))
+                .putString(KEY_TEACHER_NAME, globalTeacherName != null ? globalTeacherName : "")
+                .apply();
         Log.d(TAG, "Saved " + classFolders.size() + " classes");
     }
 
     private void loadData() {
-        String json = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-                .getString(KEY_CLASSES, "[]");
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        String json = prefs.getString(KEY_CLASSES, "[]");
+        globalTeacherName = prefs.getString(KEY_TEACHER_NAME, "");
         Type type = new TypeToken<List<ClassFolder>>() {
         }.getType();
         classFolders = gson.fromJson(json, type);
