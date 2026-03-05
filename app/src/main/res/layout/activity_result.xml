@@ -14,7 +14,7 @@
         android:layout_height="70dp"
         android:background="@color/primary_blue"
         android:elevation="6dp"
-        android:fontFamily="sans-serif-medium"
+        android:fontFamily="@font/poppins_medium"
         android:gravity="center"
         android:paddingTop="8dp"
         android:text="OMR Detection Results"
@@ -118,7 +118,7 @@
                     android:textSize="12sp"
                     android:textStyle="bold"
                     android:letterSpacing="0.08"
-                    android:fontFamily="sans-serif-black" />
+                    android:fontFamily="@font/poppins_black" />
 
                 <TextView
                     android:id="@+id/tvLrnStatus"
@@ -128,7 +128,7 @@
                     android:textColor="#F59E0B"
                     android:textSize="11sp"
                     android:textStyle="bold"
-                    android:fontFamily="sans-serif-medium" />
+                    android:fontFamily="@font/poppins_medium" />
             </LinearLayout>
 
             <!-- LRN input + confirm row -->
@@ -155,7 +155,7 @@
                     android:textColorHint="#94A3B8"
                     android:textSize="16sp"
                     android:textStyle="bold"
-                    android:fontFamily="sans-serif-medium" />
+                    android:fontFamily="@font/poppins_medium" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnConfirmLrn"
@@ -180,7 +180,7 @@
                 android:text="Please verify the detected LRN is correct before saving."
                 android:textColor="#64748B"
                 android:textSize="11sp"
-                android:fontFamily="sans-serif" />
+                android:fontFamily="@font/poppins" />
 
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>

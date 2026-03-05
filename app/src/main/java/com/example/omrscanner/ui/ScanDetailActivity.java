@@ -18,6 +18,7 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
+import androidx.core.content.res.ResourcesCompat;
 
 import com.example.omrscanner.R;
 import com.example.omrscanner.models.ActivityFolder;
@@ -166,6 +167,7 @@ public class ScanDetailActivity extends AppCompatActivity {
         }
 
         etLrn.setText(currentScan.getLrn());
+        // Detected answers count (not a score — there is no answer key)
         tvScore.setText(currentScan.getScore() + "/" + currentScan.getNumItems());
         tvDate.setText(currentScan.getFormattedDate());
 
@@ -292,7 +294,7 @@ public class ScanDetailActivity extends AppCompatActivity {
         tvNum.setText(String.valueOf(itemNum));
         tvNum.setTextColor(Color.parseColor(COLOR_BLUE));
         tvNum.setTextSize(11);
-        tvNum.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        tvNum.setTypeface(ResourcesCompat.getFont(this, R.font.poppins_medium), Typeface.BOLD);
         LinearLayout.LayoutParams numParams = new LinearLayout.LayoutParams(dp(36),
                 ViewGroup.LayoutParams.WRAP_CONTENT);
         tvNum.setLayoutParams(numParams);
@@ -303,7 +305,7 @@ public class ScanDetailActivity extends AppCompatActivity {
         tvAns.setText(answer.isEmpty() ? "—" : answer);
         tvAns.setTextColor(Color.parseColor(answer.isEmpty() ? COLOR_MUTED : COLOR_DARK));
         tvAns.setTextSize(14);
-        tvAns.setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD));
+        tvAns.setTypeface(ResourcesCompat.getFont(this, R.font.poppins_black), Typeface.BOLD);
         row.addView(tvAns);
 
         return row;
@@ -343,7 +345,7 @@ public class ScanDetailActivity extends AppCompatActivity {
         tvQ.setText(String.format("#%d", qNum));
         tvQ.setTextColor(Color.parseColor(COLOR_BLUE));
         tvQ.setTextSize(12);
-        tvQ.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        tvQ.setTypeface(ResourcesCompat.getFont(this, R.font.poppins_medium), Typeface.BOLD);
         LinearLayout.LayoutParams qParams = new LinearLayout.LayoutParams(dp(40),
                 ViewGroup.LayoutParams.WRAP_CONTENT);
         tvQ.setLayoutParams(qParams);
@@ -368,7 +370,7 @@ public class ScanDetailActivity extends AppCompatActivity {
             btn.setText(labels[j]);
             btn.setGravity(Gravity.CENTER);
             btn.setTextSize(12);
-            btn.setTypeface(Typeface.DEFAULT_BOLD);
+            btn.setTypeface(ResourcesCompat.getFont(this, R.font.poppins_bold));
 
             int btnW = labels[j].equals("—") ? dp(44) : dp(36);
             LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(btnW, dp(36));
@@ -452,7 +454,7 @@ public class ScanDetailActivity extends AppCompatActivity {
         // 2. Commit edited answers
         currentScan.setAnswers(new LinkedHashMap<>(editedAnswers));
 
-        // 3. Recalculate score
+        // 3. Recalculate detected answer count
         currentScan.setScore(currentScan.getAnsweredCount());
 
         // 4. Update list in memory
@@ -472,7 +474,7 @@ public class ScanDetailActivity extends AppCompatActivity {
         etLrn.setBackgroundColor(Color.TRANSPARENT);
         btnSaveChanges.setVisibility(View.GONE);
 
-        // Refresh score display + grid
+        // Refresh detected count display + grid
         tvScore.setText(currentScan.getScore() + "/" + currentScan.getNumItems());
         renderAnswers();
     }

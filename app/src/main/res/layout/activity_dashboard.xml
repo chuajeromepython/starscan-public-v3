@@ -111,7 +111,7 @@
                     android:textColor="#FFFFFF"
                     android:textSize="18sp"
                     android:textStyle="bold"
-                    android:fontFamily="sans-serif-black"
+                    android:fontFamily="@font/poppins_black"
                     android:singleLine="true"
                     android:ellipsize="end" />
 
@@ -257,7 +257,7 @@
                             android:textColor="#0038A8"
                             android:textSize="13sp"
                             android:textStyle="bold"
-                            android:fontFamily="sans-serif-medium"
+                            android:fontFamily="@font/poppins_medium"
                             android:background="?attr/selectableItemBackgroundBorderless"
                             android:paddingStart="4dp"
                             android:paddingEnd="4dp"
@@ -282,7 +282,7 @@
                             android:textSize="13sp"
                             android:textStyle="bold"
                             android:textColor="#0038A8"
-                            android:fontFamily="sans-serif-medium"
+                            android:fontFamily="@font/poppins_medium"
                             android:background="?attr/selectableItemBackgroundBorderless"
                             android:paddingStart="4dp"
                             android:paddingEnd="4dp"
@@ -309,7 +309,7 @@
                             android:layout_height="wrap_content"
                             android:textSize="13sp"
                             android:textColor="#1E293B"
-                            android:fontFamily="sans-serif"
+                            android:fontFamily="@font/poppins"
                             android:paddingStart="4dp"
                             android:paddingEnd="4dp"
                             android:paddingTop="6dp"
@@ -573,7 +573,7 @@
                                     android:textColor="#64748B"
                                     android:textSize="15sp"
                                     android:textStyle="bold"
-                                    android:fontFamily="sans-serif-medium"
+                                    android:fontFamily="@font/poppins_medium"
                                     android:layout_marginTop="12dp" />
                                 <TextView
                                     android:layout_width="wrap_content"
@@ -731,7 +731,7 @@
                             android:layout_height="wrap_content"
                             android:orientation="horizontal"
                             android:gravity="center_vertical"
-                            android:layout_marginBottom="12dp">
+                            android:layout_marginBottom="8dp">
                             <TextView
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
@@ -740,7 +740,26 @@
                                 android:textSize="15sp"
                                 android:textStyle="bold"
                                 android:textColor="#1E293B" />
+                            <TextView
+                                android:id="@+id/classAssessmentCount"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:textSize="12sp"
+                                android:textColor="#94A3B8" />
                         </LinearLayout>
+
+                        <!-- Sheet-type filter tabs -->
+                        <HorizontalScrollView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:scrollbars="none"
+                            android:layout_marginBottom="12dp">
+                            <LinearLayout
+                                android:id="@+id/classSheetTabs"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:orientation="horizontal" />
+                        </HorizontalScrollView>
 
                         <!-- Activity cards — populated by Java -->
                         <LinearLayout
@@ -773,7 +792,7 @@
                                 android:textColor="#64748B"
                                 android:textSize="15sp"
                                 android:textStyle="bold"
-                                android:fontFamily="sans-serif-medium"
+                                android:fontFamily="@font/poppins_medium"
                                 android:layout_marginTop="12dp" />
                             <TextView
                                 android:layout_width="wrap_content"
@@ -948,7 +967,7 @@
                                 android:textColor="#64748B"
                                 android:textSize="15sp"
                                 android:textStyle="bold"
-                                android:fontFamily="sans-serif-medium"
+                                android:fontFamily="@font/poppins_medium"
                                 android:layout_marginTop="12dp" />
                             <TextView
                                 android:layout_width="wrap_content"

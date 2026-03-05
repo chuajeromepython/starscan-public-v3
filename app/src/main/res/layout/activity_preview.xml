@@ -14,7 +14,7 @@
         android:layout_height="70dp"
         android:background="#0038A8"
         android:elevation="4dp"
-        android:fontFamily="sans-serif-medium"
+        android:fontFamily="@font/poppins_medium"
         android:gravity="center"
         android:paddingTop="8dp"
         android:text="Image Preview"

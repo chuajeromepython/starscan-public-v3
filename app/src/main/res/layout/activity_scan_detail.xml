@@ -70,7 +70,7 @@
                     android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:text="Scan Details" android:textColor="#FFFFFF"
                     android:textSize="18sp" android:textStyle="bold"
-                    android:fontFamily="sans-serif-black" android:singleLine="true"
+                    android:fontFamily="@font/poppins_black" android:singleLine="true"
                     android:ellipsize="end" />
                 <TextView android:id="@+id/topBarBadge"
                     android:layout_width="wrap_content" android:layout_height="wrap_content"
@@ -216,7 +216,7 @@
                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                 android:text="STUDENT LRN" android:textColor="#64748B"
                                 android:textSize="11sp" android:textStyle="bold"
-                                android:letterSpacing="0.1" android:fontFamily="sans-serif-medium" />
+                                android:letterSpacing="0.1" android:fontFamily="@font/poppins_medium" />
 
                             <EditText android:id="@+id/etLrn"
                                 android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -224,34 +224,34 @@
                                 android:enabled="false" android:hint="No LRN" android:inputType="text"
                                 android:maxLines="1" android:ellipsize="end"
                                 android:textColor="#1E293B" android:textColorHint="#CBD5E1"
-                                android:textSize="16sp" android:fontFamily="sans-serif-medium" />
+                                android:textSize="16sp" android:fontFamily="@font/poppins_medium" />
 
                             <View android:layout_width="match_parent" android:layout_height="1dp"
                                 android:layout_marginTop="14dp" android:layout_marginBottom="14dp"
                                 android:background="#F1F5F9" />
 
-                            <!-- Score + Timestamp row -->
+                            <!-- Detected + Timestamp row -->
                             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                                 android:orientation="horizontal">
 
-                                <!-- Score -->
+                                <!-- Detected Answers -->
                                 <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
                                     android:layout_weight="1" android:orientation="vertical">
                                     <FrameLayout android:layout_width="32dp" android:layout_height="32dp"
-                                        android:background="@drawable/bg_stat_violet" android:layout_marginBottom="8dp">
+                                        android:background="@drawable/bg_stat_green" android:layout_marginBottom="8dp">
                                         <ImageView android:layout_width="16dp" android:layout_height="16dp"
                                             android:layout_gravity="center" android:src="@drawable/ic_clipboard_list"
-                                            app:tint="#7C3AED" />
+                                            app:tint="#059669" />
                                     </FrameLayout>
                                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                        android:text="SCORE" android:textColor="#64748B" android:textSize="11sp"
+                                        android:text="DETECTED" android:textColor="#64748B" android:textSize="11sp"
                                         android:textStyle="bold" android:letterSpacing="0.1"
-                                        android:fontFamily="sans-serif-medium" />
+                                        android:fontFamily="@font/poppins_medium" />
                                     <TextView android:id="@+id/tvScore"
                                         android:layout_width="wrap_content" android:layout_height="wrap_content"
                                         android:layout_marginTop="4dp" android:text="0/0"
-                                        android:textColor="#0038A8" android:textSize="22sp"
-                                        android:textStyle="bold" android:fontFamily="sans-serif-black" />
+                                        android:textColor="#059669" android:textSize="22sp"
+                                        android:textStyle="bold" android:fontFamily="@font/poppins_black" />
                                 </LinearLayout>
 
                                 <View android:layout_width="1dp" android:layout_height="match_parent"
@@ -269,12 +269,12 @@
                                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                         android:text="TIMESTAMP" android:textColor="#64748B" android:textSize="11sp"
                                         android:textStyle="bold" android:letterSpacing="0.1"
-                                        android:fontFamily="sans-serif-medium" />
+                                        android:fontFamily="@font/poppins_medium" />
                                     <TextView android:id="@+id/tvDate"
                                         android:layout_width="wrap_content" android:layout_height="wrap_content"
                                         android:layout_marginTop="4dp" android:text="—"
                                         android:textColor="#1E293B" android:textSize="14sp"
-                                        android:fontFamily="sans-serif" />
+                                        android:fontFamily="@font/poppins" />
                                 </LinearLayout>
 
                             </LinearLayout>
@@ -310,13 +310,13 @@
                                     android:layout_weight="1" android:text="EXTRACTED ANSWERS"
                                     android:textColor="#1E293B" android:textSize="13sp"
                                     android:textStyle="bold" android:letterSpacing="0.05"
-                                    android:fontFamily="sans-serif-black" />
+                                    android:fontFamily="@font/poppins_black" />
 
                                 <TextView android:id="@+id/tvAnswerCount"
                                     android:layout_width="wrap_content" android:layout_height="wrap_content"
                                     android:text="0 items" android:textColor="#2563EB"
                                     android:textSize="11sp" android:textStyle="bold"
-                                    android:fontFamily="sans-serif-medium"
+                                    android:fontFamily="@font/poppins_medium"
                                     android:background="@drawable/bg_stat_blue"
                                     android:paddingStart="8dp" android:paddingEnd="8dp"
                                     android:paddingTop="3dp" android:paddingBottom="3dp" />
@@ -336,11 +336,11 @@
                                     <TextView android:layout_width="36dp" android:layout_height="wrap_content"
                                         android:text="ITEM" android:textColor="#94A3B8" android:textSize="10sp"
                                         android:textStyle="bold" android:letterSpacing="0.08"
-                                        android:fontFamily="sans-serif-medium" />
+                                        android:fontFamily="@font/poppins_medium" />
                                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                         android:text="ANSWER" android:textColor="#94A3B8" android:textSize="10sp"
                                         android:textStyle="bold" android:letterSpacing="0.08"
-                                        android:fontFamily="sans-serif-medium" />
+                                        android:fontFamily="@font/poppins_medium" />
                                 </LinearLayout>
 
                                 <View android:layout_width="1dp" android:layout_height="match_parent"
@@ -352,11 +352,11 @@
                                     <TextView android:layout_width="36dp" android:layout_height="wrap_content"
                                         android:text="ITEM" android:textColor="#94A3B8" android:textSize="10sp"
                                         android:textStyle="bold" android:letterSpacing="0.08"
-                                        android:fontFamily="sans-serif-medium" />
+                                        android:fontFamily="@font/poppins_medium" />
                                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                         android:text="ANSWER" android:textColor="#94A3B8" android:textSize="10sp"
                                         android:textStyle="bold" android:letterSpacing="0.08"
-                                        android:fontFamily="sans-serif-medium" />
+                                        android:fontFamily="@font/poppins_medium" />
                                 </LinearLayout>
                             </LinearLayout>
 
@@ -383,100 +383,100 @@
                                             android:paddingStart="4dp" android:paddingEnd="4dp" android:background="#F8FAFC">
                                             <TextView android:layout_width="36dp" android:layout_height="wrap_content"
                                                 android:text="1" android:textColor="#0038A8" android:textSize="11sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-medium" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_medium" />
                                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                                 android:text="A" android:textColor="#1E293B" android:textSize="14sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-black" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_black" />
                                         </LinearLayout>
                                         <LinearLayout android:layout_width="match_parent" android:layout_height="36dp"
                                             android:orientation="horizontal" android:gravity="center_vertical"
                                             android:paddingStart="4dp" android:paddingEnd="4dp" android:background="#FFFFFF">
                                             <TextView android:layout_width="36dp" android:layout_height="wrap_content"
                                                 android:text="2" android:textColor="#0038A8" android:textSize="11sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-medium" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_medium" />
                                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                                 android:text="B" android:textColor="#1E293B" android:textSize="14sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-black" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_black" />
                                         </LinearLayout>
                                         <LinearLayout android:layout_width="match_parent" android:layout_height="36dp"
                                             android:orientation="horizontal" android:gravity="center_vertical"
                                             android:paddingStart="4dp" android:paddingEnd="4dp" android:background="#F8FAFC">
                                             <TextView android:layout_width="36dp" android:layout_height="wrap_content"
                                                 android:text="3" android:textColor="#0038A8" android:textSize="11sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-medium" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_medium" />
                                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                                 android:text="C" android:textColor="#1E293B" android:textSize="14sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-black" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_black" />
                                         </LinearLayout>
                                         <LinearLayout android:layout_width="match_parent" android:layout_height="36dp"
                                             android:orientation="horizontal" android:gravity="center_vertical"
                                             android:paddingStart="4dp" android:paddingEnd="4dp" android:background="#FFFFFF">
                                             <TextView android:layout_width="36dp" android:layout_height="wrap_content"
                                                 android:text="4" android:textColor="#0038A8" android:textSize="11sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-medium" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_medium" />
                                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                                 android:text="A" android:textColor="#1E293B" android:textSize="14sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-black" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_black" />
                                         </LinearLayout>
                                         <LinearLayout android:layout_width="match_parent" android:layout_height="36dp"
                                             android:orientation="horizontal" android:gravity="center_vertical"
                                             android:paddingStart="4dp" android:paddingEnd="4dp" android:background="#F8FAFC">
                                             <TextView android:layout_width="36dp" android:layout_height="wrap_content"
                                                 android:text="5" android:textColor="#0038A8" android:textSize="11sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-medium" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_medium" />
                                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                                 android:text="D" android:textColor="#1E293B" android:textSize="14sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-black" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_black" />
                                         </LinearLayout>
                                         <LinearLayout android:layout_width="match_parent" android:layout_height="36dp"
                                             android:orientation="horizontal" android:gravity="center_vertical"
                                             android:paddingStart="4dp" android:paddingEnd="4dp" android:background="#FFFFFF">
                                             <TextView android:layout_width="36dp" android:layout_height="wrap_content"
                                                 android:text="6" android:textColor="#0038A8" android:textSize="11sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-medium" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_medium" />
                                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                                 android:text="B" android:textColor="#1E293B" android:textSize="14sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-black" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_black" />
                                         </LinearLayout>
                                         <LinearLayout android:layout_width="match_parent" android:layout_height="36dp"
                                             android:orientation="horizontal" android:gravity="center_vertical"
                                             android:paddingStart="4dp" android:paddingEnd="4dp" android:background="#F8FAFC">
                                             <TextView android:layout_width="36dp" android:layout_height="wrap_content"
                                                 android:text="7" android:textColor="#0038A8" android:textSize="11sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-medium" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_medium" />
                                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                                 android:text="C" android:textColor="#1E293B" android:textSize="14sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-black" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_black" />
                                         </LinearLayout>
                                         <LinearLayout android:layout_width="match_parent" android:layout_height="36dp"
                                             android:orientation="horizontal" android:gravity="center_vertical"
                                             android:paddingStart="4dp" android:paddingEnd="4dp" android:background="#FFFFFF">
                                             <TextView android:layout_width="36dp" android:layout_height="wrap_content"
                                                 android:text="8" android:textColor="#0038A8" android:textSize="11sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-medium" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_medium" />
                                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                                 android:text="A" android:textColor="#1E293B" android:textSize="14sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-black" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_black" />
                                         </LinearLayout>
                                         <LinearLayout android:layout_width="match_parent" android:layout_height="36dp"
                                             android:orientation="horizontal" android:gravity="center_vertical"
                                             android:paddingStart="4dp" android:paddingEnd="4dp" android:background="#F8FAFC">
                                             <TextView android:layout_width="36dp" android:layout_height="wrap_content"
                                                 android:text="9" android:textColor="#0038A8" android:textSize="11sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-medium" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_medium" />
                                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                                 android:text="D" android:textColor="#1E293B" android:textSize="14sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-black" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_black" />
                                         </LinearLayout>
                                         <LinearLayout android:layout_width="match_parent" android:layout_height="36dp"
                                             android:orientation="horizontal" android:gravity="center_vertical"
                                             android:paddingStart="4dp" android:paddingEnd="4dp" android:background="#FFFFFF">
                                             <TextView android:layout_width="36dp" android:layout_height="wrap_content"
                                                 android:text="10" android:textColor="#0038A8" android:textSize="11sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-medium" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_medium" />
                                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                                 android:text="B" android:textColor="#1E293B" android:textSize="14sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-black" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_black" />
                                         </LinearLayout>
                                     </LinearLayout>
 
@@ -492,100 +492,100 @@
                                             android:paddingStart="8dp" android:paddingEnd="4dp" android:background="#F8FAFC">
                                             <TextView android:layout_width="36dp" android:layout_height="wrap_content"
                                                 android:text="11" android:textColor="#0038A8" android:textSize="11sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-medium" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_medium" />
                                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                                 android:text="C" android:textColor="#1E293B" android:textSize="14sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-black" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_black" />
                                         </LinearLayout>
                                         <LinearLayout android:layout_width="match_parent" android:layout_height="36dp"
                                             android:orientation="horizontal" android:gravity="center_vertical"
                                             android:paddingStart="8dp" android:paddingEnd="4dp" android:background="#FFFFFF">
                                             <TextView android:layout_width="36dp" android:layout_height="wrap_content"
                                                 android:text="12" android:textColor="#0038A8" android:textSize="11sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-medium" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_medium" />
                                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                                 android:text="A" android:textColor="#1E293B" android:textSize="14sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-black" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_black" />
                                         </LinearLayout>
                                         <LinearLayout android:layout_width="match_parent" android:layout_height="36dp"
                                             android:orientation="horizontal" android:gravity="center_vertical"
                                             android:paddingStart="8dp" android:paddingEnd="4dp" android:background="#F8FAFC">
                                             <TextView android:layout_width="36dp" android:layout_height="wrap_content"
                                                 android:text="13" android:textColor="#0038A8" android:textSize="11sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-medium" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_medium" />
                                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                                 android:text="B" android:textColor="#1E293B" android:textSize="14sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-black" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_black" />
                                         </LinearLayout>
                                         <LinearLayout android:layout_width="match_parent" android:layout_height="36dp"
                                             android:orientation="horizontal" android:gravity="center_vertical"
                                             android:paddingStart="8dp" android:paddingEnd="4dp" android:background="#FFFFFF">
                                             <TextView android:layout_width="36dp" android:layout_height="wrap_content"
                                                 android:text="14" android:textColor="#0038A8" android:textSize="11sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-medium" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_medium" />
                                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                                 android:text="D" android:textColor="#1E293B" android:textSize="14sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-black" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_black" />
                                         </LinearLayout>
                                         <LinearLayout android:layout_width="match_parent" android:layout_height="36dp"
                                             android:orientation="horizontal" android:gravity="center_vertical"
                                             android:paddingStart="8dp" android:paddingEnd="4dp" android:background="#F8FAFC">
                                             <TextView android:layout_width="36dp" android:layout_height="wrap_content"
                                                 android:text="15" android:textColor="#0038A8" android:textSize="11sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-medium" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_medium" />
                                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                                 android:text="A" android:textColor="#1E293B" android:textSize="14sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-black" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_black" />
                                         </LinearLayout>
                                         <LinearLayout android:layout_width="match_parent" android:layout_height="36dp"
                                             android:orientation="horizontal" android:gravity="center_vertical"
                                             android:paddingStart="8dp" android:paddingEnd="4dp" android:background="#FFFFFF">
                                             <TextView android:layout_width="36dp" android:layout_height="wrap_content"
                                                 android:text="16" android:textColor="#0038A8" android:textSize="11sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-medium" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_medium" />
                                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                                 android:text="C" android:textColor="#1E293B" android:textSize="14sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-black" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_black" />
                                         </LinearLayout>
                                         <LinearLayout android:layout_width="match_parent" android:layout_height="36dp"
                                             android:orientation="horizontal" android:gravity="center_vertical"
                                             android:paddingStart="8dp" android:paddingEnd="4dp" android:background="#F8FAFC">
                                             <TextView android:layout_width="36dp" android:layout_height="wrap_content"
                                                 android:text="17" android:textColor="#0038A8" android:textSize="11sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-medium" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_medium" />
                                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                                 android:text="B" android:textColor="#1E293B" android:textSize="14sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-black" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_black" />
                                         </LinearLayout>
                                         <LinearLayout android:layout_width="match_parent" android:layout_height="36dp"
                                             android:orientation="horizontal" android:gravity="center_vertical"
                                             android:paddingStart="8dp" android:paddingEnd="4dp" android:background="#FFFFFF">
                                             <TextView android:layout_width="36dp" android:layout_height="wrap_content"
                                                 android:text="18" android:textColor="#0038A8" android:textSize="11sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-medium" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_medium" />
                                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                                 android:text="A" android:textColor="#1E293B" android:textSize="14sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-black" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_black" />
                                         </LinearLayout>
                                         <LinearLayout android:layout_width="match_parent" android:layout_height="36dp"
                                             android:orientation="horizontal" android:gravity="center_vertical"
                                             android:paddingStart="8dp" android:paddingEnd="4dp" android:background="#F8FAFC">
                                             <TextView android:layout_width="36dp" android:layout_height="wrap_content"
                                                 android:text="19" android:textColor="#0038A8" android:textSize="11sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-medium" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_medium" />
                                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                                 android:text="D" android:textColor="#1E293B" android:textSize="14sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-black" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_black" />
                                         </LinearLayout>
                                         <LinearLayout android:layout_width="match_parent" android:layout_height="36dp"
                                             android:orientation="horizontal" android:gravity="center_vertical"
                                             android:paddingStart="8dp" android:paddingEnd="4dp" android:background="#FFFFFF">
                                             <TextView android:layout_width="36dp" android:layout_height="wrap_content"
                                                 android:text="20" android:textColor="#0038A8" android:textSize="11sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-medium" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_medium" />
                                             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                                 android:text="C" android:textColor="#1E293B" android:textSize="14sp"
-                                                android:textStyle="bold" android:fontFamily="sans-serif-black" />
+                                                android:textStyle="bold" android:fontFamily="@font/poppins_black" />
                                         </LinearLayout>
                                     </LinearLayout>
 
@@ -611,7 +611,7 @@
                                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                     android:text="No answers extracted" android:textColor="#1E293B"
                                     android:textSize="14sp" android:textStyle="bold"
-                                    android:fontFamily="sans-serif-medium" android:layout_marginTop="8dp" />
+                                    android:fontFamily="@font/poppins_medium" android:layout_marginTop="8dp" />
                                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                                     android:text="Scan a paper to see results here"
                                     android:textColor="#64748B" android:textSize="12sp"
@@ -642,7 +642,7 @@
         android:textColor="#FFFFFF"
         android:textSize="14sp"
         android:textStyle="bold"
-        android:fontFamily="sans-serif-medium"
+        android:fontFamily="@font/poppins_medium"
         android:paddingStart="32dp"
         android:paddingEnd="32dp"
         android:visibility="gone"

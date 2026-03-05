@@ -388,6 +388,23 @@ public class ResultActivity extends AppCompatActivity {
             return;
         }
 
+        if (classId != null && activityId != null && scanResult.lnr != null) {
+            boolean exists = DashboardActivity.isLrnExists(this, classId, activityId, scanResult.lnr);
+            if (exists) {
+                new android.app.AlertDialog.Builder(this)
+                        .setTitle("Duplicate LRN detected")
+                        .setMessage("A scan with LRN " + scanResult.lnr + " already exists in this assessment. Do you want to replace it?")
+                        .setPositiveButton("Replace", (dialog, which) -> proceedWithExport(true))
+                        .setNegativeButton("Cancel", null)
+                        .show();
+                return;
+            }
+        }
+
+        proceedWithExport(false);
+    }
+
+    private void proceedWithExport(boolean replace) {
         showLoading(true);
 
         new Thread(() -> {
@@ -400,7 +417,7 @@ public class ResultActivity extends AppCompatActivity {
 
                 // Save scan result to the class/activity folder structure
                 if (classId != null && activityId != null) {
-                    saveScanToFolder(csvFilePath);
+                    saveScanToFolder(csvFilePath, replace);
                 }
 
                 if (csvFilePath != null) {
@@ -444,7 +461,7 @@ public class ResultActivity extends AppCompatActivity {
      * Save the scan result into the class/activity folder structure
      * so it appears in the Dashboard's activity scan list.
      */
-    private void saveScanToFolder(String csvFilePath) {
+    private void saveScanToFolder(String csvFilePath, boolean replace) {
         try {
             // Convert ScanResult answers to the ScanEntry format
             Map<Integer, String> answersMap = new LinkedHashMap<>();
@@ -481,7 +498,7 @@ public class ResultActivity extends AppCompatActivity {
                 }
             }
 
-            DashboardActivity.saveScanResult(this, classId, activityId, entry);
+            DashboardActivity.saveScanResult(this, classId, activityId, entry, replace);
             Log.d(TAG, "Scan result saved to folder: classId=" + classId + ", activityId=" + activityId);
 
         } catch (Exception e) {

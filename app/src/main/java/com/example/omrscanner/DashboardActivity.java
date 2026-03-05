@@ -22,6 +22,7 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.ArrayAdapter;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
@@ -69,6 +70,7 @@ public class DashboardActivity extends AppCompatActivity {
     private ClassFolder selectedClass = null;
     private ActivityFolder selectedActivity = null;
     private String selectedSheetType = null;
+    private String selectedSheetFilter = null; // null = "All"
     private String globalTeacherName = "";
 
     // Views
@@ -81,6 +83,8 @@ public class DashboardActivity extends AppCompatActivity {
     private LinearLayout homeEmpty, homeClassList;
     private TextView classTeacherLabel;
     private LinearLayout classEmpty, classActivityList;
+    private LinearLayout classSheetTabs;
+    private TextView classAssessmentCount;
 
     private CardView scanCtaCard;
 
@@ -193,6 +197,8 @@ public class DashboardActivity extends AppCompatActivity {
         classTeacherLabel = findViewById(R.id.classTeacherLabel);
         classEmpty = findViewById(R.id.classEmpty);
         classActivityList = findViewById(R.id.classActivityList);
+        classSheetTabs = findViewById(R.id.classSheetTabs);
+        classAssessmentCount = findViewById(R.id.classAssessmentCount);
 
         scanCtaCard = findViewById(R.id.scanCtaCard);
         scanCtaSub = findViewById(R.id.scanCtaSub);
@@ -260,13 +266,16 @@ public class DashboardActivity extends AppCompatActivity {
                 screenHome.setVisibility(View.VISIBLE);
                 btnBack.setVisibility(View.GONE);
                 topBarTitle.setText("SagotSuri");
-                topBarBadge.setText(classFolders.size() + " class"
-                        + (classFolders.size() != 1 ? "es" : ""));
+                topBarBadge.setVisibility(View.GONE);
                 // Refresh teacher name display in header
                 if (globalTeacherName != null && !globalTeacherName.isEmpty()) {
-                    tvTeacherName.setText("\uD83D\uDC64 " + globalTeacherName);
+                    tvTeacherName.setText(globalTeacherName);
+                    tvTeacherName.setTextColor(Color.parseColor("#FFFFFF"));
+                    tvTeacherName.setTypeface(null, Typeface.BOLD);
                 } else {
-                    tvTeacherName.setText("\uD83D\uDC64 Tap to set teacher name");
+                    tvTeacherName.setText("Tap to set teacher name");
+                    tvTeacherName.setTextColor(Color.parseColor("#BFDBFE"));
+                    tvTeacherName.setTypeface(null, Typeface.NORMAL);
                 }
                 fab.setText("Class");
                 fab.setVisibility(View.VISIBLE);
@@ -282,7 +291,9 @@ public class DashboardActivity extends AppCompatActivity {
                 }
                 screenClass.setVisibility(View.VISIBLE);
                 btnBack.setVisibility(View.VISIBLE);
+                selectedSheetFilter = null; // reset tab filter for new class
                 topBarTitle.setText(selectedClass.getDisplayName());
+                topBarBadge.setVisibility(View.VISIBLE);
                 topBarBadge.setText("📁 " + selectedClass.getActivityCount());
                 fab.setText("Assessment");
                 fab.setVisibility(View.VISIBLE);
@@ -305,6 +316,7 @@ public class DashboardActivity extends AppCompatActivity {
                 screenActivity.setVisibility(View.VISIBLE);
                 btnBack.setVisibility(View.VISIBLE);
                 topBarTitle.setText(selectedActivity.getName());
+                topBarBadge.setVisibility(View.VISIBLE);
                 topBarBadge.setText(selectedActivity.getSheetType());
                 fab.setVisibility(View.GONE);
                 breadcrumbBar.setVisibility(View.VISIBLE);
@@ -483,14 +495,101 @@ public class DashboardActivity extends AppCompatActivity {
         classTeacherLabel.setText("Teacher: " + displayTeacher);
 
         List<ActivityFolder> activities = selectedClass.getActivities();
-        if (activities == null || activities.isEmpty()) {
+
+        // ── Build sheet-type filter tabs ──
+        buildClassSheetTabs(activities);
+
+        // ── Apply filter ──
+        List<ActivityFolder> filtered = new ArrayList<>();
+        if (activities != null) {
+            for (ActivityFolder act : activities) {
+                if (selectedSheetFilter == null || act.getSheetType().equals(selectedSheetFilter)) {
+                    filtered.add(act);
+                }
+            }
+        }
+
+        // Update count label
+        if (classAssessmentCount != null) {
+            classAssessmentCount.setText(filtered.size() + " total");
+        }
+
+        if (filtered.isEmpty()) {
             classEmpty.setVisibility(View.VISIBLE);
             classActivityList.setVisibility(View.GONE);
         } else {
             classEmpty.setVisibility(View.GONE);
             classActivityList.setVisibility(View.VISIBLE);
-            for (ActivityFolder act : activities)
+            for (ActivityFolder act : filtered)
                 classActivityList.addView(createActivityCard(act));
+        }
+    }
+
+    /** Build the "All / ZPH30 / ZPH50 / ZPH60" filter tabs above the assessment list. */
+    private void buildClassSheetTabs(List<ActivityFolder> activities) {
+        classSheetTabs.removeAllViews();
+
+        // Count how many assessments per sheet type
+        int countZPH30 = 0, countZPH50 = 0, countZPH60 = 0;
+        if (activities != null) {
+            for (ActivityFolder act : activities) {
+                switch (act.getSheetType()) {
+                    case "ZPH30": countZPH30++; break;
+                    case "ZPH50": countZPH50++; break;
+                    case "ZPH60": countZPH60++; break;
+                }
+            }
+        }
+        int totalCount = (activities != null) ? activities.size() : 0;
+
+        // Tab data: label, filter value (null = all), count
+        Object[][] tabs = {
+                { "All",    null,    totalCount },
+                { "ZPH30",  "ZPH30", countZPH30 },
+                { "ZPH50",  "ZPH50", countZPH50 },
+                { "ZPH60",  "ZPH60", countZPH60 },
+        };
+
+        for (int i = 0; i < tabs.length; i++) {
+            final String label = (String) tabs[i][0];
+            final String filterVal = (String) tabs[i][1];
+            final int count = (int) tabs[i][2];
+
+            // Only show a tab if it has assessments (always show "All")
+            if (filterVal != null && count == 0) continue;
+
+            boolean isActive = (selectedSheetFilter == null && filterVal == null)
+                    || (selectedSheetFilter != null && selectedSheetFilter.equals(filterVal));
+
+            TextView tab = new TextView(this);
+            tab.setText(label + " (" + count + ")");
+            tab.setTextSize(12);
+            tab.setTypeface(null, isActive ? Typeface.BOLD : Typeface.NORMAL);
+            tab.setGravity(Gravity.CENTER);
+            tab.setPadding(dp(14), dp(8), dp(14), dp(8));
+
+            GradientDrawable bg = new GradientDrawable();
+            bg.setCornerRadius(dp(20));
+            if (isActive) {
+                bg.setColor(Color.parseColor("#0038A8"));
+                tab.setTextColor(Color.WHITE);
+            } else {
+                bg.setColor(Color.parseColor("#F1F5F9"));
+                bg.setStroke(dp(1), Color.parseColor("#E2E8F0"));
+                tab.setTextColor(Color.parseColor("#64748B"));
+            }
+            tab.setBackground(bg);
+
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.rightMargin = dp(8);
+            tab.setLayoutParams(lp);
+
+            tab.setOnClickListener(v -> {
+                selectedSheetFilter = filterVal;
+                renderClassScreen();
+            });
+            classSheetTabs.addView(tab);
         }
     }
 
@@ -718,6 +817,7 @@ public class DashboardActivity extends AppCompatActivity {
         return card;
     }
 
+    /** Badge showing how many items had a detected answer (not a score). */
     private TextView createScoreBadge(ScanEntry scan) {
         TextView badge = new TextView(this);
         badge.setText(scan.getScore() + "/" + scan.getNumItems());
@@ -726,20 +826,9 @@ public class DashboardActivity extends AppCompatActivity {
         badge.setPadding(dp(8), dp(3), dp(8), dp(3));
         GradientDrawable badgeBg = new GradientDrawable();
         badgeBg.setCornerRadius(dp(6));
-        switch (scan.getScoreLevel()) {
-            case "high":
-                badgeBg.setColor(Color.parseColor("#DCFCE7"));
-                badge.setTextColor(Color.parseColor("#16A34A"));
-                break;
-            case "mid":
-                badgeBg.setColor(Color.parseColor("#FEF9C3"));
-                badge.setTextColor(Color.parseColor("#CA8A04"));
-                break;
-            default:
-                badgeBg.setColor(Color.parseColor("#FEE2E2"));
-                badge.setTextColor(Color.parseColor("#CE1126"));
-                break;
-        }
+        // Neutral green-tinted badge — represents detected count, not correctness
+        badgeBg.setColor(Color.parseColor("#DCFCE7"));
+        badge.setTextColor(Color.parseColor("#059669"));
         badge.setBackground(badgeBg);
         return badge;
     }
@@ -761,7 +850,7 @@ public class DashboardActivity extends AppCompatActivity {
                     dialog.dismiss();
                     showEditClassDialog(cls);
                 }, false));
-        root.addView(createMenuOption("⬇️   Download Summary",
+        root.addView(createMenuOption("⬇️   Download Folder",
                 () -> {
                     dialog.dismiss();
                     downloadClassData(cls);
@@ -826,9 +915,26 @@ public class DashboardActivity extends AppCompatActivity {
         root.addView(sectionInput);
 
         root.addView(createFieldLabel("SCHOOL YEAR"));
-        EditText schoolYearInput = createLightInput("e.g. 2023-2024");
-        schoolYearInput.setText(cls.getSchoolYear() != null ? cls.getSchoolYear() : "");
-        root.addView(schoolYearInput);
+        // School Year dropdown
+        final String[] schoolYearOptions = buildSchoolYearOptions();
+        int editCurrentYr = Calendar.getInstance().get(Calendar.YEAR);
+        String editDefaultSY = editCurrentYr + "-" + (editCurrentYr + 1);
+        String currentSY = (cls.getSchoolYear() != null && !cls.getSchoolYear().isEmpty())
+                ? cls.getSchoolYear() : editDefaultSY;
+        final String[] selectedSchoolYear = { currentSY };
+        TextView schoolYearPicker = createDropdownField(currentSY);
+        schoolYearPicker.setTextColor(Color.parseColor("#1E293B"));
+        schoolYearPicker.setOnClickListener(v -> {
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("Select School Year")
+                    .setItems(schoolYearOptions, (dlg, which) -> {
+                        selectedSchoolYear[0] = schoolYearOptions[which];
+                        schoolYearPicker.setText(schoolYearOptions[which] + "  ▾");
+                        schoolYearPicker.setTextColor(Color.parseColor("#1E293B"));
+                    })
+                    .show();
+        });
+        root.addView(schoolYearPicker);
 
         LinearLayout actions = buildActionsRow(dp(20));
         TextView btnCancel = createDialogButton("Cancel", false);
@@ -862,7 +968,7 @@ public class DashboardActivity extends AppCompatActivity {
                     : cls.getTeacher());
             cls.setGrade(grade);
             cls.setSection(section);
-            cls.setSchoolYear(schoolYearInput.getText().toString().trim());
+            cls.setSchoolYear(selectedSchoolYear[0]);
             saveData();
             dialog.dismiss();
             showToast("Class updated ✓");
@@ -988,7 +1094,9 @@ public class DashboardActivity extends AppCompatActivity {
                         }
                         saveData();
                         // Refresh the teacher name label in the header
-                        tvTeacherName.setText("\uD83D\uDC64 " + globalTeacherName);
+                        tvTeacherName.setText(globalTeacherName);
+                        tvTeacherName.setTextColor(Color.parseColor("#FFFFFF"));
+                        tvTeacherName.setTypeface(null, Typeface.BOLD);
                         // If currently on class screen, refresh teacher label there too
                         if (SCREEN_CLASS.equals(currentScreen) && selectedClass != null) {
                             classTeacherLabel.setText("Teacher: " + globalTeacherName);
@@ -1200,8 +1308,29 @@ public class DashboardActivity extends AppCompatActivity {
         root.addView(sectionInput);
 
         root.addView(createFieldLabel("SCHOOL YEAR"));
-        EditText schoolYearInput = createLightInput("e.g. 2023-2024");
-        root.addView(schoolYearInput);
+        // School Year dropdown — default to current school year
+        final String[] schoolYearOptions = buildSchoolYearOptions();
+        int currentYr = Calendar.getInstance().get(Calendar.YEAR);
+        String defaultSY = currentYr + "-" + (currentYr + 1);
+        // Find position of the current SY in the array (fallback to first)
+        int defaultIdx = 0;
+        for (int i = 0; i < schoolYearOptions.length; i++) {
+            if (schoolYearOptions[i].equals(defaultSY)) { defaultIdx = i; break; }
+        }
+        final String[] selectedSchoolYear = { schoolYearOptions[defaultIdx] };
+        TextView schoolYearPicker = createDropdownField(schoolYearOptions[defaultIdx]);
+        schoolYearPicker.setTextColor(Color.parseColor("#1E293B"));
+        schoolYearPicker.setOnClickListener(v -> {
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("Select School Year")
+                    .setItems(schoolYearOptions, (dlg, which) -> {
+                        selectedSchoolYear[0] = schoolYearOptions[which];
+                        schoolYearPicker.setText(schoolYearOptions[which] + "  ▾");
+                        schoolYearPicker.setTextColor(Color.parseColor("#1E293B"));
+                    })
+                    .show();
+        });
+        root.addView(schoolYearPicker);
 
         LinearLayout actions = buildActionsRow(dp(20));
         TextView btnCancel = createDialogButton("Cancel", false);
@@ -1215,8 +1344,12 @@ public class DashboardActivity extends AppCompatActivity {
         btnDone.setOnClickListener(v -> {
             String grade = gradeInput.getText().toString().trim();
             String section = sectionInput.getText().toString().trim();
-            if (grade.isEmpty() || section.isEmpty()) {
-                showErrorDialog("Missing Fields", "Grade and Section are required to create a class.");
+            if (grade.isEmpty()) {
+                showErrorDialog("Missing Grade", "Please enter the grade level (e.g. Grade 10).");
+                return;
+            }
+            if (section.isEmpty()) {
+                showErrorDialog("Missing Section", "Please enter the section name (e.g. Section A).");
                 return;
             }
             for (ClassFolder existing : classFolders) {
@@ -1228,7 +1361,7 @@ public class DashboardActivity extends AppCompatActivity {
                     return;
                 }
             }
-            String schoolYear = schoolYearInput.getText().toString().trim();
+            String schoolYear = selectedSchoolYear[0];
             // Use the global teacher name when creating the class
             String teacher = (globalTeacherName != null && !globalTeacherName.isEmpty())
                     ? globalTeacherName
@@ -1559,7 +1692,7 @@ public class DashboardActivity extends AppCompatActivity {
                 }
 
                 StringBuilder actCsv = new StringBuilder("LRN,Score");
-                for (int i = 1; i <= act.getNumItems(); i++)
+                for (int i = 1; i   <= act.getNumItems(); i++)
                     actCsv.append(",Q").append(i);
                 actCsv.append("\n");
                 for (ScanEntry scan : scans) {
@@ -1786,9 +1919,37 @@ public class DashboardActivity extends AppCompatActivity {
         Log.d(TAG, "Loaded " + classFolders.size() + " classes");
     }
 
+    public static boolean isLrnExists(android.content.Context context, String classId, String activityId, String lrn) {
+        if (classId == null || activityId == null || lrn == null) return false;
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        Gson g = new Gson();
+        String json = prefs.getString(KEY_CLASSES, "[]");
+        Type type = new TypeToken<List<ClassFolder>>() {}.getType();
+        List<ClassFolder> classes = g.fromJson(json, type);
+        if (classes != null) {
+            for (ClassFolder cls : classes) {
+                if (cls.getId().equals(classId)) {
+                    for (ActivityFolder act : cls.getActivities()) {
+                        if (act.getId().equals(activityId)) {
+                            if (act.getScans() != null) {
+                                for (ScanEntry entry : act.getScans()) {
+                                    if (lrn.equals(entry.getLrn())) {
+                                        return true;
+                                    }
+                                }
+                            }
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     public static void saveScanResult(android.content.Context context,
             String classId, String activityId,
-            ScanEntry scanEntry) {
+            ScanEntry scanEntry, boolean replace) {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         Gson g = new Gson();
         String json = prefs.getString(KEY_CLASSES, "[]");
@@ -1800,8 +1961,19 @@ public class DashboardActivity extends AppCompatActivity {
                 if (cls.getId().equals(classId)) {
                     for (ActivityFolder act : cls.getActivities()) {
                         if (act.getId().equals(activityId)) {
+                            if (replace && act.getScans() != null) {
+                                for (int i = 0; i < act.getScans().size(); i++) {
+                                    if (act.getScans().get(i).getLrn() != null &&
+                                        act.getScans().get(i).getLrn().equals(scanEntry.getLrn())) {
+                                        act.getScans().set(i, scanEntry);
+                                        prefs.edit().putString(KEY_CLASSES, g.toJson(classes)).apply();
+                                        return;
+                                    }
+                                }
+                            }
                             act.addScan(scanEntry);
-                            break;
+                            prefs.edit().putString(KEY_CLASSES, g.toJson(classes)).apply();
+                            return;
                         }
                     }
                     break;
@@ -2041,6 +2213,50 @@ public class DashboardActivity extends AppCompatActivity {
             dialog.getWindow()
                     .getAttributes().windowAnimations = com.google.android.material.R.style.Animation_Design_BottomSheetDialog;
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // SCHOOL YEAR HELPERS
+    // ═══════════════════════════════════════════════════════════════
+
+    /** Build an array of school-year strings centred on the current calendar year. */
+    private String[] buildSchoolYearOptions() {
+        int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+        // Range: 5 years before … 4 years after (10 options total)
+        int startYear = currentYear - 5;
+        String[] options = new String[10];
+        for (int i = 0; i < 10; i++) {
+            int y = startYear + i;
+            options[i] = y + "-" + (y + 1);
+        }
+        return options;
+    }
+
+    /**
+     * Creates a clickable TextView styled as a dropdown field (matching the
+     * {@link #createLightInput} look) with a ▼ indicator.
+     */
+    private TextView createDropdownField(String initialText) {
+        TextView tv = new TextView(this);
+        tv.setText(initialText + "  ▾");
+        tv.setTag(initialText);             // keep raw value in tag
+        tv.setHint("Select…");
+        tv.setHintTextColor(Color.parseColor("#CBD5E1"));
+        tv.setTextColor(Color.parseColor("#94A3B8"));
+        tv.setTextSize(14);
+        tv.setClickable(true);
+        tv.setFocusable(true);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.parseColor("#F8FAFC"));
+        bg.setCornerRadius(dp(10));
+        bg.setStroke(dp(1), Color.parseColor("#E2E8F0"));
+        tv.setBackground(bg);
+        tv.setPadding(dp(12), dp(12), dp(12), dp(12));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.bottomMargin = dp(16);
+        tv.setLayoutParams(lp);
+        return tv;
     }
 
     // ═══════════════════════════════════════════════════════════════
