@@ -2,6 +2,8 @@ package com.example.omrscanner;
 
 import android.app.Dialog;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
@@ -11,6 +13,7 @@ import android.os.Handler;
 import android.os.Bundle;
 import android.os.Looper;
 import android.text.Editable;
+import android.text.InputType;
 import android.text.TextWatcher;
 import android.util.Log;
 import android.view.Gravity;
@@ -29,6 +32,7 @@ import android.widget.Toast;
 import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.cardview.widget.CardView;
 import androidx.core.view.WindowCompat;
@@ -51,9 +55,19 @@ import com.example.omrscanner.ui.ScanDetailActivity;
 import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 
+import net.lingala.zip4j.ZipFile;
+import net.lingala.zip4j.model.ZipParameters;
+import net.lingala.zip4j.model.enums.AesKeyStrength;
+import net.lingala.zip4j.model.enums.EncryptionMethod;
+
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -63,6 +77,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class DashboardActivity extends AppCompatActivity {
 
     private static final String TAG = "DashboardActivity";
+    private static final long EXPORT_IMAGE_TARGET_BYTES = 100L * 1024L;
+    private static final int EXPORT_IMAGE_MIN_EDGE_PX = 900;
 
     // Extras
     public static final String EXTRA_SHEET_TYPE = "sheet_type";
@@ -2072,81 +2088,171 @@ public class DashboardActivity extends AppCompatActivity {
     // ═══════════════════════════════════════════════════════════════
 
     private void downloadClassData(ClassFolder cls) {
-        try {
-            if (cls.getActivities() == null || cls.getActivities().isEmpty()) {
-                showToast("No data to download");
+        if (cls.getActivities() == null || cls.getActivities().isEmpty()) {
+            showToast("No data to download");
+            return;
+        }
+        showDownloadPasswordDialog(cls);
+    }
+
+    private void showDownloadPasswordDialog(ClassFolder cls) {
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(20), dp(8), dp(20), 0);
+
+        EditText passwordInput = new EditText(this);
+        passwordInput.setHint("Password");
+        passwordInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        passwordInput.setBackground(createInputBg());
+        passwordInput.setPadding(dp(12), dp(10), dp(12), dp(10));
+
+        EditText confirmInput = new EditText(this);
+        confirmInput.setHint("Confirm password");
+        confirmInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        confirmInput.setBackground(createInputBg());
+        confirmInput.setPadding(dp(12), dp(10), dp(12), dp(10));
+
+        LinearLayout.LayoutParams fieldLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        fieldLp.bottomMargin = dp(10);
+        passwordInput.setLayoutParams(fieldLp);
+        confirmInput.setLayoutParams(fieldLp);
+        content.addView(passwordInput);
+        content.addView(confirmInput);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Protect Download")
+                .setMessage("Set a password for this ZIP file.")
+                .setView(content)
+                .setPositiveButton("Download", null)
+                .setNegativeButton("Cancel", null)
+                .create();
+
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String password = passwordInput.getText() != null ? passwordInput.getText().toString().trim() : "";
+            String confirm = confirmInput.getText() != null ? confirmInput.getText().toString().trim() : "";
+
+            if (password.isEmpty()) {
+                passwordInput.setError("Password is required");
                 return;
             }
-            String folderName = cls.getGrade().replaceAll("\\s+", "")
-                    + "-" + cls.getSection().replaceAll("\\s+", "");
-            java.io.File downloadsDir = android.os.Environment
-                    .getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS);
-            java.io.File classDir = new java.io.File(new java.io.File(downloadsDir, "OMRScanner"), folderName);
+            if (!password.equals(confirm)) {
+                confirmInput.setError("Passwords do not match");
+                return;
+            }
 
-            int totalImages = 0, totalCsvs = 0;
+            dialog.dismiss();
+            showToast("Preparing protected download...");
+            new Thread(() -> runProtectedClassDownload(cls, password)).start();
+        }));
 
+        dialog.show();
+    }
+
+    private GradientDrawable createInputBg() {
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.WHITE);
+        bg.setCornerRadius(dp(8));
+        bg.setStroke(dp(1), Color.parseColor("#CBD5E1"));
+        return bg;
+    }
+
+    private void runProtectedClassDownload(ClassFolder cls, String password) {
+        try {
+            DownloadExportResult result = exportClassDataToProtectedZip(cls, password);
+            runOnUiThread(() -> showDownloadSuccessDialog(cls, result.zipFile, result.totalImages, result.totalCsvs));
+        } catch (Exception e) {
+            Log.e(TAG, "Error downloading class data", e);
+            runOnUiThread(() -> showToast("Error exporting: " + e.getMessage()));
+        }
+    }
+
+    private DownloadExportResult exportClassDataToProtectedZip(ClassFolder cls, String password) throws Exception {
+        File downloadsDir = android.os.Environment
+                .getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS);
+        File omrDir = new File(downloadsDir, "OMRScanner");
+        if (!omrDir.exists() && !omrDir.mkdirs()) {
+            throw new IllegalStateException("Unable to create Downloads/OMRScanner");
+        }
+
+        String folderName = buildClassFolderName(cls);
+        String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
+        File stagingRoot = new File(getCacheDir(), "omr_export_" + System.currentTimeMillis());
+        File classDir = new File(stagingRoot, folderName);
+        if (!classDir.mkdirs()) {
+            throw new IllegalStateException("Unable to create export folder");
+        }
+
+        int totalImages = 0;
+        int totalCsvs = 0;
+
+        try {
             for (ActivityFolder act : cls.getActivities()) {
                 List<ScanEntry> scans = act.getScans();
-                if (scans == null || scans.isEmpty())
+                if (scans == null || scans.isEmpty()) {
                     continue;
+                }
 
-                String actDirName = act.getName().replaceAll("[^a-zA-Z0-9_\\- ]", "_").trim();
-                java.io.File actDir = new java.io.File(classDir, actDirName);
-                java.io.File imagesDir = new java.io.File(actDir, "images");
-                java.io.File resultsDir = new java.io.File(actDir, "result");
-                if (!imagesDir.exists())
-                    imagesDir.mkdirs();
-                if (!resultsDir.exists())
-                    resultsDir.mkdirs();
+                String actDirName = sanitizeFilePart(act.getName());
+                File actDir = new File(classDir, actDirName);
+                File imagesDir = new File(actDir, "images");
+                File resultsDir = new File(actDir, "result");
+                if (!imagesDir.exists() && !imagesDir.mkdirs()) {
+                    throw new IllegalStateException("Unable to create " + imagesDir.getName());
+                }
+                if (!resultsDir.exists() && !resultsDir.mkdirs()) {
+                    throw new IllegalStateException("Unable to create " + resultsDir.getName());
+                }
 
                 int scanNum = 0;
                 for (ScanEntry scan : scans) {
                     scanNum++;
                     String srcPath = scan.getOverlayImagePath();
-                    if (srcPath == null || !(new java.io.File(srcPath).exists()))
+                    if (srcPath == null || !(new File(srcPath).exists())) {
                         srcPath = scan.getImagePath();
+                    }
                     if (srcPath != null) {
-                        java.io.File srcFile = new java.io.File(srcPath);
+                        File srcFile = new File(srcPath);
                         if (srcFile.exists()) {
-                            String ext = srcPath.endsWith(".png") ? ".png" : ".jpg";
                             String lrnPart = (scan.getLrn() != null && !scan.getLrn().isEmpty())
                                     ? scan.getLrn().replaceAll("[^a-zA-Z0-9]", "")
                                     : "scan_" + scanNum;
-                            java.io.File dest = new java.io.File(imagesDir, lrnPart + ext);
-                            copyFile(srcFile, dest);
-                            scanMediaFile(dest);
-                            totalImages++;
+                            File dest = new File(imagesDir, lrnPart + ".jpg");
+                            boolean reachedTarget = compressImageForExport(srcFile, dest);
+                            if (!reachedTarget) {
+                                Log.w(TAG, "Export image still above target size: " + dest.getName());
+                            }
+                            if (dest.exists()) {
+                                totalImages++;
+                            }
                         }
                     }
-                    try {
-                        String lrnOnly = (scan.getLrn() != null && !scan.getLrn().isEmpty())
-                                ? scan.getLrn()
-                                : "scan_" + scanNum;
-                        String indName = (lrnOnly + "_" + cls.getGrade() + "-" + cls.getSection() + "_"
-                                + act.getName().replaceAll("\\s+", "") + ".csv")
-                                .replaceAll("[^a-zA-Z0-9_\\-\\.]", "_");
-                        StringBuilder sb = new StringBuilder("LRN,Score");
-                        for (int k = 1; k <= act.getNumItems(); k++)
-                            sb.append(",Q").append(k);
-                        sb.append("\n").append(scan.getLrn() != null ? scan.getLrn() : "")
-                                .append(",").append(scan.getScore()).append("/").append(scan.getNumItems());
-                        for (int k = 1; k <= act.getNumItems(); k++) {
-                            String ans = scan.getAnswers() != null ? scan.getAnswers().get(k) : null;
-                            sb.append(",").append(ans != null ? ans : "");
-                        }
-                        sb.append("\n");
-                        java.io.FileWriter fw = new java.io.FileWriter(new java.io.File(resultsDir, indName));
-                        fw.write(sb.toString());
-                        fw.close();
-                        scanMediaFile(new java.io.File(resultsDir, indName));
-                    } catch (Exception ex) {
-                        Log.e(TAG, "Ind CSV error", ex);
+
+                    String lrnOnly = (scan.getLrn() != null && !scan.getLrn().isEmpty())
+                            ? scan.getLrn()
+                            : "scan_" + scanNum;
+                    String indName = (lrnOnly + "_" + cls.getGrade() + "-" + cls.getSection() + "_"
+                            + act.getName().replaceAll("\\s+", "") + ".csv")
+                            .replaceAll("[^a-zA-Z0-9_\\-\\.]", "_");
+                    StringBuilder sb = new StringBuilder("LRN,Score");
+                    for (int k = 1; k <= act.getNumItems(); k++) {
+                        sb.append(",Q").append(k);
                     }
+                    sb.append("\n").append(scan.getLrn() != null ? scan.getLrn() : "")
+                            .append(",").append(scan.getScore()).append("/").append(scan.getNumItems());
+                    for (int k = 1; k <= act.getNumItems(); k++) {
+                        String ans = scan.getAnswers() != null ? scan.getAnswers().get(k) : null;
+                        sb.append(",").append(ans != null ? ans : "");
+                    }
+                    sb.append("\n");
+                    writeTextFile(new File(resultsDir, indName), sb.toString());
+                    totalCsvs++;
                 }
 
                 StringBuilder actCsv = new StringBuilder("LRN,Score");
-                for (int i = 1; i <= act.getNumItems(); i++)
+                for (int i = 1; i <= act.getNumItems(); i++) {
                     actCsv.append(",Q").append(i);
+                }
                 actCsv.append("\n");
                 for (ScanEntry scan : scans) {
                     actCsv.append(scan.getLrn() != null ? scan.getLrn() : "")
@@ -2157,36 +2263,136 @@ public class DashboardActivity extends AppCompatActivity {
                     }
                     actCsv.append("\n");
                 }
-                java.io.File csvFile = new java.io.File(actDir, actDirName.replaceAll("\\s+", "_") + ".csv");
-                java.io.FileWriter writer = new java.io.FileWriter(csvFile);
-                writer.write(actCsv.toString());
-                writer.close();
-                scanMediaFile(csvFile);
+                File csvFile = new File(actDir, actDirName + ".csv");
+                writeTextFile(csvFile, actCsv.toString());
                 totalCsvs++;
             }
-            showDownloadSuccessDialog(cls, classDir, totalImages, totalCsvs);
-        } catch (Exception e) {
-            Log.e(TAG, "Error downloading class data", e);
-            showToast("Error exporting: " + e.getMessage());
+
+            File zipFile = new File(omrDir, folderName + "_" + timestamp + ".zip");
+            createEncryptedZip(classDir, zipFile, password);
+            scanMediaFile(zipFile);
+            return new DownloadExportResult(zipFile, totalImages, totalCsvs);
+        } finally {
+            deleteRecursively(stagingRoot);
         }
     }
 
-    private void copyFile(java.io.File src, java.io.File dst) throws java.io.IOException {
-        try (java.io.FileInputStream in = new java.io.FileInputStream(src);
-                java.io.FileOutputStream out = new java.io.FileOutputStream(dst)) {
-            byte[] buf = new byte[4096];
-            int len;
-            while ((len = in.read(buf)) > 0)
-                out.write(buf, 0, len);
+    private String buildClassFolderName(ClassFolder cls) {
+        String grade = cls.getGrade() != null ? cls.getGrade().replaceAll("\\s+", "") : "Class";
+        String section = cls.getSection() != null ? cls.getSection().replaceAll("\\s+", "") : "Section";
+        return sanitizeFilePart(grade + "-" + section);
+    }
+
+    private String sanitizeFilePart(String value) {
+        String sanitized = value != null ? value.replaceAll("[^a-zA-Z0-9_\\- ]", "_").trim() : "";
+        sanitized = sanitized.replaceAll("\\s+", "_");
+        return sanitized.isEmpty() ? "item" : sanitized;
+    }
+
+    private void writeTextFile(File target, String content) throws Exception {
+        try (FileWriter writer = new FileWriter(target)) {
+            writer.write(content);
         }
     }
 
-    private void scanMediaFile(java.io.File file) {
+    private boolean compressImageForExport(File srcFile, File destFile) throws Exception {
+        Bitmap original = BitmapFactory.decodeFile(srcFile.getAbsolutePath());
+        if (original == null) {
+            return false;
+        }
+
+        Bitmap working = original;
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        byte[] bestBytes = null;
+        boolean hitTarget = false;
+
+        try {
+            while (true) {
+                for (int quality = 92; quality >= 35; quality -= 7) {
+                    baos.reset();
+                    working.compress(Bitmap.CompressFormat.JPEG, quality, baos);
+                    byte[] current = baos.toByteArray();
+                    if (bestBytes == null || current.length < bestBytes.length) {
+                        bestBytes = current;
+                    }
+                    if (current.length <= EXPORT_IMAGE_TARGET_BYTES) {
+                        bestBytes = current;
+                        hitTarget = true;
+                        break;
+                    }
+                }
+
+                if (hitTarget) {
+                    break;
+                }
+
+                int minEdge = Math.min(working.getWidth(), working.getHeight());
+                if (minEdge <= EXPORT_IMAGE_MIN_EDGE_PX) {
+                    break;
+                }
+
+                int nextW = Math.max(EXPORT_IMAGE_MIN_EDGE_PX, Math.round(working.getWidth() * 0.85f));
+                int nextH = Math.max(EXPORT_IMAGE_MIN_EDGE_PX, Math.round(working.getHeight() * 0.85f));
+                if (nextW >= working.getWidth() || nextH >= working.getHeight()) {
+                    break;
+                }
+
+                Bitmap scaled = Bitmap.createScaledBitmap(working, nextW, nextH, true);
+                if (working != original) {
+                    working.recycle();
+                }
+                working = scaled;
+            }
+
+            if (bestBytes == null) {
+                return false;
+            }
+
+            try (FileOutputStream fos = new FileOutputStream(destFile)) {
+                fos.write(bestBytes);
+            }
+            return bestBytes.length <= EXPORT_IMAGE_TARGET_BYTES;
+        } finally {
+            if (working != original) {
+                working.recycle();
+            }
+            original.recycle();
+        }
+    }
+
+    private void createEncryptedZip(File sourceDir, File zipFile, String password) throws Exception {
+        ZipParameters zipParams = new ZipParameters();
+        zipParams.setEncryptFiles(true);
+        zipParams.setEncryptionMethod(EncryptionMethod.AES);
+        zipParams.setAesKeyStrength(AesKeyStrength.KEY_STRENGTH_256);
+
+        ZipFile protectedZip = new ZipFile(zipFile, password.toCharArray());
+        protectedZip.addFolder(sourceDir, zipParams);
+    }
+
+    private void deleteRecursively(File file) {
+        if (file == null || !file.exists()) {
+            return;
+        }
+        if (file.isDirectory()) {
+            File[] children = file.listFiles();
+            if (children != null) {
+                for (File child : children) {
+                    deleteRecursively(child);
+                }
+            }
+        }
+        if (!file.delete()) {
+            Log.w(TAG, "Unable to delete temp path: " + file.getAbsolutePath());
+        }
+    }
+
+    private void scanMediaFile(File file) {
         android.media.MediaScannerConnection.scanFile(
                 this, new String[] { file.getAbsolutePath() }, null, null);
     }
 
-    private void showDownloadSuccessDialog(ClassFolder cls, java.io.File classDir,
+    private void showDownloadSuccessDialog(ClassFolder cls, File zipFile,
             int totalImages, int totalCsvs) {
         Dialog dialog = new Dialog(this);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
@@ -2208,7 +2414,7 @@ public class DashboardActivity extends AppCompatActivity {
         root.addView(buildSheetTitle("Download Complete!", "#16A34A", Gravity.CENTER, 12));
 
         TextView info = new TextView(this);
-        info.setText("📁 " + cls.getDisplayName() + "\n🖼️ " + totalImages
+        info.setText("🔒 " + cls.getDisplayName() + "\n🖼️ " + totalImages
                 + " image" + (totalImages != 1 ? "s" : "")
                 + "  •  📄 " + totalCsvs + " CSV" + (totalCsvs != 1 ? "s" : ""));
         info.setTextSize(13);
@@ -2222,7 +2428,7 @@ public class DashboardActivity extends AppCompatActivity {
         root.addView(info);
 
         TextView pathLabel = new TextView(this);
-        pathLabel.setText("📂 Downloads/OMRScanner/" + classDir.getName() + "/");
+        pathLabel.setText("📦 Downloads/OMRScanner/" + zipFile.getName());
         pathLabel.setTextSize(11);
         pathLabel.setTextColor(Color.parseColor("#0038A8"));
         pathLabel.setGravity(Gravity.CENTER);
@@ -2240,7 +2446,7 @@ public class DashboardActivity extends AppCompatActivity {
 
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
-        TextView btnOpen = createDialogButton("Open Folder", true);
+        TextView btnOpen = createDialogButton("Open Downloads", true);
         TextView btnDone = createDialogButton("Done", false);
         actions.addView(btnOpen);
         actions.addView(spacer(dp(10)));
@@ -2249,7 +2455,7 @@ public class DashboardActivity extends AppCompatActivity {
 
         btnOpen.setOnClickListener(v -> {
             dialog.dismiss();
-            openFolderInFileManager(classDir);
+            openFolderInFileManager(zipFile.getParentFile());
         });
         btnDone.setOnClickListener(v -> dialog.dismiss());
 
@@ -2258,16 +2464,32 @@ public class DashboardActivity extends AppCompatActivity {
         dialog.show();
     }
 
-    private void openFolderInFileManager(java.io.File folder) {
+    private void openFolderInFileManager(File folder) {
+        if (folder == null) {
+            showToast("File saved to: Downloads/OMRScanner/");
+            return;
+        }
         try {
             Intent intent = new Intent(Intent.ACTION_VIEW);
             intent.setDataAndType(android.net.Uri.parse(folder.getAbsolutePath()), "resource/folder");
             if (intent.resolveActivity(getPackageManager()) != null)
                 startActivity(intent);
             else
-                showToast("Files saved to: Downloads/OMRScanner/" + folder.getName());
+                showToast("File saved to: Downloads/OMRScanner/");
         } catch (Exception e) {
-            showToast("Files saved to: Downloads/OMRScanner/" + folder.getName());
+            showToast("File saved to: Downloads/OMRScanner/");
+        }
+    }
+
+    private static class DownloadExportResult {
+        final File zipFile;
+        final int totalImages;
+        final int totalCsvs;
+
+        DownloadExportResult(File zipFile, int totalImages, int totalCsvs) {
+            this.zipFile = zipFile;
+            this.totalImages = totalImages;
+            this.totalCsvs = totalCsvs;
         }
     }
 
