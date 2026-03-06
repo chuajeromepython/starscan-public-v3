@@ -55,6 +55,8 @@ public class ResultActivity extends AppCompatActivity {
     private EditText etLrnResult;
     private TextView tvLrnStatus;
     private TextView tvLrnHelper;
+    private TextView tvLrnCardTitle;
+    private android.widget.LinearLayout lrnInputContainer;
     private MaterialButton btnConfirmLrn;
     private boolean isLrnConfirmed = false;
 
@@ -97,6 +99,8 @@ public class ResultActivity extends AppCompatActivity {
         etLrnResult   = findViewById(R.id.etLrnResult);
         tvLrnStatus   = findViewById(R.id.tvLrnStatus);
         tvLrnHelper   = findViewById(R.id.tvLrnHelper);
+        tvLrnCardTitle = findViewById(R.id.tvLrnCardTitle);
+        lrnInputContainer = findViewById(R.id.lrnInputContainer);
         btnConfirmLrn = findViewById(R.id.btnConfirmLrn);
 
         // Get data from intent
@@ -256,7 +260,15 @@ public class ResultActivity extends AppCompatActivity {
 
                         // Show detection summary
                         String summary;
-                        if (scanResult.hasUndetectedLrnDigits()) {
+                        if (scanResult.hasDoubleShadedLrn()) {
+                            summary = String.format(
+                                    "⚠ %s | LRN: DOUBLE-SHADED (%d column(s)) | %d / %d answers",
+                                    scanResult.templateId,
+                                    scanResult.doubleShadedLnrPositions.size(),
+                                    scanResult.getAnsweredCount(),
+                                    scanResult.getQuestionCount()
+                            );
+                        } else if (scanResult.hasUndetectedLrnDigits()) {
                             summary = String.format(
                                     "⚠ %s | LRN: %s (%d digit(s) not detected!) | %d / %d answers",
                                     scanResult.templateId,
@@ -320,12 +332,37 @@ public class ResultActivity extends AppCompatActivity {
         lrnCard.setVisibility(View.VISIBLE);
         isLrnConfirmed = false;
 
-        // Clean LRN for display: replace '_' with empty for editing
-        String displayLrn = (detectedLrn != null) ? detectedLrn.replace("_", "") : "";
+        // Clean LRN for display: replace '_' and 'X' (double-shaded) with empty for editing
+        String displayLrn = (detectedLrn != null)
+                ? detectedLrn.replace("_", "").replace("X", "") : "";
         etLrnResult.setText(displayLrn);
 
-        // Check for undetected digits
-        if (scanResult != null && scanResult.hasUndetectedLrnDigits()) {
+        // Assume error by default to block input, reset to valid below if correct
+        boolean isError = true;
+
+        // ── DOUBLE-SHADED LRN: highest priority error ──────────────
+        if (scanResult != null && scanResult.hasDoubleShadedLrn()) {
+            // Build human-readable list of double-shaded positions (1-based)
+            StringBuilder positions = new StringBuilder();
+            for (int i = 0; i < scanResult.doubleShadedLnrPositions.size(); i++) {
+                if (i > 0) positions.append(", ");
+                positions.append(scanResult.doubleShadedLnrPositions.get(i) + 1); // 1-based
+            }
+            int count = scanResult.doubleShadedLnrPositions.size();
+
+            tvLrnStatus.setText("⚠ " + count + " double-shaded");
+            tvLrnStatus.setTextColor(0xFFDC2626); // red
+            tvLrnHelper.setText("⚠ DOUBLE-SHADED LRN DETECTED!\n\n"
+                    + count + " LRN column(s) have two or more shaded bubbles "
+                    + "at position(s): " + positions + ".\n\n"
+                    + "The LRN identifies each student — "
+                    + "there must be ONLY ONE shaded bubble per column.\n\n"
+                    + "Red boxes on the image mark the affected areas. "
+                    + "Please fix the physical bubble sheet and scan again.");
+            tvLrnHelper.setTextColor(0xFFDC2626); // red
+
+        // ── UNDETECTED digits ──────────────────────────────────────
+        } else if (scanResult != null && scanResult.hasUndetectedLrnDigits()) {
             // Build human-readable list of missing positions (1-based)
             StringBuilder positions = new StringBuilder();
             for (int i = 0; i < scanResult.undetectedLnrPositions.size(); i++) {
@@ -338,17 +375,28 @@ public class ResultActivity extends AppCompatActivity {
             tvLrnStatus.setTextColor(0xFFEF4444); // red
             tvLrnHelper.setText(count + " LRN digit(s) not detected at position(s): "
                     + positions + ". Red boxes on the image mark undetected areas. "
-                    + "Please enter the correct 12-digit LRN manually.");
+                    + "Please fix the physical bubble sheet and scan again.");
             tvLrnHelper.setTextColor(0xFFEF4444); // red
         } else if (detectedLrn == null || detectedLrn.trim().isEmpty()) {
-            tvLrnHelper.setText("No LRN detected. Please enter the 12-digit LRN manually.");
+            tvLrnHelper.setText("No LRN detected. No student ID found. Please fix the physical bubble sheet and scan again.");
             tvLrnHelper.setTextColor(0xFFEF4444); // red
         } else if (displayLrn.length() != 12) {
-            tvLrnHelper.setText("Detected LRN is " + displayLrn.length() + " digits — expected 12. Please correct it.");
+            tvLrnHelper.setText("Detected LRN is " + displayLrn.length() + " digits — expected 12. Please fix the physical bubble sheet and scan again.");
             tvLrnHelper.setTextColor(0xFFF59E0B); // amber
         } else {
+            isError = false;
             tvLrnHelper.setText("Please verify the detected LRN is correct before saving.");
             tvLrnHelper.setTextColor(0xFF64748B); // muted
+        }
+
+        if (isError) {
+            lrnInputContainer.setVisibility(View.GONE);
+            tvLrnCardTitle.setText("SCAN ERROR");
+            tvLrnCardTitle.setTextColor(0xFFDC2626); // red
+        } else {
+            lrnInputContainer.setVisibility(View.VISIBLE);
+            tvLrnCardTitle.setText("VERIFY STUDENT LRN");
+            tvLrnCardTitle.setTextColor(0xFF1E293B); // dark
         }
     }
 

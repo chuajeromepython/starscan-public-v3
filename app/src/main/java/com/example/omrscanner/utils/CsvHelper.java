@@ -64,26 +64,21 @@ public class CsvHelper {
         File csvFile = new File(cacheDir, fileName);
 
         try (FileWriter writer = new FileWriter(csvFile)) {
-            // ── Header row ──────────────────────────────────────────────
-            StringBuilder header = new StringBuilder("Timestamp,TemplateID,LNR");
             int qCount = scanResult.getQuestionCount();
-            for (int q = 1; q <= qCount; q++) {
-                header.append(",Q").append(q);
-            }
-            writer.append(header).append('\n');
 
             // ── Data row ────────────────────────────────────────────────
             StringBuilder row = new StringBuilder();
-            row.append(ROW_DATE_FMT.format(now));
-            row.append(',');
-            row.append(safe(scanResult.templateId));
-            row.append(',');
-            row.append(safe(scanResult.lnr));
+            String lrnVal = safe(scanResult.lnr);
+            for (int c = 0; c < lrnVal.length(); c++) {
+                row.append(lrnVal.charAt(c)).append(';');
+            }
 
             for (int q = 1; q <= qCount; q++) {
-                row.append(',');
                 String answer = scanResult.answers.get(q);
                 row.append(safe(answer));
+                if (q < qCount) {
+                    row.append(';');
+                }
             }
             writer.append(row).append('\n');
 
@@ -121,25 +116,18 @@ public class CsvHelper {
         try (FileWriter writer = new FileWriter(csvFile, true)) {
             int qCount = scanResult.getQuestionCount();
 
-            if (needsHeader) {
-                StringBuilder header = new StringBuilder("Timestamp,TemplateID,LNR");
-                for (int q = 1; q <= qCount; q++) {
-                    header.append(",Q").append(q);
-                }
-                writer.append(header).append('\n');
+            StringBuilder row = new StringBuilder();
+            String lrnVal = safe(scanResult.lnr);
+            for (int c = 0; c < lrnVal.length(); c++) {
+                row.append(lrnVal.charAt(c)).append(';');
             }
 
-            StringBuilder row = new StringBuilder();
-            row.append(ROW_DATE_FMT.format(new Date()));
-            row.append(',');
-            row.append(safe(scanResult.templateId));
-            row.append(',');
-            row.append(safe(scanResult.lnr));
-
             for (int q = 1; q <= qCount; q++) {
-                row.append(',');
                 String answer = scanResult.answers.get(q);
                 row.append(safe(answer));
+                if (q < qCount) {
+                    row.append(';');
+                }
             }
             writer.append(row).append('\n');
 

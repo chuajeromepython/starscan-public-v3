@@ -60,6 +60,9 @@ import net.lingala.zip4j.model.ZipParameters;
 import net.lingala.zip4j.model.enums.AesKeyStrength;
 import net.lingala.zip4j.model.enums.EncryptionMethod;
 
+import com.google.android.material.textfield.TextInputLayout;
+import com.google.android.material.textfield.TextInputEditText;
+
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -127,6 +130,7 @@ public class DashboardActivity extends AppCompatActivity {
 
     // Views
     private ImageButton btnBack;
+    private ImageButton btnUpload;
     private TextView topBarTitle, topBarBadge;
     private TextView tvTeacherName;
     private LinearLayout teacherNameRow;
@@ -247,6 +251,7 @@ public class DashboardActivity extends AppCompatActivity {
 
     private void initViews() {
         btnBack = findViewById(R.id.btnBack);
+        btnUpload = findViewById(R.id.btnUpload);
         topBarTitle = findViewById(R.id.topBarTitle);
         topBarBadge = findViewById(R.id.topBarBadge);
         tvTeacherName = findViewById(R.id.tvTeacherName);
@@ -289,6 +294,7 @@ public class DashboardActivity extends AppCompatActivity {
         breadcrumbActivity = findViewById(R.id.breadcrumbActivity);
 
         btnBack.setOnClickListener(v -> navigateBack());
+        btnUpload.setOnClickListener(v -> showGlobalUploadClassDialog());
         fab.setOnClickListener(v -> onFabClicked());
 
         // Teacher name row click → edit dialog
@@ -2083,6 +2089,174 @@ public class DashboardActivity extends AppCompatActivity {
         return card;
     }
 
+    private View createSelectionCard(Dialog dialog, String emoji, String label,
+            String desc, Runnable onClick) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.HORIZONTAL);
+        card.setGravity(Gravity.CENTER_VERTICAL);
+        card.setPadding(dp(16), dp(16), dp(16), dp(16));
+        card.setClickable(true);
+        card.setFocusable(true);
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.parseColor("#F8FAFC"));
+        bg.setCornerRadius(dp(14));
+        bg.setStroke(dp(1), Color.parseColor("#E2E8F0"));
+        card.setBackground(bg);
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.bottomMargin = dp(10);
+        card.setLayoutParams(lp);
+
+        TextView iconView = new TextView(this);
+        iconView.setText(emoji);
+        iconView.setTextSize(28);
+        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        ilp.rightMargin = dp(14);
+        iconView.setLayoutParams(ilp);
+        card.addView(iconView);
+
+        LinearLayout textCol = new LinearLayout(this);
+        textCol.setOrientation(LinearLayout.VERTICAL);
+        textCol.setLayoutParams(new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView nameView = new TextView(this);
+        nameView.setText(label);
+        nameView.setTextSize(15);
+        nameView.setTextColor(Color.parseColor("#1E293B"));
+        nameView.setTypeface(null, Typeface.BOLD);
+        textCol.addView(nameView);
+
+        TextView descView = new TextView(this);
+        descView.setText(desc);
+        descView.setTextSize(12);
+        descView.setTextColor(Color.parseColor("#64748B"));
+        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        dlp.topMargin = dp(2);
+        descView.setLayoutParams(dlp);
+        textCol.addView(descView);
+        card.addView(textCol);
+
+        TextView arrow = new TextView(this);
+        arrow.setText("›");
+        arrow.setTextSize(18);
+        arrow.setTextColor(Color.parseColor("#94A3B8"));
+        card.addView(arrow);
+
+        card.setOnClickListener(v -> onClick.run());
+        return card;
+    }
+
+    private void showGlobalUploadClassDialog() {
+        if (classFolders == null || classFolders.isEmpty()) {
+            showToast("No classes available. Please create a class first.");
+            return;
+        }
+
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setCancelable(true);
+
+        LinearLayout root = buildSheet();
+        root.addView(createDialogHandle());
+        root.addView(buildSheetTitle("🎓 Select Class to Upload To", "#0038A8", Gravity.START, 4));
+
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(400)));
+        LinearLayout listContainer = new LinearLayout(this);
+        listContainer.setOrientation(LinearLayout.VERTICAL);
+        scrollView.addView(listContainer);
+
+        for (ClassFolder cls : classFolders) {
+            View card = createSelectionCard(dialog, "📁", cls.getDisplayName(), cls.getActivityCount() + " Assessments", () -> {
+                dialog.dismiss();
+                showGlobalUploadAssessmentDialog(cls);
+            });
+            listContainer.addView(card);
+        }
+
+        root.addView(scrollView);
+
+        TextView cancel = new TextView(this);
+        cancel.setText("Cancel");
+        cancel.setTextSize(14);
+        cancel.setTextColor(Color.parseColor("#94A3B8"));
+        cancel.setGravity(Gravity.CENTER);
+        cancel.setPadding(0, dp(16), 0, dp(8));
+        cancel.setOnClickListener(v -> dialog.dismiss());
+        root.addView(cancel);
+
+        dialog.setContentView(root);
+        configureBottomDialog(dialog);
+        dialog.show();
+    }
+
+    private void showGlobalUploadAssessmentDialog(ClassFolder cls) {
+        if (cls.getActivities() == null || cls.getActivities().isEmpty()) {
+            showToast("No assessments available in this class. Please create one first.");
+            return;
+        }
+
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setCancelable(true);
+
+        LinearLayout root = buildSheet();
+        root.addView(createDialogHandle());
+        root.addView(buildSheetTitle("📋 Select Assessment", "#0038A8", Gravity.START, 4));
+
+        TextView subtitle = new TextView(this);
+        subtitle.setText(cls.getDisplayName());
+        subtitle.setTextSize(12);
+        subtitle.setTextColor(Color.parseColor("#64748B"));
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        slp.bottomMargin = dp(20);
+        subtitle.setLayoutParams(slp);
+        root.addView(subtitle);
+
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(400)));
+        LinearLayout listContainer = new LinearLayout(this);
+        listContainer.setOrientation(LinearLayout.VERTICAL);
+        scrollView.addView(listContainer);
+
+        for (ActivityFolder act : cls.getActivities()) {
+            View card = createSelectionCard(dialog, "📝", act.getName(), act.getSheetType() + " · " + act.getNumItems() + " Items", () -> {
+                dialog.dismiss();
+                selectedClass = cls;
+                selectedActivity = act;
+                selectedSheetType = act.getSheetType();
+                openGallery();
+            });
+            listContainer.addView(card);
+        }
+
+        root.addView(scrollView);
+
+        TextView back = new TextView(this);
+        back.setText("Back to Classes");
+        back.setTextSize(14);
+        back.setTextColor(Color.parseColor("#94A3B8"));
+        back.setGravity(Gravity.CENTER);
+        back.setPadding(0, dp(16), 0, dp(8));
+        back.setOnClickListener(v -> {
+            dialog.dismiss();
+            showGlobalUploadClassDialog();
+        });
+        root.addView(back);
+
+        dialog.setContentView(root);
+        configureBottomDialog(dialog);
+        dialog.show();
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // DOWNLOAD CLASS DATA
     // ═══════════════════════════════════════════════════════════════
@@ -2100,25 +2274,40 @@ public class DashboardActivity extends AppCompatActivity {
         content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(dp(20), dp(8), dp(20), 0);
 
-        EditText passwordInput = new EditText(this);
+        // ==== Password Field ====
+        TextInputLayout passwordLayout = new TextInputLayout(this);
+        passwordLayout.setHintEnabled(false);
+        passwordLayout.setBoxBackgroundMode(TextInputLayout.BOX_BACKGROUND_NONE);
+        passwordLayout.setEndIconMode(TextInputLayout.END_ICON_PASSWORD_TOGGLE);
+
+        TextInputEditText passwordInput = new TextInputEditText(passwordLayout.getContext());
         passwordInput.setHint("Password");
         passwordInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         passwordInput.setBackground(createInputBg());
         passwordInput.setPadding(dp(12), dp(10), dp(12), dp(10));
+        passwordLayout.addView(passwordInput);
 
-        EditText confirmInput = new EditText(this);
+        // ==== Confirm Password Field ====
+        TextInputLayout confirmLayout = new TextInputLayout(this);
+        confirmLayout.setHintEnabled(false);
+        confirmLayout.setBoxBackgroundMode(TextInputLayout.BOX_BACKGROUND_NONE);
+        confirmLayout.setEndIconMode(TextInputLayout.END_ICON_PASSWORD_TOGGLE);
+
+        TextInputEditText confirmInput = new TextInputEditText(confirmLayout.getContext());
         confirmInput.setHint("Confirm password");
         confirmInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         confirmInput.setBackground(createInputBg());
         confirmInput.setPadding(dp(12), dp(10), dp(12), dp(10));
+        confirmLayout.addView(confirmInput);
 
         LinearLayout.LayoutParams fieldLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         fieldLp.bottomMargin = dp(10);
-        passwordInput.setLayoutParams(fieldLp);
-        confirmInput.setLayoutParams(fieldLp);
-        content.addView(passwordInput);
-        content.addView(confirmInput);
+        passwordLayout.setLayoutParams(fieldLp);
+        confirmLayout.setLayoutParams(fieldLp);
+
+        content.addView(passwordLayout);
+        content.addView(confirmLayout);
 
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("Protect Download")
@@ -2234,32 +2423,35 @@ public class DashboardActivity extends AppCompatActivity {
                     String indName = (lrnOnly + "_" + cls.getGrade() + "-" + cls.getSection() + "_"
                             + act.getName().replaceAll("\\s+", "") + ".csv")
                             .replaceAll("[^a-zA-Z0-9_\\-\\.]", "_");
-                    StringBuilder sb = new StringBuilder("LRN,Score");
-                    for (int k = 1; k <= act.getNumItems(); k++) {
-                        sb.append(",Q").append(k);
+                    StringBuilder sb = new StringBuilder();
+                    String lrnVal = scan.getLrn() != null ? scan.getLrn() : "";
+                    for (int c = 0; c < lrnVal.length(); c++) {
+                        sb.append(lrnVal.charAt(c)).append(";");
                     }
-                    sb.append("\n").append(scan.getLrn() != null ? scan.getLrn() : "")
-                            .append(",").append(scan.getScore()).append("/").append(scan.getNumItems());
                     for (int k = 1; k <= act.getNumItems(); k++) {
                         String ans = scan.getAnswers() != null ? scan.getAnswers().get(k) : null;
-                        sb.append(",").append(ans != null ? ans : "");
+                        sb.append(ans != null ? ans : "");
+                        if (k < act.getNumItems()) {
+                            sb.append(";");
+                        }
                     }
                     sb.append("\n");
                     writeTextFile(new File(resultsDir, indName), sb.toString());
                     totalCsvs++;
                 }
 
-                StringBuilder actCsv = new StringBuilder("LRN,Score");
-                for (int i = 1; i <= act.getNumItems(); i++) {
-                    actCsv.append(",Q").append(i);
-                }
-                actCsv.append("\n");
+                StringBuilder actCsv = new StringBuilder();
                 for (ScanEntry scan : scans) {
-                    actCsv.append(scan.getLrn() != null ? scan.getLrn() : "")
-                            .append(",").append(scan.getScore()).append("/").append(scan.getNumItems());
+                    String lrnVal = scan.getLrn() != null ? scan.getLrn() : "";
+                    for (int c = 0; c < lrnVal.length(); c++) {
+                        actCsv.append(lrnVal.charAt(c)).append(";");
+                    }
                     for (int i = 1; i <= act.getNumItems(); i++) {
                         String ans = scan.getAnswers() != null ? scan.getAnswers().get(i) : null;
-                        actCsv.append(",").append(ans != null ? ans : "");
+                        actCsv.append(ans != null ? ans : "");
+                        if (i < act.getNumItems()) {
+                            actCsv.append(";");
+                        }
                     }
                     actCsv.append("\n");
                 }

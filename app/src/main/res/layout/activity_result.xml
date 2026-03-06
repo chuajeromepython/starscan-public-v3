@@ -109,6 +109,7 @@
                     android:background="@color/primary_blue" />
 
                 <TextView
+                    android:id="@+id/tvLrnCardTitle"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
@@ -132,6 +133,7 @@
 
             <!-- LRN input + confirm row -->
             <LinearLayout
+                android:id="@+id/lrnInputContainer"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"

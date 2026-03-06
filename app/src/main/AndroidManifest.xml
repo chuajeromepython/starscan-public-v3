@@ -20,6 +20,9 @@
 
         <activity android:name=".ui.ResultActivity"/>
         <activity android:name=".ui.PreviewActivity"/>
+        <activity android:name=".ui.LrnErrorActivity"
+            android:label="LRN Error"
+            android:theme="@style/Theme.OMRScanner" />
         <activity android:name=".camera.CameraActivity"/>
         <activity android:name=".DashboardActivity"/>
 

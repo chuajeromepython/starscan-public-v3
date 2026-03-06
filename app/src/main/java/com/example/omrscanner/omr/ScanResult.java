@@ -33,6 +33,14 @@ public class ScanResult {
     public List<Integer> undetectedLnrPositions = new ArrayList<>();
 
     /**
+     * 0-based column indices of LRN digit positions where TWO or more
+     * bubbles exceeded the fill threshold (double-shaded).
+     * This is a critical error — the LRN is the student's unique ID and
+     * must have exactly one shaded bubble per column.
+     */
+    public List<Integer> doubleShadedLnrPositions = new ArrayList<>();
+
+    /**
      * Detected answers keyed by 1-based question number.
      * Value is one or more uppercase letters, e.g. "A", "BD", or "" if blank.
      * Insertion order matches question numbering (LinkedHashMap).
@@ -53,6 +61,11 @@ public class ScanResult {
     /** @return true if any LRN digit position was not clearly shaded. */
     public boolean hasUndetectedLrnDigits() {
         return undetectedLnrPositions != null && !undetectedLnrPositions.isEmpty();
+    }
+
+    /** @return true if any LRN digit position has TWO or more shaded bubbles. */
+    public boolean hasDoubleShadedLrn() {
+        return doubleShadedLnrPositions != null && !doubleShadedLnrPositions.isEmpty();
     }
 
     /**
