@@ -31,7 +31,7 @@ import java.util.Map;
  *   TemplateManager tm = new TemplateManager(context);
  *
  *   // After perspective-warping the sheet image:
- *   String type = tm.detectSheetType(warpedBitmap);   // "ZPH30", "ZPH50", or "ZPH60"
+ *   String type = tm.detectSheetType(warpedBitmap);   // "ZPH30", "ZPH40", "ZPH50", or "ZPH60"
  *   OmrTemplate tpl = tm.getTemplate(type);
  *
  *   // Get bubble centers mapped to the bitmap's actual pixel size:
@@ -44,7 +44,7 @@ import java.util.Map;
  * template-match the first question block of each candidate template against
  * the warped image.  The template with the highest match score wins.
  * <ul>
- *   <li><b>ZPH30</b> — Questions start high (y ~ 247).  On a ZPH50/60
+ *   <li><b>ZPH30 / ZPH40</b> — Questions start high (y ~ 247). On a ZPH50/60
  *       sheet this region is blank, so the match score will be very low.</li>
  *   <li><b>ZPH50 / ZPH60</b> — Questions start low (y ~ 650).  ZPH60 has
  *       a 6th column (start_x ~ 1409) that ZPH50 lacks, giving it a
@@ -59,7 +59,9 @@ public class TemplateManager {
     private static final String TEMPLATE_DIR = "templates";
 
     // ── Template file names ──────────────────────────────────────────────────
-    private static final String[] TEMPLATE_FILES = {"ZPH30.json", "ZPH50.json", "ZPH60.json"};
+    private static final String[] TEMPLATE_FILES = {
+            "ZPH30.json", "ZPH40.json", "ZPH50.json", "ZPH60.json"
+    };
 
     // ── Alignment-based detection thresholds ───────────────────────────────
     /**
@@ -151,7 +153,7 @@ public class TemplateManager {
      * translation / scale shifts that remain after perspective warping.</p>
      *
      * @param bitmap the perspective-warped sheet image (any resolution)
-     * @return template ID string: "ZPH30", "ZPH50", or "ZPH60"
+     * @return template ID string: "ZPH30", "ZPH40", "ZPH50", or "ZPH60"
      */
     public String detectSheetType(Bitmap bitmap) {
         if (bitmap == null) {

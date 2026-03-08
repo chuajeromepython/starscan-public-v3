@@ -11,7 +11,7 @@ import java.util.Map;
  * Holds the complete result of scanning one OMR sheet.
  *
  * <ul>
- *   <li>{@link #templateId} — which template was detected (ZPH30 / ZPH50 / ZPH60)</li>
+ *   <li>{@link #templateId} — which template was detected (ZPH30 / ZPH40 / ZPH50 / ZPH60)</li>
  *   <li>{@link #lnr} — the 12-digit student ID extracted from the LNR block</li>
  *   <li>{@link #answers} — question number → detected choice(s), e.g. 1→"A", 5→"AC"</li>
  *   <li>{@link #overlayBitmap} — the warped image with coloured circles drawn on bubbles</li>
@@ -19,7 +19,7 @@ import java.util.Map;
  */
 public class ScanResult {
 
-    /** Template identifier: "ZPH30", "ZPH50", or "ZPH60". */
+    /** Template identifier: "ZPH30", "ZPH40", "ZPH50", or "ZPH60". */
     public String templateId;
 
     /** Student ID string (12 digits) extracted from the LNR bubble block. */

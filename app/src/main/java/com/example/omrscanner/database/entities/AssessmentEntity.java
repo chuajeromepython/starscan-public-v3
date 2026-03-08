@@ -33,7 +33,7 @@ public class AssessmentEntity {
   public String name; // e.g. "hs", "he"
 
   @ColumnInfo(name = "sheet_type")
-  public String sheetType; // "ZPH30", "ZPH50", "ZPH60"
+  public String sheetType; // "ZPH30", "ZPH40", "ZPH50", "ZPH60"
 
   @ColumnInfo(name = "exam_date")
   public String examDate; // e.g. "Mar 05, 2026"
@@ -73,6 +73,8 @@ public class AssessmentEntity {
         return 60;
       case "ZPH50":
         return 50;
+      case "ZPH40":
+        return 40;
       case "ZPH30":
       default:
         return 30;

@@ -11,7 +11,7 @@ import java.util.UUID;
 public class ActivityFolder {
     private String id;
     private String name;
-    private String sheetType; // ZPH30, ZPH50, ZPH60
+    private String sheetType; // ZPH30, ZPH40, ZPH50, ZPH60
     private List<ScanEntry> scans;
     private long createdAt;
     private String examDate; // Date when the activity was taken
@@ -106,6 +106,8 @@ public class ActivityFolder {
                 return 60;
             case "ZPH50":
                 return 50;
+            case "ZPH40":
+                return 40;
             case "ZPH30":
                 return 30;
             default:

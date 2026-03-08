@@ -24,7 +24,7 @@ import java.util.Map;
  *
  * <ul>
  *   <li>Timestamp — ISO-style date/time of the scan</li>
- *   <li>TemplateID — detected sheet type (ZPH30 / ZPH50 / ZPH60)</li>
+ *   <li>TemplateID — detected sheet type (ZPH30 / ZPH40 / ZPH50 / ZPH60)</li>
  *   <li>LNR — 12-digit student ID</li>
  *   <li>Q1..Qn — detected answer letters per question (blank if none detected,
  *       multi-letter like "AC" if multiple bubbles filled)</li>

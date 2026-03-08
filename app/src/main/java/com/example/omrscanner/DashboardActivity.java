@@ -826,19 +826,22 @@ public class DashboardActivity extends AppCompatActivity {
     }
 
     /**
-     * Build the "All / ZPH30 / ZPH50 / ZPH60" filter tabs above the assessment
-     * list.
+     * Build the "All / ZPH30 / ZPH40 / ZPH50 / ZPH60" filter tabs above the
+     * assessment list.
      */
     private void buildClassSheetTabs(List<ActivityFolder> activities) {
         classSheetTabs.removeAllViews();
 
         // Count how many assessments per sheet type
-        int countZPH30 = 0, countZPH50 = 0, countZPH60 = 0;
+        int countZPH30 = 0, countZPH40 = 0, countZPH50 = 0, countZPH60 = 0;
         if (activities != null) {
             for (ActivityFolder act : activities) {
                 switch (act.getSheetType()) {
                     case "ZPH30":
                         countZPH30++;
+                        break;
+                    case "ZPH40":
+                        countZPH40++;
                         break;
                     case "ZPH50":
                         countZPH50++;
@@ -855,6 +858,7 @@ public class DashboardActivity extends AppCompatActivity {
         Object[][] tabs = {
                 { "All", null, totalCount },
                 { "ZPH30", "ZPH30", countZPH30 },
+                { "ZPH40", "ZPH40", countZPH40 },
                 { "ZPH50", "ZPH50", countZPH50 },
                 { "ZPH60", "ZPH60", countZPH60 },
         };
@@ -2012,7 +2016,12 @@ public class DashboardActivity extends AppCompatActivity {
 
         root.addView(createFieldLabel("OMR SHEET TYPE"));
 
-        String[][] sheetTypes = { { "ZPH30", "30 Items" }, { "ZPH50", "50 Items" }, { "ZPH60", "60 Items" } };
+        String[][] sheetTypes = {
+                { "ZPH30", "30 Items" },
+                { "ZPH40", "40 Items" },
+                { "ZPH50", "50 Items" },
+                { "ZPH60", "60 Items" }
+        };
         final String[] selectedType = { "ZPH30" };
 
         LinearLayout typeRow = new LinearLayout(this);
@@ -2022,7 +2031,7 @@ public class DashboardActivity extends AppCompatActivity {
         trLp.bottomMargin = dp(16);
         typeRow.setLayoutParams(trLp);
 
-        final TextView[] typeButtons = new TextView[3];
+        final TextView[] typeButtons = new TextView[sheetTypes.length];
         for (int i = 0; i < sheetTypes.length; i++) {
             final int idx = i;
             TextView btn = new TextView(this);
@@ -2035,7 +2044,7 @@ public class DashboardActivity extends AppCompatActivity {
             btn.setFocusable(true);
             LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
                     0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-            if (i < 2)
+            if (i < sheetTypes.length - 1)
                 blp.rightMargin = dp(8);
             btn.setLayoutParams(blp);
             typeButtons[i] = btn;

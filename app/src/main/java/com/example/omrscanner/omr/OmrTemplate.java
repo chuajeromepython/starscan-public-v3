@@ -5,7 +5,7 @@ import com.google.gson.annotations.SerializedName;
 import java.util.List;
 
 /**
- * Data model for a complete OMR sheet template (e.g. ZPH30, ZPH50, ZPH60).
+ * Data model for a complete OMR sheet template (e.g. ZPH30, ZPH40, ZPH50, ZPH60).
  *
  * Parsed from JSON files stored in assets/templates/.
  * The width/height define the coordinate space in which all block positions are specified.
@@ -14,7 +14,7 @@ import java.util.List;
  */
 public class OmrTemplate {
 
-    /** Unique template identifier, e.g. "ZPH30", "ZPH50", "ZPH60" */
+    /** Unique template identifier, e.g. "ZPH30", "ZPH40", "ZPH50", "ZPH60" */
     @SerializedName("template_id")
     public String templateId;
 
