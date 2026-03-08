@@ -69,37 +69,6 @@
         <!-- REMOVED: scanFrame anchor box — it served no functional purpose -->
         <!-- REMOVED: scanHintText — no longer needed without scan frame -->
 
-        <!-- ── Top camera controls ───────── -->
-        <LinearLayout
-            android:id="@+id/topCameraControls"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_gravity="top"
-            android:layout_marginTop="16dp"
-            android:layout_marginStart="16dp"
-            android:layout_marginEnd="16dp"
-            android:orientation="horizontal"
-            android:gravity="end">
-
-            <FrameLayout
-                android:id="@+id/btnFlash"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:background="@drawable/bg_cam_ctrl_inactive"
-                android:clickable="true"
-                android:focusable="true"
-                android:contentDescription="@string/toggle_desc">
-                <ImageView
-                    android:id="@+id/iconFlash"
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:layout_gravity="center"
-                    android:src="@drawable/ic_flash"
-                    app:tint="#CCFFFFFF" />
-            </FrameLayout>
-
-        </LinearLayout>
-
         <!-- ── Anchor detection status hint ──────────────────────── -->
         <LinearLayout
             android:id="@+id/anchorStatusBar"
@@ -195,9 +164,22 @@
             android:textStyle="bold"
             android:gravity="center" />
 
-        <View
+        <FrameLayout
+            android:id="@+id/btnFlash"
             android:layout_width="40dp"
-            android:layout_height="40dp" />
+            android:layout_height="40dp"
+            android:background="@drawable/bg_cam_btn_white"
+            android:clickable="true"
+            android:focusable="true"
+            android:contentDescription="@string/toggle_desc">
+            <ImageView
+                android:id="@+id/iconFlash"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_flash"
+                app:tint="#FFFFFF" />
+        </FrameLayout>
 
     </LinearLayout>
 
@@ -274,51 +256,6 @@
         android:alpha="0"
         android:visibility="invisible" />
 
-    <!-- ── ORIENTATION GUIDE OVERLAY ─────────────────────────────
-         Shown when the phone is in portrait; tells user to rotate
-         to landscape for scanning. Covers everything.
-         ──────────────────────────────────────────────────────── -->
-    <LinearLayout
-        android:id="@+id/orientationGuideOverlay"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@drawable/bg_orientation_overlay"
-        android:gravity="center"
-        android:orientation="vertical"
-        android:visibility="gone"
-        android:elevation="10dp"
-        android:clickable="true"
-        android:focusable="true">
 
-        <ImageView
-            android:id="@+id/orientationIcon"
-            android:layout_width="72dp"
-            android:layout_height="72dp"
-            android:src="@drawable/ic_rotate_phone"
-            android:layout_marginBottom="20dp"
-            android:contentDescription="@string/rotate_phone_desc" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Rotate your phone"
-            android:textColor="#FFFFFF"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:fontFamily="@font/poppins_medium"
-            android:gravity="center"
-            android:layout_marginBottom="8dp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Hold your phone in landscape mode\nto scan the OMR sheet"
-            android:textColor="#B3FFFFFF"
-            android:textSize="14sp"
-            android:fontFamily="@font/poppins"
-            android:gravity="center"
-            android:lineSpacingExtra="4dp" />
-
-    </LinearLayout>
 
 </FrameLayout>

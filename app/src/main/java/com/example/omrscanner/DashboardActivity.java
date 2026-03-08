@@ -140,7 +140,13 @@ public class DashboardActivity extends AppCompatActivity {
     private EditText homeClassSearchInput;
     private TextView homeClassSortPicker;
     private LinearLayout homeGradeFilterChips, homeSchoolYearFilterChips;
+    private LinearLayout homeFilterPanel;
+    private TextView homeFilterToggle;
+    private boolean homeFilterPanelVisible = false;
     private TextView classTeacherLabel;
+    private TextView classNameLabel;
+    private TextView classStudentCount;
+    private TextView classActivityCount;
     private LinearLayout classEmpty, classActivityList;
     private LinearLayout classSheetTabs;
     private TextView classAssessmentCount;
@@ -267,8 +273,13 @@ public class DashboardActivity extends AppCompatActivity {
         homeClassSortPicker = findViewById(R.id.homeClassSortPicker);
         homeGradeFilterChips = findViewById(R.id.homeGradeFilterChips);
         homeSchoolYearFilterChips = findViewById(R.id.homeSchoolYearFilterChips);
+        homeFilterPanel = findViewById(R.id.homeFilterPanel);
+        homeFilterToggle = findViewById(R.id.homeFilterToggle);
 
         classTeacherLabel = findViewById(R.id.classTeacherLabel);
+        classNameLabel = findViewById(R.id.classNameLabel);
+        classStudentCount = findViewById(R.id.classStudentCount);
+        classActivityCount = findViewById(R.id.classActivityCount);
         classEmpty = findViewById(R.id.classEmpty);
         classActivityList = findViewById(R.id.classActivityList);
         classSheetTabs = findViewById(R.id.classSheetTabs);
@@ -350,6 +361,13 @@ public class DashboardActivity extends AppCompatActivity {
         homeClassSortPicker.setOnClickListener(v -> showClassSortDialog());
         classAssessmentSortPicker.setOnClickListener(v -> showAssessmentSortDialog());
         updateSortPickers();
+
+        // Filter panel toggle
+        homeFilterToggle.setOnClickListener(v -> {
+            homeFilterPanelVisible = !homeFilterPanelVisible;
+            homeFilterPanel.setVisibility(homeFilterPanelVisible ? View.VISIBLE : View.GONE);
+            updateFilterToggleAppearance();
+        });
     }
 
     private void scheduleHomeSearchRefresh() {
@@ -499,6 +517,42 @@ public class DashboardActivity extends AppCompatActivity {
     private void onFabClicked() {
         switch (currentScreen) {
             case SCREEN_HOME:
+                // Block class creation if teacher name is not set yet
+                if (globalTeacherName == null || globalTeacherName.trim().isEmpty()) {
+                    Dialog noNameDialog = new Dialog(this);
+                    noNameDialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+                    noNameDialog.setCancelable(true);
+
+                    LinearLayout root = buildSheet();
+                    root.addView(createDialogHandle());
+                    root.addView(buildSheetTitle("⚠ Teacher Name Required", "#D97706", Gravity.START, 20));
+
+                    TextView msg = new TextView(this);
+                    msg.setText("Please set your teacher name first before creating a class.");
+                    msg.setTextColor(Color.parseColor("#475569"));
+                    msg.setTextSize(14);
+                    msg.setPadding(dp(24), dp(4), dp(24), dp(16));
+                    root.addView(msg);
+
+                    LinearLayout actions = buildActionsRow(dp(20));
+                    TextView btnCancel = createDialogButton("Cancel", false);
+                    TextView btnSet = createDialogButton("Set Now", true);
+                    actions.addView(btnCancel);
+                    actions.addView(spacer(dp(10)));
+                    actions.addView(btnSet);
+                    root.addView(actions);
+
+                    btnCancel.setOnClickListener(v -> noNameDialog.dismiss());
+                    btnSet.setOnClickListener(v -> {
+                        noNameDialog.dismiss();
+                        showEditTeacherNameDialog();
+                    });
+
+                    noNameDialog.setContentView(root);
+                    configureBottomDialog(noNameDialog);
+                    noNameDialog.show();
+                    return;
+                }
                 showNewClassDialog();
                 break;
             case SCREEN_CLASS:
@@ -534,6 +588,8 @@ public class DashboardActivity extends AppCompatActivity {
         if (statScans != null)
             statScans.setText(String.valueOf(totalScans));
 
+        updateFilterToggleAppearance();
+
         final int requestId = ++homeQueryGeneration;
         repo.queryClassList(classSearchQuery, selectedClassGradeFilter, selectedClassSchoolYearFilter,
                 selectedClassSort, rows -> runOnUiThread(() -> {
@@ -564,10 +620,15 @@ public class DashboardActivity extends AppCompatActivity {
                 }));
     }
 
+    /** Accent colours that cycle for class cards to give visual variety. */
+    private static final String[] CLASS_CARD_ACCENTS = {
+            "#2563EB", "#059669", "#7C3AED", "#D97706", "#DC2626", "#0891B2"
+    };
+
     private View createClassCard(ClassListRow row) {
+        // Outer card: horizontal layout = accent bar + content
         LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(16), dp(16), dp(16), dp(16));
+        card.setOrientation(LinearLayout.HORIZONTAL);
         card.setClickable(true);
         card.setFocusable(true);
 
@@ -576,63 +637,95 @@ public class DashboardActivity extends AppCompatActivity {
         bg.setCornerRadius(dp(16));
         bg.setStroke(dp(1), Color.parseColor("#E2E8F0"));
         card.setBackground(bg);
+        card.setElevation(dp(2));
+        card.setClipToOutline(true);
+
+        // Ripple feedback
+        android.content.res.TypedArray ta = obtainStyledAttributes(
+                new int[]{android.R.attr.selectableItemBackground});
+        card.setForeground(ta.getDrawable(0));
+        ta.recycle();
 
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.bottomMargin = dp(12);
+        lp.bottomMargin = dp(10);
         card.setLayoutParams(lp);
 
+        // ── Colored accent bar on left ──
+        int accentIndex = Math.abs((row.getDisplayName() != null
+                ? row.getDisplayName().hashCode() : 0)) % CLASS_CARD_ACCENTS.length;
+        String accentColor = CLASS_CARD_ACCENTS[accentIndex];
+
+        View accentBar = new View(this);
+        accentBar.setLayoutParams(new LinearLayout.LayoutParams(dp(5),
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        GradientDrawable accentBg = new GradientDrawable();
+        accentBg.setColor(Color.parseColor(accentColor));
+        accentBar.setBackground(accentBg);
+        card.addView(accentBar);
+
+        // ── Content column ──
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(14), dp(14), dp(14), dp(14));
+        content.setLayoutParams(new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        // Row 1: title + arrow
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
-
-        LinearLayout leftCol = new LinearLayout(this);
-        leftCol.setOrientation(LinearLayout.VERTICAL);
-        leftCol.setLayoutParams(new LinearLayout.LayoutParams(
-                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         TextView title = new TextView(this);
         title.setText(row.getDisplayName());
         title.setTextColor(Color.parseColor("#1E293B"));
         title.setTextSize(15);
         title.setTypeface(null, Typeface.BOLD);
-        leftCol.addView(title);
+        title.setMaxLines(1);
+        title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        title.setLayoutParams(new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        header.addView(title);
 
+        TextView arrow = new TextView(this);
+        arrow.setText("›");
+        arrow.setTextColor(Color.parseColor("#CBD5E1"));
+        arrow.setTextSize(20);
+        arrow.setPadding(dp(8), 0, 0, 0);
+        header.addView(arrow);
+        content.addView(header);
+
+        // Row 2: teacher name
         TextView teacher = new TextView(this);
         String displayTeacher = (globalTeacherName != null && !globalTeacherName.isEmpty())
                 ? globalTeacherName
                 : "Unknown Teacher";
-        teacher.setText("\uD83D\uDC64 " + displayTeacher);
+        teacher.setText("👤  " + displayTeacher);
         teacher.setTextColor(Color.parseColor("#64748B"));
         teacher.setTextSize(12);
         LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         tlp.topMargin = dp(4);
         teacher.setLayoutParams(tlp);
-        leftCol.addView(teacher);
-        header.addView(leftCol);
+        content.addView(teacher);
 
-        TextView arrow = new TextView(this);
-        arrow.setText("›");
-        arrow.setTextColor(Color.parseColor("#94A3B8"));
-        arrow.setTextSize(18);
-        header.addView(arrow);
-        card.addView(header);
-
+        // Row 3: assessments + school year
         TextView meta = new TextView(this);
         String schoolYearText = (row.schoolYear != null && !row.schoolYear.isEmpty())
                 ? " · S.Y. " + row.schoolYear
                 : "";
-        meta.setText("\uD83D\uDCC2 " + row.assessmentCount + " Assessment"
+        meta.setText("📂 " + row.assessmentCount + " Assessment"
                 + (row.assessmentCount != 1 ? "s" : "")
                 + schoolYearText);
         meta.setTextColor(Color.parseColor("#94A3B8"));
         meta.setTextSize(11);
         LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        mlp.topMargin = dp(8);
+        mlp.topMargin = dp(6);
         meta.setLayoutParams(mlp);
-        card.addView(meta);
+        content.addView(meta);
+
+        card.addView(content);
 
         card.setOnClickListener(v -> {
             selectedClass = findClassById(row.id);
@@ -655,6 +748,20 @@ public class DashboardActivity extends AppCompatActivity {
         return card;
     }
 
+    /** Update the filter toggle button appearance based on active filters. */
+    private void updateFilterToggleAppearance() {
+        boolean hasActiveFilter = selectedClassGradeFilter != null
+                || selectedClassSchoolYearFilter != null
+                || !CLASS_SORT_NEWEST.equals(selectedClassSort);
+        if (hasActiveFilter) {
+            homeFilterToggle.setText("⚙ •");
+            homeFilterToggle.setTextColor(Color.parseColor("#2563EB"));
+        } else {
+            homeFilterToggle.setText("⚙");
+            homeFilterToggle.setTextColor(Color.parseColor("#64748B"));
+        }
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // RENDER — CLASS
     // ═══════════════════════════════════════════════════════════════
@@ -662,10 +769,26 @@ public class DashboardActivity extends AppCompatActivity {
     private void renderClassScreen() {
         classActivityList.removeAllViews();
         // Use global teacher name; fall back to class-level if not set
-        String displayTeacher = (globalTeacherName != null && !globalTeacherName.isEmpty())
-                ? globalTeacherName
-                : selectedClass.getTeacher();
+        String displayTeacher = (selectedClass.getTeacher() != null && !selectedClass.getTeacher().trim().isEmpty())
+                ? selectedClass.getTeacher()
+                : ((globalTeacherName != null && !globalTeacherName.isEmpty()) ? globalTeacherName : "Unknown Teacher");
+
         classTeacherLabel.setText("Teacher: " + displayTeacher);
+        classNameLabel.setText(selectedClass.getDisplayName());
+
+        int maxScans = 0;
+        int activityCount = selectedClass.getActivityCount();
+        if (selectedClass.getActivities() != null) {
+            for (ActivityFolder act : selectedClass.getActivities()) {
+                if (act.getScanCount() > maxScans) {
+                    maxScans = act.getScanCount();
+                }
+            }
+        }
+        
+        // Use max scans as an approximation for the number of students since it's the closest metric
+        classStudentCount.setText(maxScans + " student" + (maxScans == 1 ? "" : "s"));
+        classActivityCount.setText(activityCount + " assessment" + (activityCount == 1 ? "" : "s"));
 
         List<ActivityFolder> activities = selectedClass.getActivities();
 
@@ -1515,38 +1638,47 @@ public class DashboardActivity extends AppCompatActivity {
                 dialog.dismiss();
                 return;
             }
-            // Confirmation alert dialog
-            new android.app.AlertDialog.Builder(this)
-                    .setTitle("Change Teacher Name?")
-                    .setMessage("Are you sure you want to change the teacher name to \""
-                            + newName + "\"?\n\nThis will apply to all class folders.")
-                    .setPositiveButton("Confirm", (alertDialog, which) -> {
-                        repo.upsertTeacher(newName, savedTeacher -> runOnUiThread(() -> {
-                            globalTeacherName = savedTeacher != null && savedTeacher.name != null
-                                    ? savedTeacher.name
-                                    : newName;
-                            if (savedTeacher != null) {
-                                currentTeacherId = savedTeacher.id;
-                            }
 
-                            for (ClassFolder cls : classFolders) {
-                                cls.setTeacher(globalTeacherName);
-                            }
+            // Runnable that actually persists the name
+            Runnable saveAction = () -> {
+                repo.upsertTeacher(newName, savedTeacher -> runOnUiThread(() -> {
+                    globalTeacherName = savedTeacher != null && savedTeacher.name != null
+                            ? savedTeacher.name
+                            : newName;
+                    if (savedTeacher != null) {
+                        currentTeacherId = savedTeacher.id;
+                    }
 
-                            tvTeacherName.setText(globalTeacherName);
-                            tvTeacherName.setTextColor(Color.parseColor("#FFFFFF"));
-                            tvTeacherName.setTypeface(null, Typeface.BOLD);
-                            if (SCREEN_CLASS.equals(currentScreen) && selectedClass != null) {
-                                classTeacherLabel.setText("Teacher: " + globalTeacherName);
-                            }
+                    for (ClassFolder cls : classFolders) {
+                        cls.setTeacher(globalTeacherName);
+                    }
 
-                            dialog.dismiss();
-                            showToast("Teacher name updated ✓");
-                            loadDataFromDb();
-                        }));
-                    })
-                    .setNegativeButton("Cancel", null)
-                    .show();
+                    tvTeacherName.setText(globalTeacherName);
+                    tvTeacherName.setTextColor(Color.parseColor("#FFFFFF"));
+                    tvTeacherName.setTypeface(null, Typeface.BOLD);
+                    if (SCREEN_CLASS.equals(currentScreen) && selectedClass != null) {
+                        classTeacherLabel.setText("Teacher: " + globalTeacherName);
+                    }
+
+                    dialog.dismiss();
+                    showToast("Teacher name updated ✓");
+                    loadDataFromDb();
+                }));
+            };
+
+            // First-time setup → save directly, no confirmation needed
+            if (globalTeacherName == null || globalTeacherName.trim().isEmpty()) {
+                saveAction.run();
+            } else {
+                // Changing existing name → ask for confirmation
+                new android.app.AlertDialog.Builder(this)
+                        .setTitle("Change Teacher Name?")
+                        .setMessage("Are you sure you want to change the teacher name to \""
+                                + newName + "\"?\n\nThis will apply to all class folders.")
+                        .setPositiveButton("Confirm", (alertDialog, which) -> saveAction.run())
+                        .setNegativeButton("Cancel", null)
+                        .show();
+            }
         });
 
         dialog.setContentView(root);

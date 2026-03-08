@@ -517,21 +517,22 @@
                             android:paddingEnd="16dp"
                             android:paddingBottom="16dp">
 
-                            <!-- "Your Classes" section header row (Doc 1) -->
+                            <!-- "Your Classes" section header row -->
                             <LinearLayout
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:orientation="horizontal"
                                 android:gravity="center_vertical"
-                                android:layout_marginBottom="12dp">
+                                android:layout_marginBottom="10dp">
                                 <TextView
                                     android:layout_width="0dp"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="1"
                                     android:text="Your Classes"
-                                    android:textSize="15sp"
+                                    android:textSize="16sp"
                                     android:textStyle="bold"
-                                    android:textColor="#1E293B" />
+                                    android:textColor="#1E293B"
+                                    android:fontFamily="@font/poppins_medium" />
                                 <TextView
                                     android:id="@+id/homeClassCount"
                                     android:layout_width="wrap_content"
@@ -541,36 +542,64 @@
                                     android:textColor="#94A3B8" />
                             </LinearLayout>
 
+                            <!-- Search bar — always visible -->
                             <LinearLayout
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:layout_marginBottom="12dp"
-                                android:background="@drawable/bg_filter_panel"
-                                android:orientation="vertical"
-                                android:padding="12dp">
+                                android:orientation="horizontal"
+                                android:gravity="center_vertical"
+                                android:layout_marginBottom="10dp">
 
                                 <EditText
                                     android:id="@+id/homeClassSearchInput"
-                                    android:layout_width="match_parent"
+                                    android:layout_width="0dp"
                                     android:layout_height="wrap_content"
-                                    android:layout_marginBottom="10dp"
+                                    android:layout_weight="1"
                                     android:background="@drawable/input_modern_bg"
-                                    android:hint="Search class, section, school year..."
+                                    android:hint="🔍  Search classes..."
                                     android:imeOptions="actionDone"
                                     android:inputType="text"
                                     android:maxLines="1"
-                                    android:paddingStart="12dp"
+                                    android:paddingStart="14dp"
                                     android:paddingTop="10dp"
-                                    android:paddingEnd="12dp"
+                                    android:paddingEnd="14dp"
                                     android:paddingBottom="10dp"
                                     android:textColor="#1E293B"
                                     android:textColorHint="#94A3B8"
                                     android:textSize="13sp" />
 
+                                <!-- Filter toggle button -->
+                                <TextView
+                                    android:id="@+id/homeFilterToggle"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="8dp"
+                                    android:background="@drawable/bg_sort_pill"
+                                    android:paddingStart="10dp"
+                                    android:paddingTop="10dp"
+                                    android:paddingEnd="10dp"
+                                    android:paddingBottom="10dp"
+                                    android:text="⚙"
+                                    android:textSize="16sp"
+                                    android:clickable="true"
+                                    android:focusable="true" />
+                            </LinearLayout>
+
+                            <!-- Collapsible filter panel — hidden by default -->
+                            <LinearLayout
+                                android:id="@+id/homeFilterPanel"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="10dp"
+                                android:background="@drawable/bg_filter_panel"
+                                android:orientation="vertical"
+                                android:padding="12dp"
+                                android:visibility="gone">
+
                                 <LinearLayout
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
-                                    android:layout_marginBottom="8dp"
+                                    android:layout_marginBottom="10dp"
                                     android:gravity="center_vertical"
                                     android:orientation="horizontal">
 
@@ -609,7 +638,7 @@
                                 <HorizontalScrollView
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
-                                    android:layout_marginBottom="8dp"
+                                    android:layout_marginBottom="10dp"
                                     android:scrollbars="none">
 
                                     <LinearLayout
@@ -860,60 +889,45 @@
                                 android:orientation="horizontal" />
                         </HorizontalScrollView>
 
+                        <!-- Search + sort row for assessments -->
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginBottom="12dp"
-                            android:background="@drawable/bg_filter_panel"
-                            android:orientation="vertical"
-                            android:padding="12dp">
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical">
 
                             <EditText
                                 android:id="@+id/classAssessmentSearchInput"
-                                android:layout_width="match_parent"
+                                android:layout_width="0dp"
                                 android:layout_height="wrap_content"
-                                android:layout_marginBottom="10dp"
+                                android:layout_weight="1"
                                 android:background="@drawable/input_modern_bg"
-                                android:hint="Search assessment, sheet, date..."
+                                android:hint="🔍  Search assessments..."
                                 android:imeOptions="actionDone"
                                 android:inputType="text"
                                 android:maxLines="1"
-                                android:paddingStart="12dp"
+                                android:paddingStart="14dp"
                                 android:paddingTop="10dp"
-                                android:paddingEnd="12dp"
+                                android:paddingEnd="14dp"
                                 android:paddingBottom="10dp"
                                 android:textColor="#1E293B"
                                 android:textColorHint="#94A3B8"
                                 android:textSize="13sp" />
 
-                            <LinearLayout
-                                android:layout_width="match_parent"
+                            <TextView
+                                android:id="@+id/classAssessmentSortPicker"
+                                android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:gravity="center_vertical"
-                                android:orientation="horizontal">
-
-                                <TextView
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:text="Sort"
-                                    android:textColor="#64748B"
-                                    android:textSize="12sp"
-                                    android:textStyle="bold" />
-
-                                <TextView
-                                    android:id="@+id/classAssessmentSortPicker"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:background="@drawable/bg_sort_pill"
-                                    android:paddingStart="10dp"
-                                    android:paddingTop="6dp"
-                                    android:paddingEnd="10dp"
-                                    android:paddingBottom="6dp"
-                                    android:text="Newest ▾"
-                                    android:textColor="#1E293B"
-                                    android:textSize="12sp" />
-                            </LinearLayout>
+                                android:layout_marginStart="8dp"
+                                android:background="@drawable/bg_sort_pill"
+                                android:paddingStart="10dp"
+                                android:paddingTop="10dp"
+                                android:paddingEnd="10dp"
+                                android:paddingBottom="10dp"
+                                android:text="Newest ▾"
+                                android:textColor="#1E293B"
+                                android:textSize="12sp" />
                         </LinearLayout>
 
                         <!-- Activity cards — populated by Java -->

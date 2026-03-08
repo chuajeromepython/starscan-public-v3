@@ -161,6 +161,7 @@ public class ResultActivity extends AppCompatActivity {
         } else {
             // Go back to camera for retake
             Intent intent = new Intent(this, CameraActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
             if (selectedSheetType != null) {
                 intent.putExtra(DashboardActivity.EXTRA_SHEET_TYPE, selectedSheetType);
             }
