@@ -1,0 +1,57 @@
+{
+  "template_id": "ZPH40",
+  "width": 1607,
+  "height": 1139,
+  "blocks": [
+    {
+      "label": "Question_1_10",
+      "rows": 10,
+      "cols": 4,
+      "start_x": 106,
+      "start_y": 255,
+      "dx": 42.0,
+      "dy": 90.89,
+      "radius": 14
+    },
+    {
+      "label": "Question_11_20",
+      "rows": 10,
+      "cols": 4,
+      "start_x": 350,
+      "start_y": 249,
+      "dx": 44.0,
+      "dy": 91.56,
+      "radius": 14
+    },
+    {
+      "label": "Question_21_30",
+      "rows": 10,
+      "cols": 4,
+      "start_x": 601,
+      "start_y": 244,
+      "dx": 43.0,
+      "dy": 92.22,
+      "radius": 14
+    },
+    {
+      "label": "Question_31_40",
+      "rows": 10,
+      "cols": 4,
+      "start_x": 850,
+      "start_y": 239,
+      "dx": 44.33,
+      "dy": 92.44,
+      "radius": 14
+    },
+    {
+      "label": "LNR",
+      "rows": 10,
+      "cols": 12,
+      "start_x": 1050,
+      "start_y": 237,
+      "dx": 43.45,
+      "dy": 92.56,
+      "radius": 14
+    }
+  ]
+}
