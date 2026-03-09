@@ -70,6 +70,15 @@ public class TemplateManager {
      * detector falls back to "ZPH50".
      */
     private static final double DETECTION_MIN_SCORE = 0.35;
+    /**
+     * If two orientation candidates differ by less than this score, treat
+     * them as equivalent and apply deterministic tie-breaking.
+     */
+    private static final double ROTATION_TIE_MARGIN = 0.015;
+    /**
+     * Preferred orientation when CW and CCW are effectively tied.
+     */
+    private static final int PREFERRED_90_ROTATION = Core.ROTATE_90_COUNTERCLOCKWISE;
 
     // ── State ────────────────────────────────────────────────────────────────
     private final Map<String, OmrTemplate> templates = new HashMap<>();
@@ -231,6 +240,85 @@ public class TemplateManager {
     }
 
     /**
+     * Per-rotation best candidate (template + score) used for final orientation
+     * selection and deterministic tie-breaking.
+     */
+    private static class RotationCandidate {
+        final int rotationCode;
+        final String templateId;
+        final double score;
+
+        RotationCandidate(int rotationCode, String templateId, double score) {
+            this.rotationCode = rotationCode;
+            this.templateId = templateId;
+            this.score = score;
+        }
+    }
+
+    /**
+     * Bundles orientation winner metadata so callers can log decisions.
+     */
+    private static class RotationDecision {
+        final RotationCandidate winner;
+        final RotationCandidate runnerUp;
+        final boolean tieBreakApplied;
+        final double scoreGap;
+
+        RotationDecision(
+                RotationCandidate winner,
+                RotationCandidate runnerUp,
+                boolean tieBreakApplied,
+                double scoreGap) {
+            this.winner = winner;
+            this.runnerUp = runnerUp;
+            this.tieBreakApplied = tieBreakApplied;
+            this.scoreGap = scoreGap;
+        }
+    }
+
+    /**
+     * Pick the best rotation candidate, applying deterministic CW/CCW
+     * tie-breaking when scores are very close.
+     */
+    private RotationDecision chooseRotationCandidate(List<RotationCandidate> candidates) {
+        if (candidates == null || candidates.isEmpty()) {
+            return new RotationDecision(new RotationCandidate(-1, "ZPH50", 0.0), null, false, 0.0);
+        }
+
+        RotationCandidate best = null;
+        RotationCandidate second = null;
+        for (RotationCandidate candidate : candidates) {
+            if (best == null || candidate.score > best.score) {
+                second = best;
+                best = candidate;
+            } else if (second == null || candidate.score > second.score) {
+                second = candidate;
+            }
+        }
+
+        double scoreGap = (second == null) ? Double.MAX_VALUE : Math.abs(best.score - second.score);
+        boolean tieBreakApplied = false;
+        RotationCandidate winner = best;
+
+        if (second != null
+                && scoreGap <= ROTATION_TIE_MARGIN
+                && isOppositeQuarterTurns(best.rotationCode, second.rotationCode)) {
+            if (best.rotationCode != PREFERRED_90_ROTATION
+                    && second.rotationCode == PREFERRED_90_ROTATION) {
+                winner = second;
+            }
+            tieBreakApplied = true;
+        }
+
+        return new RotationDecision(winner, second, tieBreakApplied, scoreGap);
+    }
+
+    private static boolean isOppositeQuarterTurns(int a, int b) {
+        return (a == Core.ROTATE_90_CLOCKWISE && b == Core.ROTATE_90_COUNTERCLOCKWISE)
+                || (a == Core.ROTATE_90_COUNTERCLOCKWISE && b == Core.ROTATE_90_CLOCKWISE);
+    }
+
+    /**
      * Detect the correct orientation and sheet type in one pass.
      *
      * <p>The {@link PerspectiveAligner} always outputs a <b>portrait</b>
@@ -284,11 +372,10 @@ public class TemplateManager {
         //   - whether we need to release the Mat afterwards
         int[][] rotations;
         if (isPortrait) {
-            // Portrait input → it needs 90-degree rotation to become landscape.
-            // Try CW and CCW rotations.
+            // Portrait input from PerspectiveAligner is the normal scan path.
+            // Force 90° CCW for deterministic output that matches capture flow.
             rotations = new int[][] {
-                    { Core.ROTATE_90_CLOCKWISE },
-                    { Core.ROTATE_90_COUNTERCLOCKWISE }
+                    { PREFERRED_90_ROTATION }
             };
         } else {
             // Already landscape → try as-is first, but also try 180 rotation
@@ -302,9 +389,7 @@ public class TemplateManager {
             };
         }
 
-        String bestTemplateId = "ZPH50";
-        double bestScore = -1.0;
-        int bestRotation = -1;  // -1 = no rotation
+        List<RotationCandidate> rotationCandidates = new ArrayList<>();
 
         GridAligner aligner = new GridAligner();
 
@@ -321,6 +406,9 @@ public class TemplateManager {
             int cw = candidate.cols();
             int ch = candidate.rows();
 
+            String rotationBestTemplateId = "ZPH50";
+            double rotationBestScore = -1.0;
+
             // Score each template against this orientation
             for (Map.Entry<String, OmrTemplate> entry : templates.entrySet()) {
                 OmrTemplate tpl = entry.getValue();
@@ -333,12 +421,13 @@ public class TemplateManager {
                         "  rot=%d, template=%s, score=%.3f (img %dx%d → tpl %dx%d)",
                         rotCode, tpl.templateId, score, cw, ch, tpl.width, tpl.height));
 
-                if (score > bestScore) {
-                    bestScore = score;
-                    bestTemplateId = tpl.templateId;
-                    bestRotation = rotCode;
+                if (score > rotationBestScore) {
+                    rotationBestScore = score;
+                    rotationBestTemplateId = tpl.templateId;
                 }
             }
+
+            rotationCandidates.add(new RotationCandidate(rotCode, rotationBestTemplateId, rotationBestScore));
 
             // Release rotated Mat (but not the original srcGray)
             if (rotCode != -1) {
@@ -348,6 +437,19 @@ public class TemplateManager {
 
         aligner.release();
         srcGray.release();
+
+        RotationDecision decision = chooseRotationCandidate(rotationCandidates);
+        String bestTemplateId = decision.winner.templateId;
+        int bestRotation = decision.winner.rotationCode;
+        double bestScore = decision.winner.score;
+
+        if (decision.runnerUp != null) {
+            Log.i(TAG, String.format(
+                    "detectAndOrient: top1 rot=%d template=%s score=%.3f | top2 rot=%d template=%s score=%.3f | gap=%.4f | tieBreak=%b",
+                    decision.winner.rotationCode, decision.winner.templateId, decision.winner.score,
+                    decision.runnerUp.rotationCode, decision.runnerUp.templateId, decision.runnerUp.score,
+                    decision.scoreGap, decision.tieBreakApplied));
+        }
 
         Log.i(TAG, String.format(
                 "detectAndOrient: winner template=%s rot=%d score=%.3f",
@@ -419,8 +521,7 @@ public class TemplateManager {
         int[][] rotations;
         if (isPortrait) {
             rotations = new int[][] {
-                    { Core.ROTATE_90_CLOCKWISE },
-                    { Core.ROTATE_90_COUNTERCLOCKWISE }
+                    { PREFERRED_90_ROTATION }
             };
         } else {
             rotations = new int[][] {
@@ -431,8 +532,7 @@ public class TemplateManager {
             };
         }
 
-        double bestScore = -1.0;
-        int bestRotation = -1;
+        List<RotationCandidate> rotationCandidates = new ArrayList<>();
 
         GridAligner aligner = new GridAligner();
 
@@ -456,10 +556,7 @@ public class TemplateManager {
             Log.d(TAG, String.format("  rot=%d, template=%s, score=%.3f",
                     rotCode, templateId, score));
 
-            if (score > bestScore) {
-                bestScore = score;
-                bestRotation = rotCode;
-            }
+            rotationCandidates.add(new RotationCandidate(rotCode, templateId, score));
 
             if (rotCode != -1) {
                 candidate.release();
@@ -468,6 +565,18 @@ public class TemplateManager {
 
         aligner.release();
         srcGray.release();
+
+        RotationDecision decision = chooseRotationCandidate(rotationCandidates);
+        int bestRotation = decision.winner.rotationCode;
+        double bestScore = decision.winner.score;
+
+        if (decision.runnerUp != null) {
+            Log.i(TAG, String.format(
+                    "detectAndOrientWithTemplate: top1 rot=%d score=%.3f | top2 rot=%d score=%.3f | gap=%.4f | tieBreak=%b",
+                    decision.winner.rotationCode, decision.winner.score,
+                    decision.runnerUp.rotationCode, decision.runnerUp.score,
+                    decision.scoreGap, decision.tieBreakApplied));
+        }
 
         Log.i(TAG, String.format("detectAndOrientWithTemplate: template=%s rot=%d score=%.3f",
                 templateId, bestRotation, bestScore));
