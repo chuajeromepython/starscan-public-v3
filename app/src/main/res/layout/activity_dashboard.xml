@@ -182,7 +182,7 @@
         app:strokeColor="#33FFFFFF"
         app:strokeWidth="1dp"
         app:layout_constraintTop_toBottomOf="@id/headerCard"
-        app:layout_constraintBottom_toTopOf="@id/fab"
+        app:layout_constraintBottom_toTopOf="@id/fabSpacer"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
@@ -488,7 +488,7 @@
                             android:orientation="vertical"
                             android:paddingStart="16dp"
                             android:paddingEnd="16dp"
-                            android:paddingBottom="16dp">
+                            android:paddingBottom="72dp">
 
                             <LinearLayout
                                 android:layout_width="match_parent"
@@ -706,7 +706,7 @@
                         android:paddingStart="16dp"
                         android:paddingEnd="16dp"
                         android:paddingTop="16dp"
-                        android:paddingBottom="16dp">
+                        android:paddingBottom="72dp">
 
                         <com.google.android.material.card.MaterialCardView
                             android:id="@+id/classInfoCard"
@@ -1084,13 +1084,22 @@
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
-    <!-- ═══ FAB ═══ -->
+    <!-- ═══ FAB SPACER — always reserves the button zone height so the
+         contentCard top never shifts when the FAB is GONE ═══ -->
+    <View
+        android:id="@+id/fabSpacer"
+        android:layout_width="0dp"
+        android:layout_height="56dp"
+        app:layout_constraintBottom_toTopOf="@id/footer"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- ═══ FAB — floats over the spacer zone ═══ -->
     <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
         android:id="@+id/fab"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        android:layout_marginBottom="8dp"
+        android:layout_marginBottom="4dp"
         android:text="Class"
         android:textAllCaps="false"
         android:textColor="#FFFFFF"
@@ -1100,9 +1109,8 @@
         app:iconTint="#FFFFFF"
         app:iconSize="20dp"
         app:backgroundTint="#F43F5E"
-        app:elevation="4dp"
+        app:elevation="8dp"
         app:cornerRadius="16dp"
-        app:layout_constraintTop_toBottomOf="@id/contentCard"
         app:layout_constraintBottom_toTopOf="@id/footer"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
