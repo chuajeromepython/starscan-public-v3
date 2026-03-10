@@ -52,15 +52,15 @@
 
             <!-- Zoom Indicator -->
             <ImageView
-                android:layout_width="28dp"
-                android:layout_height="28dp"
+                android:layout_width="22dp"
+                android:layout_height="23dp"
                 android:layout_gravity="bottom|end"
                 android:layout_margin="8dp"
                 android:background="@drawable/bg_zoom_indicator"
-                android:src="@drawable/ic_expand"
+                android:contentDescription="@string/zoom_image"
                 android:padding="6dp"
-                app:tint="#FFFFFF"
-                android:contentDescription="@string/zoom_image" />
+                android:src="@drawable/ic_expand"
+                app:tint="#FFFFFF" />
         </FrameLayout>
 
         <!-- Image Info -->

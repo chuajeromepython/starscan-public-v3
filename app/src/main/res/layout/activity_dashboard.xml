@@ -53,37 +53,37 @@
             android:alpha="0.05" />
 
         <!-- ══ HEADER CONTENT — ConstraintLayout for precise placement ══ -->
+        <!-- ══ HEADER CONTENT — ConstraintLayout for precise placement ══ -->
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_gravity="top"
-            android:layout_marginTop="0dp">
+            android:layout_height="match_parent"
+            android:layout_gravity="center_vertical">
 
-            <!-- Circular logo avatar — top-left -->
+            <!-- Circular logo avatar — centered vertically, left-aligned -->
             <ImageView
                 android:id="@+id/headerLogo"
-                android:layout_width="96dp"
-                android:layout_height="96dp"
+                android:layout_width="85dp"
+                android:layout_height="85dp"
                 android:adjustViewBounds="true"
                 android:contentDescription="STARS logo"
                 android:src="@mipmap/star_plain_foreground"
-                android:background="@drawable/bg_icon_circle_white"
-                android:padding="8dp"
+                android:padding="6dp"
                 android:elevation="2dp"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent" />
 
             <!-- App name + teacher name stacked vertically, centered on logo -->
             <LinearLayout
                 android:layout_width="0dp"
-                android:layout_height="0dp"
+                android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:gravity="center_vertical"
-                android:layout_marginStart="16dp"
+                android:layout_marginStart="12dp"
                 app:layout_constraintStart_toEndOf="@id/headerLogo"
                 app:layout_constraintEnd_toStartOf="@id/btnUpload"
-                app:layout_constraintTop_toTopOf="@id/headerLogo"
-                app:layout_constraintBottom_toBottomOf="@id/headerLogo">
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent">
 
                 <TextView
                     android:id="@+id/tvAppName"
@@ -91,7 +91,7 @@
                     android:layout_height="wrap_content"
                     android:text="STARS"
                     android:textColor="#FFFFFF"
-                    android:textSize="28sp"
+                    android:textSize="24sp"
                     android:textStyle="bold"
                     android:letterSpacing="0.05"
                     android:includeFontPadding="false" />
@@ -113,7 +113,7 @@
                         android:layout_height="wrap_content"
                         android:text="Tap to set teacher name"
                         android:textColor="#CCFFFFFF"
-                        android:textSize="14sp"
+                        android:textSize="13sp"
                         android:textStyle="normal"
                         android:maxLines="1"
                         android:ellipsize="end"
@@ -121,8 +121,8 @@
 
                     <ImageView
                         android:id="@+id/btnEditTeacherName"
-                        android:layout_width="14dp"
-                        android:layout_height="14dp"
+                        android:layout_width="13dp"
+                        android:layout_height="13dp"
                         android:src="@drawable/ic_edit_pencil"
                         android:layout_marginStart="6dp"
                         android:layout_gravity="center_vertical"
@@ -133,11 +133,11 @@
 
             </LinearLayout>
 
-            <!-- Upload button — top-right -->
+            <!-- Upload button — centered vertically, right-aligned -->
             <ImageButton
                 android:id="@+id/btnUpload"
-                android:layout_width="52dp"
-                android:layout_height="52dp"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
                 android:src="@drawable/ic_upload"
                 android:contentDescription="Upload"
                 android:background="@drawable/bg_icon_circle_white"
@@ -145,7 +145,8 @@
                 android:elevation="2dp"
                 app:tint="#FFFFFF"
                 app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
 
