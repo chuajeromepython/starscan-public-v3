@@ -60,6 +60,9 @@ import net.lingala.zip4j.model.ZipParameters;
 import net.lingala.zip4j.model.enums.AesKeyStrength;
 import net.lingala.zip4j.model.enums.EncryptionMethod;
 
+import com.google.android.material.textfield.TextInputLayout;
+import com.google.android.material.textfield.TextInputEditText;
+
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -127,6 +130,7 @@ public class DashboardActivity extends AppCompatActivity {
 
     // Views
     private ImageButton btnBack;
+    private ImageButton btnUpload;
     private TextView topBarTitle, topBarBadge;
     private TextView tvTeacherName;
     private LinearLayout teacherNameRow;
@@ -136,7 +140,13 @@ public class DashboardActivity extends AppCompatActivity {
     private EditText homeClassSearchInput;
     private TextView homeClassSortPicker;
     private LinearLayout homeGradeFilterChips, homeSchoolYearFilterChips;
+    private LinearLayout homeFilterPanel;
+    private TextView homeFilterToggle;
+    private boolean homeFilterPanelVisible = false;
     private TextView classTeacherLabel;
+    private TextView classNameLabel;
+    private TextView classStudentCount;
+    private TextView classActivityCount;
     private LinearLayout classEmpty, classActivityList;
     private LinearLayout classSheetTabs;
     private TextView classAssessmentCount;
@@ -247,6 +257,7 @@ public class DashboardActivity extends AppCompatActivity {
 
     private void initViews() {
         btnBack = findViewById(R.id.btnBack);
+        btnUpload = findViewById(R.id.btnUpload);
         topBarTitle = findViewById(R.id.topBarTitle);
         topBarBadge = findViewById(R.id.topBarBadge);
         tvTeacherName = findViewById(R.id.tvTeacherName);
@@ -262,8 +273,13 @@ public class DashboardActivity extends AppCompatActivity {
         homeClassSortPicker = findViewById(R.id.homeClassSortPicker);
         homeGradeFilterChips = findViewById(R.id.homeGradeFilterChips);
         homeSchoolYearFilterChips = findViewById(R.id.homeSchoolYearFilterChips);
+        homeFilterPanel = findViewById(R.id.homeFilterPanel);
+        homeFilterToggle = findViewById(R.id.homeFilterToggle);
 
         classTeacherLabel = findViewById(R.id.classTeacherLabel);
+        classNameLabel = findViewById(R.id.classNameLabel);
+        classStudentCount = findViewById(R.id.classStudentCount);
+        classActivityCount = findViewById(R.id.classActivityCount);
         classEmpty = findViewById(R.id.classEmpty);
         classActivityList = findViewById(R.id.classActivityList);
         classSheetTabs = findViewById(R.id.classSheetTabs);
@@ -289,6 +305,7 @@ public class DashboardActivity extends AppCompatActivity {
         breadcrumbActivity = findViewById(R.id.breadcrumbActivity);
 
         btnBack.setOnClickListener(v -> navigateBack());
+        btnUpload.setOnClickListener(v -> showGlobalUploadClassDialog());
         fab.setOnClickListener(v -> onFabClicked());
 
         // Teacher name row click → edit dialog
@@ -344,6 +361,13 @@ public class DashboardActivity extends AppCompatActivity {
         homeClassSortPicker.setOnClickListener(v -> showClassSortDialog());
         classAssessmentSortPicker.setOnClickListener(v -> showAssessmentSortDialog());
         updateSortPickers();
+
+        // Filter panel toggle
+        homeFilterToggle.setOnClickListener(v -> {
+            homeFilterPanelVisible = !homeFilterPanelVisible;
+            homeFilterPanel.setVisibility(homeFilterPanelVisible ? View.VISIBLE : View.GONE);
+            updateFilterToggleAppearance();
+        });
     }
 
     private void scheduleHomeSearchRefresh() {
@@ -493,6 +517,42 @@ public class DashboardActivity extends AppCompatActivity {
     private void onFabClicked() {
         switch (currentScreen) {
             case SCREEN_HOME:
+                // Block class creation if teacher name is not set yet
+                if (globalTeacherName == null || globalTeacherName.trim().isEmpty()) {
+                    Dialog noNameDialog = new Dialog(this);
+                    noNameDialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+                    noNameDialog.setCancelable(true);
+
+                    LinearLayout root = buildSheet();
+                    root.addView(createDialogHandle());
+                    root.addView(buildSheetTitle("⚠ Teacher Name Required", "#D97706", Gravity.START, 20));
+
+                    TextView msg = new TextView(this);
+                    msg.setText("Please set your teacher name first before creating a class.");
+                    msg.setTextColor(Color.parseColor("#475569"));
+                    msg.setTextSize(14);
+                    msg.setPadding(dp(24), dp(4), dp(24), dp(16));
+                    root.addView(msg);
+
+                    LinearLayout actions = buildActionsRow(dp(20));
+                    TextView btnCancel = createDialogButton("Cancel", false);
+                    TextView btnSet = createDialogButton("Set Now", true);
+                    actions.addView(btnCancel);
+                    actions.addView(spacer(dp(10)));
+                    actions.addView(btnSet);
+                    root.addView(actions);
+
+                    btnCancel.setOnClickListener(v -> noNameDialog.dismiss());
+                    btnSet.setOnClickListener(v -> {
+                        noNameDialog.dismiss();
+                        showEditTeacherNameDialog();
+                    });
+
+                    noNameDialog.setContentView(root);
+                    configureBottomDialog(noNameDialog);
+                    noNameDialog.show();
+                    return;
+                }
                 showNewClassDialog();
                 break;
             case SCREEN_CLASS:
@@ -528,6 +588,8 @@ public class DashboardActivity extends AppCompatActivity {
         if (statScans != null)
             statScans.setText(String.valueOf(totalScans));
 
+        updateFilterToggleAppearance();
+
         final int requestId = ++homeQueryGeneration;
         repo.queryClassList(classSearchQuery, selectedClassGradeFilter, selectedClassSchoolYearFilter,
                 selectedClassSort, rows -> runOnUiThread(() -> {
@@ -558,10 +620,15 @@ public class DashboardActivity extends AppCompatActivity {
                 }));
     }
 
+    /** Accent colours that cycle for class cards to give visual variety. */
+    private static final String[] CLASS_CARD_ACCENTS = {
+            "#2563EB", "#059669", "#7C3AED", "#D97706", "#DC2626", "#0891B2"
+    };
+
     private View createClassCard(ClassListRow row) {
+        // Outer card: horizontal layout = accent bar + content
         LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(16), dp(16), dp(16), dp(16));
+        card.setOrientation(LinearLayout.HORIZONTAL);
         card.setClickable(true);
         card.setFocusable(true);
 
@@ -570,63 +637,95 @@ public class DashboardActivity extends AppCompatActivity {
         bg.setCornerRadius(dp(16));
         bg.setStroke(dp(1), Color.parseColor("#E2E8F0"));
         card.setBackground(bg);
+        card.setElevation(dp(2));
+        card.setClipToOutline(true);
+
+        // Ripple feedback
+        android.content.res.TypedArray ta = obtainStyledAttributes(
+                new int[]{android.R.attr.selectableItemBackground});
+        card.setForeground(ta.getDrawable(0));
+        ta.recycle();
 
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.bottomMargin = dp(12);
+        lp.bottomMargin = dp(10);
         card.setLayoutParams(lp);
 
+        // ── Colored accent bar on left ──
+        int accentIndex = Math.abs((row.getDisplayName() != null
+                ? row.getDisplayName().hashCode() : 0)) % CLASS_CARD_ACCENTS.length;
+        String accentColor = CLASS_CARD_ACCENTS[accentIndex];
+
+        View accentBar = new View(this);
+        accentBar.setLayoutParams(new LinearLayout.LayoutParams(dp(5),
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        GradientDrawable accentBg = new GradientDrawable();
+        accentBg.setColor(Color.parseColor(accentColor));
+        accentBar.setBackground(accentBg);
+        card.addView(accentBar);
+
+        // ── Content column ──
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(14), dp(14), dp(14), dp(14));
+        content.setLayoutParams(new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        // Row 1: title + arrow
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
-
-        LinearLayout leftCol = new LinearLayout(this);
-        leftCol.setOrientation(LinearLayout.VERTICAL);
-        leftCol.setLayoutParams(new LinearLayout.LayoutParams(
-                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         TextView title = new TextView(this);
         title.setText(row.getDisplayName());
         title.setTextColor(Color.parseColor("#1E293B"));
         title.setTextSize(15);
         title.setTypeface(null, Typeface.BOLD);
-        leftCol.addView(title);
+        title.setMaxLines(1);
+        title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        title.setLayoutParams(new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        header.addView(title);
 
+        TextView arrow = new TextView(this);
+        arrow.setText("›");
+        arrow.setTextColor(Color.parseColor("#CBD5E1"));
+        arrow.setTextSize(20);
+        arrow.setPadding(dp(8), 0, 0, 0);
+        header.addView(arrow);
+        content.addView(header);
+
+        // Row 2: teacher name
         TextView teacher = new TextView(this);
         String displayTeacher = (globalTeacherName != null && !globalTeacherName.isEmpty())
                 ? globalTeacherName
                 : "Unknown Teacher";
-        teacher.setText("\uD83D\uDC64 " + displayTeacher);
+        teacher.setText("👤  " + displayTeacher);
         teacher.setTextColor(Color.parseColor("#64748B"));
         teacher.setTextSize(12);
         LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         tlp.topMargin = dp(4);
         teacher.setLayoutParams(tlp);
-        leftCol.addView(teacher);
-        header.addView(leftCol);
+        content.addView(teacher);
 
-        TextView arrow = new TextView(this);
-        arrow.setText("›");
-        arrow.setTextColor(Color.parseColor("#94A3B8"));
-        arrow.setTextSize(18);
-        header.addView(arrow);
-        card.addView(header);
-
+        // Row 3: assessments + school year
         TextView meta = new TextView(this);
         String schoolYearText = (row.schoolYear != null && !row.schoolYear.isEmpty())
                 ? " · S.Y. " + row.schoolYear
                 : "";
-        meta.setText("\uD83D\uDCC2 " + row.assessmentCount + " Assessment"
+        meta.setText("📂 " + row.assessmentCount + " Assessment"
                 + (row.assessmentCount != 1 ? "s" : "")
                 + schoolYearText);
         meta.setTextColor(Color.parseColor("#94A3B8"));
         meta.setTextSize(11);
         LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        mlp.topMargin = dp(8);
+        mlp.topMargin = dp(6);
         meta.setLayoutParams(mlp);
-        card.addView(meta);
+        content.addView(meta);
+
+        card.addView(content);
 
         card.setOnClickListener(v -> {
             selectedClass = findClassById(row.id);
@@ -649,6 +748,20 @@ public class DashboardActivity extends AppCompatActivity {
         return card;
     }
 
+    /** Update the filter toggle button appearance based on active filters. */
+    private void updateFilterToggleAppearance() {
+        boolean hasActiveFilter = selectedClassGradeFilter != null
+                || selectedClassSchoolYearFilter != null
+                || !CLASS_SORT_NEWEST.equals(selectedClassSort);
+        if (hasActiveFilter) {
+            homeFilterToggle.setText("⚙ •");
+            homeFilterToggle.setTextColor(Color.parseColor("#2563EB"));
+        } else {
+            homeFilterToggle.setText("⚙");
+            homeFilterToggle.setTextColor(Color.parseColor("#64748B"));
+        }
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // RENDER — CLASS
     // ═══════════════════════════════════════════════════════════════
@@ -656,10 +769,26 @@ public class DashboardActivity extends AppCompatActivity {
     private void renderClassScreen() {
         classActivityList.removeAllViews();
         // Use global teacher name; fall back to class-level if not set
-        String displayTeacher = (globalTeacherName != null && !globalTeacherName.isEmpty())
-                ? globalTeacherName
-                : selectedClass.getTeacher();
+        String displayTeacher = (selectedClass.getTeacher() != null && !selectedClass.getTeacher().trim().isEmpty())
+                ? selectedClass.getTeacher()
+                : ((globalTeacherName != null && !globalTeacherName.isEmpty()) ? globalTeacherName : "Unknown Teacher");
+
         classTeacherLabel.setText("Teacher: " + displayTeacher);
+        classNameLabel.setText(selectedClass.getDisplayName());
+
+        int maxScans = 0;
+        int activityCount = selectedClass.getActivityCount();
+        if (selectedClass.getActivities() != null) {
+            for (ActivityFolder act : selectedClass.getActivities()) {
+                if (act.getScanCount() > maxScans) {
+                    maxScans = act.getScanCount();
+                }
+            }
+        }
+        
+        // Use max scans as an approximation for the number of students since it's the closest metric
+        classStudentCount.setText(maxScans + " student" + (maxScans == 1 ? "" : "s"));
+        classActivityCount.setText(activityCount + " assessment" + (activityCount == 1 ? "" : "s"));
 
         List<ActivityFolder> activities = selectedClass.getActivities();
 
@@ -697,19 +826,22 @@ public class DashboardActivity extends AppCompatActivity {
     }
 
     /**
-     * Build the "All / ZPH30 / ZPH50 / ZPH60" filter tabs above the assessment
-     * list.
+     * Build the "All / ZPH30 / ZPH40 / ZPH50 / ZPH60" filter tabs above the
+     * assessment list.
      */
     private void buildClassSheetTabs(List<ActivityFolder> activities) {
         classSheetTabs.removeAllViews();
 
         // Count how many assessments per sheet type
-        int countZPH30 = 0, countZPH50 = 0, countZPH60 = 0;
+        int countZPH30 = 0, countZPH40 = 0, countZPH50 = 0, countZPH60 = 0;
         if (activities != null) {
             for (ActivityFolder act : activities) {
                 switch (act.getSheetType()) {
                     case "ZPH30":
                         countZPH30++;
+                        break;
+                    case "ZPH40":
+                        countZPH40++;
                         break;
                     case "ZPH50":
                         countZPH50++;
@@ -726,6 +858,7 @@ public class DashboardActivity extends AppCompatActivity {
         Object[][] tabs = {
                 { "All", null, totalCount },
                 { "ZPH30", "ZPH30", countZPH30 },
+                { "ZPH40", "ZPH40", countZPH40 },
                 { "ZPH50", "ZPH50", countZPH50 },
                 { "ZPH60", "ZPH60", countZPH60 },
         };
@@ -1509,38 +1642,47 @@ public class DashboardActivity extends AppCompatActivity {
                 dialog.dismiss();
                 return;
             }
-            // Confirmation alert dialog
-            new android.app.AlertDialog.Builder(this)
-                    .setTitle("Change Teacher Name?")
-                    .setMessage("Are you sure you want to change the teacher name to \""
-                            + newName + "\"?\n\nThis will apply to all class folders.")
-                    .setPositiveButton("Confirm", (alertDialog, which) -> {
-                        repo.upsertTeacher(newName, savedTeacher -> runOnUiThread(() -> {
-                            globalTeacherName = savedTeacher != null && savedTeacher.name != null
-                                    ? savedTeacher.name
-                                    : newName;
-                            if (savedTeacher != null) {
-                                currentTeacherId = savedTeacher.id;
-                            }
 
-                            for (ClassFolder cls : classFolders) {
-                                cls.setTeacher(globalTeacherName);
-                            }
+            // Runnable that actually persists the name
+            Runnable saveAction = () -> {
+                repo.upsertTeacher(newName, savedTeacher -> runOnUiThread(() -> {
+                    globalTeacherName = savedTeacher != null && savedTeacher.name != null
+                            ? savedTeacher.name
+                            : newName;
+                    if (savedTeacher != null) {
+                        currentTeacherId = savedTeacher.id;
+                    }
 
-                            tvTeacherName.setText(globalTeacherName);
-                            tvTeacherName.setTextColor(Color.parseColor("#FFFFFF"));
-                            tvTeacherName.setTypeface(null, Typeface.BOLD);
-                            if (SCREEN_CLASS.equals(currentScreen) && selectedClass != null) {
-                                classTeacherLabel.setText("Teacher: " + globalTeacherName);
-                            }
+                    for (ClassFolder cls : classFolders) {
+                        cls.setTeacher(globalTeacherName);
+                    }
 
-                            dialog.dismiss();
-                            showToast("Teacher name updated ✓");
-                            loadDataFromDb();
-                        }));
-                    })
-                    .setNegativeButton("Cancel", null)
-                    .show();
+                    tvTeacherName.setText(globalTeacherName);
+                    tvTeacherName.setTextColor(Color.parseColor("#FFFFFF"));
+                    tvTeacherName.setTypeface(null, Typeface.BOLD);
+                    if (SCREEN_CLASS.equals(currentScreen) && selectedClass != null) {
+                        classTeacherLabel.setText("Teacher: " + globalTeacherName);
+                    }
+
+                    dialog.dismiss();
+                    showToast("Teacher name updated ✓");
+                    loadDataFromDb();
+                }));
+            };
+
+            // First-time setup → save directly, no confirmation needed
+            if (globalTeacherName == null || globalTeacherName.trim().isEmpty()) {
+                saveAction.run();
+            } else {
+                // Changing existing name → ask for confirmation
+                new android.app.AlertDialog.Builder(this)
+                        .setTitle("Change Teacher Name?")
+                        .setMessage("Are you sure you want to change the teacher name to \""
+                                + newName + "\"?\n\nThis will apply to all class folders.")
+                        .setPositiveButton("Confirm", (alertDialog, which) -> saveAction.run())
+                        .setNegativeButton("Cancel", null)
+                        .show();
+            }
         });
 
         dialog.setContentView(root);
@@ -1874,7 +2016,12 @@ public class DashboardActivity extends AppCompatActivity {
 
         root.addView(createFieldLabel("OMR SHEET TYPE"));
 
-        String[][] sheetTypes = { { "ZPH30", "30 Items" }, { "ZPH50", "50 Items" }, { "ZPH60", "60 Items" } };
+        String[][] sheetTypes = {
+                { "ZPH30", "30 Items" },
+                { "ZPH40", "40 Items" },
+                { "ZPH50", "50 Items" },
+                { "ZPH60", "60 Items" }
+        };
         final String[] selectedType = { "ZPH30" };
 
         LinearLayout typeRow = new LinearLayout(this);
@@ -1884,7 +2031,7 @@ public class DashboardActivity extends AppCompatActivity {
         trLp.bottomMargin = dp(16);
         typeRow.setLayoutParams(trLp);
 
-        final TextView[] typeButtons = new TextView[3];
+        final TextView[] typeButtons = new TextView[sheetTypes.length];
         for (int i = 0; i < sheetTypes.length; i++) {
             final int idx = i;
             TextView btn = new TextView(this);
@@ -1897,7 +2044,7 @@ public class DashboardActivity extends AppCompatActivity {
             btn.setFocusable(true);
             LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
                     0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-            if (i < 2)
+            if (i < sheetTypes.length - 1)
                 blp.rightMargin = dp(8);
             btn.setLayoutParams(blp);
             typeButtons[i] = btn;
@@ -2083,6 +2230,174 @@ public class DashboardActivity extends AppCompatActivity {
         return card;
     }
 
+    private View createSelectionCard(Dialog dialog, String emoji, String label,
+            String desc, Runnable onClick) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.HORIZONTAL);
+        card.setGravity(Gravity.CENTER_VERTICAL);
+        card.setPadding(dp(16), dp(16), dp(16), dp(16));
+        card.setClickable(true);
+        card.setFocusable(true);
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.parseColor("#F8FAFC"));
+        bg.setCornerRadius(dp(14));
+        bg.setStroke(dp(1), Color.parseColor("#E2E8F0"));
+        card.setBackground(bg);
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.bottomMargin = dp(10);
+        card.setLayoutParams(lp);
+
+        TextView iconView = new TextView(this);
+        iconView.setText(emoji);
+        iconView.setTextSize(28);
+        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        ilp.rightMargin = dp(14);
+        iconView.setLayoutParams(ilp);
+        card.addView(iconView);
+
+        LinearLayout textCol = new LinearLayout(this);
+        textCol.setOrientation(LinearLayout.VERTICAL);
+        textCol.setLayoutParams(new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView nameView = new TextView(this);
+        nameView.setText(label);
+        nameView.setTextSize(15);
+        nameView.setTextColor(Color.parseColor("#1E293B"));
+        nameView.setTypeface(null, Typeface.BOLD);
+        textCol.addView(nameView);
+
+        TextView descView = new TextView(this);
+        descView.setText(desc);
+        descView.setTextSize(12);
+        descView.setTextColor(Color.parseColor("#64748B"));
+        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        dlp.topMargin = dp(2);
+        descView.setLayoutParams(dlp);
+        textCol.addView(descView);
+        card.addView(textCol);
+
+        TextView arrow = new TextView(this);
+        arrow.setText("›");
+        arrow.setTextSize(18);
+        arrow.setTextColor(Color.parseColor("#94A3B8"));
+        card.addView(arrow);
+
+        card.setOnClickListener(v -> onClick.run());
+        return card;
+    }
+
+    private void showGlobalUploadClassDialog() {
+        if (classFolders == null || classFolders.isEmpty()) {
+            showToast("No classes available. Please create a class first.");
+            return;
+        }
+
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setCancelable(true);
+
+        LinearLayout root = buildSheet();
+        root.addView(createDialogHandle());
+        root.addView(buildSheetTitle("🎓 Select Class to Upload To", "#0038A8", Gravity.START, 4));
+
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(400)));
+        LinearLayout listContainer = new LinearLayout(this);
+        listContainer.setOrientation(LinearLayout.VERTICAL);
+        scrollView.addView(listContainer);
+
+        for (ClassFolder cls : classFolders) {
+            View card = createSelectionCard(dialog, "📁", cls.getDisplayName(), cls.getActivityCount() + " Assessments", () -> {
+                dialog.dismiss();
+                showGlobalUploadAssessmentDialog(cls);
+            });
+            listContainer.addView(card);
+        }
+
+        root.addView(scrollView);
+
+        TextView cancel = new TextView(this);
+        cancel.setText("Cancel");
+        cancel.setTextSize(14);
+        cancel.setTextColor(Color.parseColor("#94A3B8"));
+        cancel.setGravity(Gravity.CENTER);
+        cancel.setPadding(0, dp(16), 0, dp(8));
+        cancel.setOnClickListener(v -> dialog.dismiss());
+        root.addView(cancel);
+
+        dialog.setContentView(root);
+        configureBottomDialog(dialog);
+        dialog.show();
+    }
+
+    private void showGlobalUploadAssessmentDialog(ClassFolder cls) {
+        if (cls.getActivities() == null || cls.getActivities().isEmpty()) {
+            showToast("No assessments available in this class. Please create one first.");
+            return;
+        }
+
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setCancelable(true);
+
+        LinearLayout root = buildSheet();
+        root.addView(createDialogHandle());
+        root.addView(buildSheetTitle("📋 Select Assessment", "#0038A8", Gravity.START, 4));
+
+        TextView subtitle = new TextView(this);
+        subtitle.setText(cls.getDisplayName());
+        subtitle.setTextSize(12);
+        subtitle.setTextColor(Color.parseColor("#64748B"));
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        slp.bottomMargin = dp(20);
+        subtitle.setLayoutParams(slp);
+        root.addView(subtitle);
+
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(400)));
+        LinearLayout listContainer = new LinearLayout(this);
+        listContainer.setOrientation(LinearLayout.VERTICAL);
+        scrollView.addView(listContainer);
+
+        for (ActivityFolder act : cls.getActivities()) {
+            View card = createSelectionCard(dialog, "📝", act.getName(), act.getSheetType() + " · " + act.getNumItems() + " Items", () -> {
+                dialog.dismiss();
+                selectedClass = cls;
+                selectedActivity = act;
+                selectedSheetType = act.getSheetType();
+                openGallery();
+            });
+            listContainer.addView(card);
+        }
+
+        root.addView(scrollView);
+
+        TextView back = new TextView(this);
+        back.setText("Back to Classes");
+        back.setTextSize(14);
+        back.setTextColor(Color.parseColor("#94A3B8"));
+        back.setGravity(Gravity.CENTER);
+        back.setPadding(0, dp(16), 0, dp(8));
+        back.setOnClickListener(v -> {
+            dialog.dismiss();
+            showGlobalUploadClassDialog();
+        });
+        root.addView(back);
+
+        dialog.setContentView(root);
+        configureBottomDialog(dialog);
+        dialog.show();
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // DOWNLOAD CLASS DATA
     // ═══════════════════════════════════════════════════════════════
@@ -2100,25 +2415,40 @@ public class DashboardActivity extends AppCompatActivity {
         content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(dp(20), dp(8), dp(20), 0);
 
-        EditText passwordInput = new EditText(this);
+        // ==== Password Field ====
+        TextInputLayout passwordLayout = new TextInputLayout(this);
+        passwordLayout.setHintEnabled(false);
+        passwordLayout.setBoxBackgroundMode(TextInputLayout.BOX_BACKGROUND_NONE);
+        passwordLayout.setEndIconMode(TextInputLayout.END_ICON_PASSWORD_TOGGLE);
+
+        TextInputEditText passwordInput = new TextInputEditText(passwordLayout.getContext());
         passwordInput.setHint("Password");
         passwordInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         passwordInput.setBackground(createInputBg());
         passwordInput.setPadding(dp(12), dp(10), dp(12), dp(10));
+        passwordLayout.addView(passwordInput);
 
-        EditText confirmInput = new EditText(this);
+        // ==== Confirm Password Field ====
+        TextInputLayout confirmLayout = new TextInputLayout(this);
+        confirmLayout.setHintEnabled(false);
+        confirmLayout.setBoxBackgroundMode(TextInputLayout.BOX_BACKGROUND_NONE);
+        confirmLayout.setEndIconMode(TextInputLayout.END_ICON_PASSWORD_TOGGLE);
+
+        TextInputEditText confirmInput = new TextInputEditText(confirmLayout.getContext());
         confirmInput.setHint("Confirm password");
         confirmInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         confirmInput.setBackground(createInputBg());
         confirmInput.setPadding(dp(12), dp(10), dp(12), dp(10));
+        confirmLayout.addView(confirmInput);
 
         LinearLayout.LayoutParams fieldLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         fieldLp.bottomMargin = dp(10);
-        passwordInput.setLayoutParams(fieldLp);
-        confirmInput.setLayoutParams(fieldLp);
-        content.addView(passwordInput);
-        content.addView(confirmInput);
+        passwordLayout.setLayoutParams(fieldLp);
+        confirmLayout.setLayoutParams(fieldLp);
+
+        content.addView(passwordLayout);
+        content.addView(confirmLayout);
 
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("Protect Download")
@@ -2234,32 +2564,35 @@ public class DashboardActivity extends AppCompatActivity {
                     String indName = (lrnOnly + "_" + cls.getGrade() + "-" + cls.getSection() + "_"
                             + act.getName().replaceAll("\\s+", "") + ".csv")
                             .replaceAll("[^a-zA-Z0-9_\\-\\.]", "_");
-                    StringBuilder sb = new StringBuilder("LRN,Score");
-                    for (int k = 1; k <= act.getNumItems(); k++) {
-                        sb.append(",Q").append(k);
+                    StringBuilder sb = new StringBuilder();
+                    String lrnVal = scan.getLrn() != null ? scan.getLrn() : "";
+                    for (int c = 0; c < lrnVal.length(); c++) {
+                        sb.append(lrnVal.charAt(c)).append(";");
                     }
-                    sb.append("\n").append(scan.getLrn() != null ? scan.getLrn() : "")
-                            .append(",").append(scan.getScore()).append("/").append(scan.getNumItems());
                     for (int k = 1; k <= act.getNumItems(); k++) {
                         String ans = scan.getAnswers() != null ? scan.getAnswers().get(k) : null;
-                        sb.append(",").append(ans != null ? ans : "");
+                        sb.append(ans != null ? ans : "");
+                        if (k < act.getNumItems()) {
+                            sb.append(";");
+                        }
                     }
                     sb.append("\n");
                     writeTextFile(new File(resultsDir, indName), sb.toString());
                     totalCsvs++;
                 }
 
-                StringBuilder actCsv = new StringBuilder("LRN,Score");
-                for (int i = 1; i <= act.getNumItems(); i++) {
-                    actCsv.append(",Q").append(i);
-                }
-                actCsv.append("\n");
+                StringBuilder actCsv = new StringBuilder();
                 for (ScanEntry scan : scans) {
-                    actCsv.append(scan.getLrn() != null ? scan.getLrn() : "")
-                            .append(",").append(scan.getScore()).append("/").append(scan.getNumItems());
+                    String lrnVal = scan.getLrn() != null ? scan.getLrn() : "";
+                    for (int c = 0; c < lrnVal.length(); c++) {
+                        actCsv.append(lrnVal.charAt(c)).append(";");
+                    }
                     for (int i = 1; i <= act.getNumItems(); i++) {
                         String ans = scan.getAnswers() != null ? scan.getAnswers().get(i) : null;
-                        actCsv.append(",").append(ans != null ? ans : "");
+                        actCsv.append(ans != null ? ans : "");
+                        if (i < act.getNumItems()) {
+                            actCsv.append(";");
+                        }
                     }
                     actCsv.append("\n");
                 }

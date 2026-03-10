@@ -202,18 +202,30 @@ public class BubbleScanner {
         }
 
         // For each column pick the row with the highest ratio
+        // Also detect double-shaded columns (2+ bubbles above threshold)
         StringBuilder lnr = new StringBuilder();
         for (int col = 0; col < block.cols; col++) {
+            // Count how many rows exceed the fill threshold in this column
+            int filledCount = 0;
             int bestRow = 0;
             double bestRatio = ratios[col][0];
-            for (int row = 1; row < block.rows; row++) {
+            for (int row = 0; row < block.rows; row++) {
+                if (ratios[col][row] >= FILL_THRESHOLD) {
+                    filledCount++;
+                }
                 if (ratios[col][row] > bestRatio) {
                     bestRatio = ratios[col][row];
                     bestRow = row;
                 }
             }
 
-            if (bestRatio >= FILL_THRESHOLD) {
+            if (filledCount >= 2) {
+                // DOUBLE-SHADED: 2 or more bubbles are filled in this column
+                lnr.append('X');
+                result.doubleShadedLnrPositions.add(col);
+                Log.w(TAG, String.format("LNR col %d: DOUBLE-SHADED (%d bubbles filled)",
+                        col, filledCount));
+            } else if (bestRatio >= FILL_THRESHOLD) {
                 // Digit clearly detected
                 lnr.append(bestRow);
             } else {
@@ -224,8 +236,9 @@ public class BubbleScanner {
                         col, bestRatio, FILL_THRESHOLD));
             }
 
-            Log.d(TAG, String.format("LNR col %d: digit=%d (ratio=%.3f)%s",
-                    col, bestRow, bestRatio,
+            Log.d(TAG, String.format("LNR col %d: digit=%d (ratio=%.3f, filled=%d)%s",
+                    col, bestRow, bestRatio, filledCount,
+                    filledCount >= 2 ? " [DOUBLE-SHADED]" :
                     bestRatio < FILL_THRESHOLD ? " [UNDETECTED]" : ""));
         }
 
@@ -242,6 +255,21 @@ public class BubbleScanner {
         // Draw red boxes around undetected LNR columns
         for (int col : result.undetectedLnrPositions) {
             // Calculate the bounding box for this column (spans all rows)
+            int topCy = (int) Math.round((block.startY) * scaleY) + offY;
+            int botCy = (int) Math.round((block.startY + (block.rows - 1) * block.dy) * scaleY) + offY;
+            int cx    = (int) Math.round((block.startX + col * block.dx) * scaleX) + offX;
+
+            int margin = scaledRadius + 4;
+            int x1 = Math.max(0, cx - margin);
+            int y1 = Math.max(0, topCy - margin);
+            int x2 = Math.min(overlay.cols() - 1, cx + margin);
+            int y2 = Math.min(overlay.rows() - 1, botCy + margin);
+
+            drawRedBox(overlay, x1, y1, x2, y2);
+        }
+
+        // Draw red boxes around double-shaded LNR columns
+        for (int col : result.doubleShadedLnrPositions) {
             int topCy = (int) Math.round((block.startY) * scaleY) + offY;
             int botCy = (int) Math.round((block.startY + (block.rows - 1) * block.dy) * scaleY) + offY;
             int cx    = (int) Math.round((block.startX + col * block.dx) * scaleX) + offX;

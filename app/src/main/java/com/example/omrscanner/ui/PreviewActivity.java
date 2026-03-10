@@ -176,7 +176,9 @@ public class PreviewActivity extends AppCompatActivity {
             finish();
         } else {
             // Go back to camera for retake
-            startActivity(new Intent(this, CameraActivity.class));
+            Intent intent = new Intent(this, CameraActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            startActivity(intent);
             finish();
         }
     }

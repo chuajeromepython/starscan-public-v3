@@ -16,7 +16,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
-import android.view.OrientationEventListener;
 import android.view.View;
 import android.view.Window;
 import android.widget.LinearLayout;
@@ -103,11 +102,6 @@ public class CameraActivity extends AppCompatActivity {
     private TextView anchorStatusText;
     private ImageView anchorStatusIcon;
     private TextView floatingHintText;
-    private LinearLayout orientationGuideOverlay;
-
-    // ── Orientation detection ─────────────────────────────────────
-    private OrientationEventListener orientationListener;
-    private boolean isInLandscape = false;
 
     // ── Camera state ──────────────────────────────────────────────
     private int cameraFacing = CameraSelector.LENS_FACING_BACK;
@@ -173,7 +167,6 @@ public class CameraActivity extends AppCompatActivity {
 
             initializeViews();
             setupListeners();
-            setupOrientationListener();
 
             cameraExecutor = Executors.newSingleThreadExecutor();
 
@@ -205,7 +198,6 @@ public class CameraActivity extends AppCompatActivity {
         anchorStatusText = findViewById(R.id.anchorStatusText);
         anchorStatusIcon = findViewById(R.id.anchorStatusIcon);
         floatingHintText = findViewById(R.id.floatingHintText);
-        orientationGuideOverlay = findViewById(R.id.orientationGuideOverlay);
 
         if (previewView   == null) Log.e(TAG, "previewView is null!");
         if (btnCapture    == null) Log.e(TAG, "btnCapture is null!");
@@ -307,8 +299,8 @@ public class CameraActivity extends AppCompatActivity {
 
     @OptIn(markerClass = ExperimentalGetImage.class)
     private void analyzeFrame(@NonNull ImageProxy imageProxy) {
-        // Skip if OpenCV not ready, already auto-captured, or orientation overlay showing
-        if (!openCVReady || autoCaptureTriggered || !isInLandscape) {
+        // Skip if OpenCV not ready or already auto-captured
+        if (!openCVReady || autoCaptureTriggered) {
             imageProxy.close();
             return;
         }
@@ -761,67 +753,6 @@ public class CameraActivity extends AppCompatActivity {
     }
 
     // ─────────────────────────────────────────────────────────────
-    //  ORIENTATION GUIDE
-    // ─────────────────────────────────────────────────────────────
-
-    /**
-     * Sets up an OrientationEventListener that monitors the device's physical
-     * rotation. When the phone is held in portrait (or near-portrait), a
-     * full-screen overlay is shown telling the user to rotate to landscape.
-     * The overlay hides automatically once landscape orientation is detected.
-     */
-    private void setupOrientationListener() {
-        orientationListener = new OrientationEventListener(this) {
-            @Override
-            public void onOrientationChanged(int orientation) {
-                if (orientation == ORIENTATION_UNKNOWN) return;
-
-                // Landscape ranges: 60-120 (right landscape) or 240-300 (left landscape)
-                boolean landscape = (orientation >= 60 && orientation <= 120)
-                        || (orientation >= 240 && orientation <= 300);
-
-                if (landscape != isInLandscape) {
-                    isInLandscape = landscape;
-                    runOnUiThread(() -> updateOrientationGuide(!landscape));
-                }
-            }
-        };
-    }
-
-    /**
-     * Show or hide the orientation guide overlay with a fade animation.
-     *
-     * @param show true to display the "rotate your phone" overlay
-     */
-    private void updateOrientationGuide(boolean show) {
-        if (orientationGuideOverlay == null) return;
-
-        if (show) {
-            if (orientationGuideOverlay.getVisibility() != View.VISIBLE) {
-                orientationGuideOverlay.setAlpha(0f);
-                orientationGuideOverlay.setVisibility(View.VISIBLE);
-                orientationGuideOverlay.animate()
-                        .alpha(1f)
-                        .setDuration(300)
-                        .start();
-            }
-        } else {
-            if (orientationGuideOverlay.getVisibility() == View.VISIBLE) {
-                orientationGuideOverlay.animate()
-                        .alpha(0f)
-                        .setDuration(300)
-                        .setListener(new AnimatorListenerAdapter() {
-                            @Override
-                            public void onAnimationEnd(Animator animation) {
-                                orientationGuideOverlay.setVisibility(View.GONE);
-                                orientationGuideOverlay.animate().setListener(null);
-                            }
-                        })
-                        .start();
-            }
-        }
-    }
-
     // ─────────────────────────────────────────────────────────────
     @Override
     protected void onResume() {
@@ -834,18 +765,6 @@ public class CameraActivity extends AppCompatActivity {
         smoothedAnchors = null;
         missingFramesCount = 0;
         frameSkipCounter = 0;
-
-        // Check current orientation immediately and show guide if portrait
-        int rotation = getWindowManager().getDefaultDisplay().getRotation();
-        boolean currentlyLandscape = (rotation == android.view.Surface.ROTATION_90
-                || rotation == android.view.Surface.ROTATION_270);
-        isInLandscape = currentlyLandscape;
-        updateOrientationGuide(!currentlyLandscape);
-
-        // Start listening for orientation changes
-        if (orientationListener != null && orientationListener.canDetectOrientation()) {
-            orientationListener.enable();
-        }
     }
 
     @Override
@@ -857,18 +776,11 @@ public class CameraActivity extends AppCompatActivity {
             cameraControl.enableTorch(false);
             updateFlashButton();
         }
-        // Stop listening when activity is not visible
-        if (orientationListener != null) {
-            orientationListener.disable();
-        }
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (orientationListener != null) {
-            orientationListener.disable();
-        }
         if (cameraExecutor != null) cameraExecutor.shutdown();
     }
 }
