@@ -141,7 +141,7 @@ public class DashboardActivity extends AppCompatActivity {
     private TextView homeClassSortPicker;
     private LinearLayout homeGradeFilterChips, homeSchoolYearFilterChips;
     private LinearLayout homeFilterPanel;
-    private TextView homeFilterToggle;
+    private android.widget.ImageView homeFilterToggle;
     private boolean homeFilterPanelVisible = false;
     private TextView classTeacherLabel;
     private TextView classNameLabel;
@@ -753,13 +753,29 @@ public class DashboardActivity extends AppCompatActivity {
         boolean hasActiveFilter = selectedClassGradeFilter != null
                 || selectedClassSchoolYearFilter != null
                 || !CLASS_SORT_NEWEST.equals(selectedClassSort);
-        if (hasActiveFilter) {
-            homeFilterToggle.setText("⚙ •");
-            homeFilterToggle.setTextColor(Color.parseColor("#2563EB"));
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(dp(8));
+
+        if (homeFilterPanelVisible) {
+            // Panel is open — filled blue background
+            bg.setColor(Color.parseColor("#0038A8"));
+            bg.setStroke(dp(1), Color.parseColor("#0038A8"));
+            homeFilterToggle.setColorFilter(Color.WHITE, android.graphics.PorterDuff.Mode.SRC_IN);
+        } else if (hasActiveFilter) {
+            // Panel closed but filters are active — light blue tinted background
+            bg.setColor(Color.parseColor("#EFF6FF"));
+            bg.setStroke(dp(1), Color.parseColor("#2563EB"));
+            homeFilterToggle.setColorFilter(Color.parseColor("#2563EB"), android.graphics.PorterDuff.Mode.SRC_IN);
         } else {
-            homeFilterToggle.setText("⚙");
-            homeFilterToggle.setTextColor(Color.parseColor("#64748B"));
+            // Default — subtle grey background
+            bg.setColor(Color.parseColor("#F1F5F9"));
+            bg.setStroke(dp(1), Color.parseColor("#E2E8F0"));
+            homeFilterToggle.setColorFilter(Color.parseColor("#64748B"), android.graphics.PorterDuff.Mode.SRC_IN);
         }
+
+        homeFilterToggle.setBackground(bg);
+        homeFilterToggle.setPadding(dp(6), dp(6), dp(6), dp(6));
     }
 
     // ═══════════════════════════════════════════════════════════════

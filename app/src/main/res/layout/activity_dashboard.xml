@@ -356,8 +356,9 @@
                                     android:layout_height="40dp"
                                     android:background="@drawable/bg_stat_blue"
                                     android:layout_marginBottom="8dp">
+
                                     <ImageView
-                                        android:layout_width="20dp"
+                                        android:layout_width="wrap_content"
                                         android:layout_height="20dp"
                                         android:layout_gravity="center"
                                         android:src="@drawable/ic_folder_open"
@@ -511,19 +512,20 @@
                                     android:textColor="#1E293B"
                                     android:letterSpacing="0.08"
                                     android:fontFamily="@font/poppins_medium" />
+
                                 <TextView
                                     android:id="@+id/homeClassCount"
                                     android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="4"
-                                    android:textSize="12sp"
-                                    android:textColor="#3730A3"
-                                    android:textStyle="bold"
+                                    android:layout_height="match_parent"
                                     android:background="@drawable/bg_stat_blue"
                                     android:paddingStart="10dp"
-                                    android:paddingEnd="10dp"
                                     android:paddingTop="3dp"
-                                    android:paddingBottom="3dp" />
+                                    android:paddingEnd="10dp"
+                                    android:paddingBottom="3dp"
+                                    android:text="4"
+                                    android:textColor="#3730A3"
+                                    android:textSize="12sp"
+                                    android:textStyle="bold" />
                             </LinearLayout>
 
                             <LinearLayout
@@ -551,20 +553,13 @@
                                     android:textColorHint="#94A3B8"
                                     android:textSize="13sp" />
 
-                                <TextView
+                                <ImageView
                                     android:id="@+id/homeFilterToggle"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginStart="8dp"
-                                    android:background="@drawable/bg_sort_pill"
-                                    android:paddingStart="10dp"
-                                    android:paddingTop="10dp"
-                                    android:paddingEnd="10dp"
-                                    android:paddingBottom="10dp"
-                                    android:text="⚙"
-                                    android:textSize="16sp"
-                                    android:clickable="true"
-                                    android:focusable="true" />
+                                    android:layout_width="32dp"
+                                    android:layout_height="32dp"
+                                    android:layout_gravity="center"
+                                    android:src="@drawable/sort"
+                                    android:layout_marginStart="8dp" />
                             </LinearLayout>
 
                             <LinearLayout
