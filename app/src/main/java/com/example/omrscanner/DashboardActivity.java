@@ -145,7 +145,6 @@ public class DashboardActivity extends AppCompatActivity {
     private boolean homeFilterPanelVisible = false;
     private TextView classTeacherLabel;
     private TextView classNameLabel;
-    private TextView classStudentCount;
     private TextView classActivityCount;
     private LinearLayout classEmpty, classActivityList;
     private LinearLayout classSheetTabs;
@@ -278,7 +277,6 @@ public class DashboardActivity extends AppCompatActivity {
 
         classTeacherLabel = findViewById(R.id.classTeacherLabel);
         classNameLabel = findViewById(R.id.classNameLabel);
-        classStudentCount = findViewById(R.id.classStudentCount);
         classActivityCount = findViewById(R.id.classActivityCount);
         classEmpty = findViewById(R.id.classEmpty);
         classActivityList = findViewById(R.id.classActivityList);
@@ -791,19 +789,8 @@ public class DashboardActivity extends AppCompatActivity {
 
         classTeacherLabel.setText("Teacher: " + displayTeacher);
         classNameLabel.setText(selectedClass.getDisplayName());
-
-        int maxScans = 0;
         int activityCount = selectedClass.getActivityCount();
-        if (selectedClass.getActivities() != null) {
-            for (ActivityFolder act : selectedClass.getActivities()) {
-                if (act.getScanCount() > maxScans) {
-                    maxScans = act.getScanCount();
-                }
-            }
-        }
-        
-        // Use max scans as an approximation for the number of students since it's the closest metric
-        classStudentCount.setText(maxScans + " student" + (maxScans == 1 ? "" : "s"));
+
         classActivityCount.setText(activityCount + " assessment" + (activityCount == 1 ? "" : "s"));
 
         List<ActivityFolder> activities = selectedClass.getActivities();
@@ -980,7 +967,7 @@ public class DashboardActivity extends AppCompatActivity {
                 ? row.examDate
                 : new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
                         .format(new java.util.Date(row.createdAt));
-        meta.setText("\uD83D\uDCC4 " + row.scanCount + " scan"
+        meta.setText("\uD83D\uDC65 " + row.scanCount + " student"
                 + (row.scanCount != 1 ? "s" : "")
                 + " · " + dateToShow);
         meta.setTextColor(Color.parseColor("#94A3B8"));

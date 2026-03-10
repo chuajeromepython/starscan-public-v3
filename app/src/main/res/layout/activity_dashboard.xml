@@ -773,20 +773,6 @@
                                         <ImageView
                                             android:layout_width="12dp"
                                             android:layout_height="12dp"
-                                            android:src="@drawable/ic_users"
-                                            app:tint="#CCFFFFFF"
-                                            android:layout_marginEnd="4dp" />
-                                        <TextView
-                                            android:id="@+id/classStudentCount"
-                                            android:layout_width="wrap_content"
-                                            android:layout_height="wrap_content"
-                                            android:text="35 students"
-                                            android:textColor="#CCFFFFFF"
-                                            android:textSize="12sp"
-                                            android:layout_marginEnd="16dp" />
-                                        <ImageView
-                                            android:layout_width="12dp"
-                                            android:layout_height="12dp"
                                             android:src="@drawable/ic_book_open"
                                             app:tint="#CCFFFFFF"
                                             android:layout_marginEnd="4dp" />
@@ -1108,11 +1094,12 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginBottom="16dp"
-        android:text="© 2026 OMR Scanner"
+        android:text="© 2026 Stars"
         android:textColor="#94A3B8"
         android:textSize="10sp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.498"
         app:layout_constraintStart_toStartOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
