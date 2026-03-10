@@ -7,79 +7,72 @@
     android:background="@drawable/bg_root_gradient">
 
     <!-- ═══════════════════════════════════════════════════════
-         HEADER
+         HEADER  ·  Compact version (was 36dp/60dp → now 16dp/36dp)
     ═══════════════════════════════════════════════════════════ -->
     <FrameLayout
         android:id="@+id/headerCard"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@drawable/bg_header_gradient"
-        android:paddingStart="20dp"
+        android:paddingStart="16dp"
         android:paddingEnd="20dp"
-        android:paddingTop="36dp"
-        android:paddingBottom="60dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="36dp"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
         <!-- Decorative circle — top-end -->
         <View
-            android:layout_width="140dp"
-            android:layout_height="140dp"
+            android:layout_width="100dp"
+            android:layout_height="100dp"
             android:layout_gravity="top|end"
-            android:layout_marginTop="-30dp"
-            android:layout_marginEnd="-20dp"
+            android:layout_marginTop="-20dp"
+            android:layout_marginEnd="-16dp"
             android:background="@drawable/shape_circle_white"
             android:alpha="0.10" />
 
         <!-- Decorative circle — bottom-start -->
-        <View
-            android:layout_width="96dp"
-            android:layout_height="96dp"
-            android:layout_gravity="bottom|start"
-            android:layout_marginBottom="-10dp"
-            android:layout_marginStart="-15dp"
-            android:background="@drawable/shape_circle_white"
-            android:alpha="0.07" />
 
         <!-- Small decorative circle — mid-right -->
         <View
-            android:layout_width="64dp"
-            android:layout_height="64dp"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
             android:layout_gravity="top|end"
-            android:layout_marginTop="90dp"
-            android:layout_marginEnd="30dp"
+            android:layout_marginTop="60dp"
+            android:layout_marginEnd="24dp"
             android:background="@drawable/shape_circle_white"
             android:alpha="0.05" />
 
-        <!-- ══ HEADER CONTENT — ConstraintLayout for precise placement ══ -->
-        <!-- ══ HEADER CONTENT — ConstraintLayout for precise placement ══ -->
+        <!-- ══ HEADER CONTENT ══ -->
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:layout_gravity="center_vertical">
 
-            <!-- Circular logo avatar — centered vertically, left-aligned -->
+            <!-- Logo wrapped nicely -->
             <ImageView
                 android:id="@+id/headerLogo"
-                android:layout_width="85dp"
-                android:layout_height="85dp"
+                android:layout_width="75dp"
+                android:layout_height="75dp"
                 android:adjustViewBounds="true"
                 android:contentDescription="STARS logo"
                 android:src="@mipmap/star_plain_foreground"
+                android:background="@drawable/shape_circle_white"
+                android:backgroundTint="#33FFFFFF"
                 android:padding="6dp"
-                android:elevation="2dp"
+                android:elevation="0dp"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toBottomOf="parent" />
 
-            <!-- App name + teacher name stacked vertically, centered on logo -->
+            <!-- App name + teacher name -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:gravity="center_vertical"
-                android:layout_marginStart="12dp"
+                android:layout_marginStart="8dp"
                 app:layout_constraintStart_toEndOf="@id/headerLogo"
                 app:layout_constraintEnd_toStartOf="@id/btnUpload"
                 app:layout_constraintTop_toTopOf="parent"
@@ -91,7 +84,8 @@
                     android:layout_height="wrap_content"
                     android:text="STARS"
                     android:textColor="#FFFFFF"
-                    android:textSize="24sp"
+                    android:textSize="25sp"
+                    android:fontFamily="@font/poppins_bold"
                     android:textStyle="bold"
                     android:letterSpacing="0.05"
                     android:includeFontPadding="false" />
@@ -100,7 +94,7 @@
                     android:id="@+id/teacherNameRow"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
+                    android:layout_marginTop="2dp"
                     android:orientation="horizontal"
                     android:gravity="center_vertical"
                     android:background="?attr/selectableItemBackgroundBorderless"
@@ -111,37 +105,39 @@
                         android:id="@+id/tvTeacherName"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Tap to set teacher name"
-                        android:textColor="#CCFFFFFF"
-                        android:textSize="13sp"
-                        android:textStyle="normal"
-                        android:maxLines="1"
                         android:ellipsize="end"
-                        android:includeFontPadding="false" />
+                        android:includeFontPadding="false"
+                        android:maxLines="2"
+                        android:fontFamily="@font/poppins_medium"
+                        android:text="Tap to set teacher name"
+                        android:textColor="#FFFFFF"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
 
                     <ImageView
                         android:id="@+id/btnEditTeacherName"
-                        android:layout_width="13dp"
-                        android:layout_height="13dp"
+                        android:layout_width="14dp"
+                        android:layout_height="14dp"
                         android:src="@drawable/ic_edit_pencil"
                         android:layout_marginStart="6dp"
-                        android:layout_gravity="center_vertical"
-                        android:alpha="0.7"
+                        android:layout_marginTop="3dp"
+                        android:alpha="0.9"
+                        app:tint="#E2E8F0"
                         android:contentDescription="Edit teacher name" />
 
                 </LinearLayout>
 
             </LinearLayout>
 
-            <!-- Upload button — centered vertically, right-aligned -->
+            <!-- Upload button — smaller (was 44dp → now 38dp) -->
             <ImageButton
                 android:id="@+id/btnUpload"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
                 android:src="@drawable/ic_upload"
                 android:contentDescription="Upload"
                 android:background="@drawable/bg_icon_circle_white"
-                android:padding="10dp"
+                android:padding="8dp"
                 android:elevation="2dp"
                 app:tint="#FFFFFF"
                 app:layout_constraintEnd_toEndOf="parent"
@@ -150,7 +146,7 @@
 
         </androidx.constraintlayout.widget.ConstraintLayout>
 
-        <!-- topBarTitle: kept for Java compatibility — GONE, takes no space -->
+        <!-- topBarTitle: kept for Java compatibility — GONE -->
         <TextView
             android:id="@+id/topBarTitle"
             android:layout_width="wrap_content"
@@ -158,10 +154,7 @@
             android:visibility="gone"
             android:textSize="0sp" />
 
-        <!-- topBarBadge: kept for Java compatibility — GONE by default.
-             This is what DashboardActivity.java shows/hides for
-             assessment counts and sheet-type labels. It is separate
-             from the visible "STARS" label above. -->
+        <!-- topBarBadge: kept for Java compatibility — GONE by default -->
         <TextView
             android:id="@+id/topBarBadge"
             android:layout_width="wrap_content"
@@ -173,6 +166,7 @@
 
     <!-- ═══════════════════════════════════════════════════════
          CONTENT CARD
+         marginTop reduced (was -40dp → -28dp) to match smaller header overlap
     ═══════════════════════════════════════════════════════════ -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/contentCard"
@@ -180,15 +174,15 @@
         android:layout_height="0dp"
         android:layout_marginStart="12dp"
         android:layout_marginEnd="12dp"
-        android:layout_marginTop="-40dp"
-        android:layout_marginBottom="0dp"
+        android:layout_marginTop="-28dp"
+        android:layout_marginBottom="20dp"
         app:cardBackgroundColor="#F2FFFFFF"
         app:cardCornerRadius="24dp"
         app:cardElevation="6dp"
         app:strokeColor="#33FFFFFF"
         app:strokeWidth="1dp"
         app:layout_constraintTop_toBottomOf="@id/headerCard"
-        app:layout_constraintBottom_toTopOf="@id/fabSpacer"
+        app:layout_constraintBottom_toTopOf="@id/fab"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
@@ -326,15 +320,16 @@
                     android:orientation="vertical"
                     android:visibility="visible">
 
+                    <!-- Stats row — tighter padding (was 16dp → 12dp top/bottom) -->
                     <LinearLayout
                         android:id="@+id/statsRow"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal"
-                        android:paddingStart="16dp"
-                        android:paddingEnd="16dp"
-                        android:paddingTop="16dp"
-                        android:paddingBottom="12dp">
+                        android:paddingStart="14dp"
+                        android:paddingEnd="14dp"
+                        android:paddingTop="12dp"
+                        android:paddingBottom="8dp">
 
                         <com.google.android.material.card.MaterialCardView
                             android:layout_width="0dp"
@@ -342,7 +337,7 @@
                             android:layout_weight="1"
                             android:layout_marginEnd="5dp"
                             app:cardBackgroundColor="#FFFFFF"
-                            app:cardCornerRadius="16dp"
+                            app:cardCornerRadius="14dp"
                             app:cardElevation="2dp"
                             app:strokeColor="#F1F5F9"
                             app:strokeWidth="1dp">
@@ -351,16 +346,15 @@
                                 android:layout_height="wrap_content"
                                 android:orientation="vertical"
                                 android:gravity="center"
-                                android:padding="14dp">
+                                android:padding="10dp">
                                 <FrameLayout
-                                    android:layout_width="40dp"
-                                    android:layout_height="40dp"
+                                    android:layout_width="34dp"
+                                    android:layout_height="34dp"
                                     android:background="@drawable/bg_stat_blue"
-                                    android:layout_marginBottom="8dp">
-
+                                    android:layout_marginBottom="6dp">
                                     <ImageView
                                         android:layout_width="wrap_content"
-                                        android:layout_height="20dp"
+                                        android:layout_height="16dp"
                                         android:layout_gravity="center"
                                         android:src="@drawable/ic_folder_open"
                                         app:tint="#3730A3" />
@@ -370,17 +364,17 @@
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:text="@string/four"
-                                    android:textSize="24sp"
+                                    android:textSize="20sp"
                                     android:textStyle="bold"
                                     android:textColor="#3730A3" />
                                 <TextView
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:text="CLASSES"
-                                    android:textSize="10sp"
+                                    android:textSize="9sp"
                                     android:textColor="#94A3B8"
                                     android:letterSpacing="0.08"
-                                    android:layout_marginTop="2dp" />
+                                    android:layout_marginTop="1dp" />
                             </LinearLayout>
                         </com.google.android.material.card.MaterialCardView>
 
@@ -391,7 +385,7 @@
                             android:layout_marginStart="5dp"
                             android:layout_marginEnd="5dp"
                             app:cardBackgroundColor="#FFFFFF"
-                            app:cardCornerRadius="16dp"
+                            app:cardCornerRadius="14dp"
                             app:cardElevation="2dp"
                             app:strokeColor="#F1F5F9"
                             app:strokeWidth="1dp">
@@ -400,15 +394,15 @@
                                 android:layout_height="wrap_content"
                                 android:orientation="vertical"
                                 android:gravity="center"
-                                android:padding="14dp">
+                                android:padding="10dp">
                                 <FrameLayout
-                                    android:layout_width="40dp"
-                                    android:layout_height="40dp"
+                                    android:layout_width="34dp"
+                                    android:layout_height="34dp"
                                     android:background="@drawable/bg_stat_green"
-                                    android:layout_marginBottom="8dp">
+                                    android:layout_marginBottom="6dp">
                                     <ImageView
-                                        android:layout_width="20dp"
-                                        android:layout_height="20dp"
+                                        android:layout_width="16dp"
+                                        android:layout_height="16dp"
                                         android:layout_gravity="center"
                                         android:src="@drawable/ic_clipboard_list"
                                         app:tint="#059669" />
@@ -418,17 +412,17 @@
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:text="@string/twenty_eight"
-                                    android:textSize="24sp"
+                                    android:textSize="20sp"
                                     android:textStyle="bold"
                                     android:textColor="#059669" />
                                 <TextView
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:text="TESTS"
-                                    android:textSize="10sp"
+                                    android:textSize="9sp"
                                     android:textColor="#94A3B8"
                                     android:letterSpacing="0.08"
-                                    android:layout_marginTop="2dp" />
+                                    android:layout_marginTop="1dp" />
                             </LinearLayout>
                         </com.google.android.material.card.MaterialCardView>
 
@@ -438,7 +432,7 @@
                             android:layout_weight="1"
                             android:layout_marginStart="5dp"
                             app:cardBackgroundColor="#FFFFFF"
-                            app:cardCornerRadius="16dp"
+                            app:cardCornerRadius="14dp"
                             app:cardElevation="2dp"
                             app:strokeColor="#F1F5F9"
                             app:strokeWidth="1dp">
@@ -447,15 +441,15 @@
                                 android:layout_height="wrap_content"
                                 android:orientation="vertical"
                                 android:gravity="center"
-                                android:padding="14dp">
+                                android:padding="10dp">
                                 <FrameLayout
-                                    android:layout_width="40dp"
-                                    android:layout_height="40dp"
+                                    android:layout_width="34dp"
+                                    android:layout_height="34dp"
                                     android:background="@drawable/bg_stat_violet"
-                                    android:layout_marginBottom="8dp">
+                                    android:layout_marginBottom="6dp">
                                     <ImageView
-                                        android:layout_width="20dp"
-                                        android:layout_height="20dp"
+                                        android:layout_width="16dp"
+                                        android:layout_height="16dp"
                                         android:layout_gravity="center"
                                         android:src="@drawable/ic_scan_line"
                                         app:tint="#7C3AED" />
@@ -465,17 +459,17 @@
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:text="142"
-                                    android:textSize="24sp"
+                                    android:textSize="20sp"
                                     android:textStyle="bold"
                                     android:textColor="#7C3AED" />
                                 <TextView
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:text="SCANS"
-                                    android:textSize="10sp"
+                                    android:textSize="9sp"
                                     android:textColor="#94A3B8"
                                     android:letterSpacing="0.08"
-                                    android:layout_marginTop="2dp" />
+                                    android:layout_marginTop="1dp" />
                             </LinearLayout>
                         </com.google.android.material.card.MaterialCardView>
 
@@ -493,22 +487,22 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:orientation="vertical"
-                            android:paddingStart="16dp"
-                            android:paddingEnd="16dp"
-                            android:paddingBottom="72dp">
+                            android:paddingStart="14dp"
+                            android:paddingEnd="14dp"
+                            android:paddingBottom="80dp">
 
                             <LinearLayout
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:orientation="horizontal"
                                 android:gravity="center_vertical"
-                                android:layout_marginBottom="10dp">
+                                android:layout_marginBottom="8dp">
                                 <TextView
                                     android:layout_width="0dp"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="1"
                                     android:text="MY CLASSES"
-                                    android:textSize="13sp"
+                                    android:textSize="12sp"
                                     android:textStyle="bold"
                                     android:textColor="#1E293B"
                                     android:letterSpacing="0.08"
@@ -525,7 +519,7 @@
                                     android:paddingBottom="3dp"
                                     android:text="4"
                                     android:textColor="#3730A3"
-                                    android:textSize="12sp"
+                                    android:textSize="11sp"
                                     android:textStyle="bold" />
                             </LinearLayout>
 
@@ -534,7 +528,7 @@
                                 android:layout_height="wrap_content"
                                 android:orientation="horizontal"
                                 android:gravity="center_vertical"
-                                android:layout_marginBottom="10dp">
+                                android:layout_marginBottom="8dp">
 
                                 <EditText
                                     android:id="@+id/homeClassSearchInput"
@@ -546,13 +540,13 @@
                                     android:imeOptions="actionDone"
                                     android:inputType="text"
                                     android:maxLines="1"
-                                    android:paddingStart="14dp"
-                                    android:paddingTop="10dp"
-                                    android:paddingEnd="14dp"
-                                    android:paddingBottom="10dp"
+                                    android:paddingStart="12dp"
+                                    android:paddingTop="9dp"
+                                    android:paddingEnd="12dp"
+                                    android:paddingBottom="9dp"
                                     android:textColor="#1E293B"
                                     android:textColorHint="#94A3B8"
-                                    android:textSize="13sp" />
+                                    android:textSize="12sp" />
 
                                 <ImageView
                                     android:id="@+id/homeFilterToggle"
@@ -567,16 +561,16 @@
                                 android:id="@+id/homeFilterPanel"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:layout_marginBottom="10dp"
+                                android:layout_marginBottom="8dp"
                                 android:background="@drawable/bg_filter_panel"
                                 android:orientation="vertical"
-                                android:padding="12dp"
+                                android:padding="10dp"
                                 android:visibility="gone">
 
                                 <LinearLayout
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
-                                    android:layout_marginBottom="10dp"
+                                    android:layout_marginBottom="8dp"
                                     android:gravity="center_vertical"
                                     android:orientation="horizontal">
                                     <TextView
@@ -585,7 +579,7 @@
                                         android:layout_weight="1"
                                         android:text="Sort"
                                         android:textColor="#64748B"
-                                        android:textSize="12sp"
+                                        android:textSize="11sp"
                                         android:textStyle="bold" />
                                     <TextView
                                         android:id="@+id/homeClassSortPicker"
@@ -593,27 +587,27 @@
                                         android:layout_height="wrap_content"
                                         android:background="@drawable/bg_sort_pill"
                                         android:paddingStart="10dp"
-                                        android:paddingTop="6dp"
+                                        android:paddingTop="5dp"
                                         android:paddingEnd="10dp"
-                                        android:paddingBottom="6dp"
+                                        android:paddingBottom="5dp"
                                         android:text="Newest ▾"
                                         android:textColor="#1E293B"
-                                        android:textSize="12sp" />
+                                        android:textSize="11sp" />
                                 </LinearLayout>
 
                                 <TextView
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
-                                    android:layout_marginBottom="6dp"
+                                    android:layout_marginBottom="5dp"
                                     android:text="Filter Grade"
                                     android:textColor="#64748B"
-                                    android:textSize="11sp"
+                                    android:textSize="10sp"
                                     android:textStyle="bold" />
 
                                 <HorizontalScrollView
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
-                                    android:layout_marginBottom="10dp"
+                                    android:layout_marginBottom="8dp"
                                     android:scrollbars="none">
                                     <LinearLayout
                                         android:id="@+id/homeGradeFilterChips"
@@ -625,10 +619,10 @@
                                 <TextView
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
-                                    android:layout_marginBottom="6dp"
+                                    android:layout_marginBottom="5dp"
                                     android:text="Filter School Year"
                                     android:textColor="#64748B"
-                                    android:textSize="11sp"
+                                    android:textSize="10sp"
                                     android:textStyle="bold" />
 
                                 <HorizontalScrollView
@@ -657,29 +651,29 @@
                                 android:orientation="vertical"
                                 android:gravity="center"
                                 android:padding="40dp"
-                                android:layout_marginTop="60dp"
+                                android:layout_marginTop="40dp"
                                 android:visibility="visible">
                                 <TextView
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:text="📁"
-                                    android:textSize="52sp"
+                                    android:textSize="48sp"
                                     android:alpha="0.4" />
                                 <TextView
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:text="No class folders yet"
                                     android:textColor="#64748B"
-                                    android:textSize="15sp"
+                                    android:textSize="14sp"
                                     android:textStyle="bold"
                                     android:fontFamily="@font/poppins_medium"
-                                    android:layout_marginTop="12dp" />
+                                    android:layout_marginTop="10dp" />
                                 <TextView
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:text="Tap + to create your first class"
                                     android:textColor="#94A3B8"
-                                    android:textSize="13sp"
+                                    android:textSize="12sp"
                                     android:layout_marginTop="4dp" />
                             </LinearLayout>
 
@@ -704,16 +698,16 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:paddingStart="16dp"
-                        android:paddingEnd="16dp"
-                        android:paddingTop="16dp"
+                        android:paddingStart="14dp"
+                        android:paddingEnd="14dp"
+                        android:paddingTop="14dp"
                         android:paddingBottom="72dp">
 
                         <com.google.android.material.card.MaterialCardView
                             android:id="@+id/classInfoCard"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginBottom="20dp"
+                            android:layout_marginBottom="16dp"
                             app:cardCornerRadius="20dp"
                             app:cardElevation="3dp"
                             app:strokeWidth="0dp">
@@ -740,26 +734,26 @@
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:orientation="vertical"
-                                    android:padding="20dp">
+                                    android:padding="16dp">
                                     <LinearLayout
                                         android:layout_width="wrap_content"
                                         android:layout_height="wrap_content"
                                         android:orientation="horizontal"
                                         android:gravity="center_vertical"
-                                        android:layout_marginBottom="4dp">
+                                        android:layout_marginBottom="2dp">
                                         <ImageView
-                                            android:layout_width="16dp"
-                                            android:layout_height="16dp"
+                                            android:layout_width="14dp"
+                                            android:layout_height="14dp"
                                             android:src="@drawable/ic_graduation_cap"
                                             app:tint="#CCFFFFFF"
-                                            android:layout_marginEnd="6dp" />
+                                            android:layout_marginEnd="5dp" />
                                         <TextView
                                             android:id="@+id/classTeacherLabel"
                                             android:layout_width="wrap_content"
                                             android:layout_height="wrap_content"
                                             android:text="Teacher: Unknown"
                                             android:textColor="#CCFFFFFF"
-                                            android:textSize="13sp" />
+                                            android:textSize="12sp" />
                                     </LinearLayout>
                                     <TextView
                                         android:id="@+id/classNameLabel"
@@ -767,18 +761,18 @@
                                         android:layout_height="wrap_content"
                                         android:text="Grade 10 — Section A"
                                         android:textColor="#FFFFFF"
-                                        android:textSize="18sp"
+                                        android:textSize="16sp"
                                         android:textStyle="bold"
-                                        android:layout_marginTop="4dp"
-                                        android:layout_marginBottom="12dp" />
+                                        android:layout_marginTop="2dp"
+                                        android:layout_marginBottom="10dp" />
                                     <LinearLayout
                                         android:layout_width="wrap_content"
                                         android:layout_height="wrap_content"
                                         android:orientation="horizontal"
                                         android:gravity="center_vertical">
                                         <ImageView
-                                            android:layout_width="14dp"
-                                            android:layout_height="14dp"
+                                            android:layout_width="12dp"
+                                            android:layout_height="12dp"
                                             android:src="@drawable/ic_users"
                                             app:tint="#CCFFFFFF"
                                             android:layout_marginEnd="4dp" />
@@ -788,11 +782,11 @@
                                             android:layout_height="wrap_content"
                                             android:text="35 students"
                                             android:textColor="#CCFFFFFF"
-                                            android:textSize="13sp"
-                                            android:layout_marginEnd="20dp" />
+                                            android:textSize="12sp"
+                                            android:layout_marginEnd="16dp" />
                                         <ImageView
-                                            android:layout_width="14dp"
-                                            android:layout_height="14dp"
+                                            android:layout_width="12dp"
+                                            android:layout_height="12dp"
                                             android:src="@drawable/ic_book_open"
                                             app:tint="#CCFFFFFF"
                                             android:layout_marginEnd="4dp" />
@@ -802,7 +796,7 @@
                                             android:layout_height="wrap_content"
                                             android:text="8 assessments"
                                             android:textColor="#CCFFFFFF"
-                                            android:textSize="13sp" />
+                                            android:textSize="12sp" />
                                     </LinearLayout>
                                 </LinearLayout>
                             </FrameLayout>
@@ -813,20 +807,20 @@
                             android:layout_height="wrap_content"
                             android:orientation="horizontal"
                             android:gravity="center_vertical"
-                            android:layout_marginBottom="8dp">
+                            android:layout_marginBottom="6dp">
                             <TextView
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:text="Assessments"
-                                android:textSize="15sp"
+                                android:textSize="14sp"
                                 android:textStyle="bold"
                                 android:textColor="#1E293B" />
                             <TextView
                                 android:id="@+id/classAssessmentCount"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:textSize="12sp"
+                                android:textSize="11sp"
                                 android:textColor="#94A3B8" />
                         </LinearLayout>
 
@@ -834,7 +828,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:scrollbars="none"
-                            android:layout_marginBottom="12dp">
+                            android:layout_marginBottom="10dp">
                             <LinearLayout
                                 android:id="@+id/classSheetTabs"
                                 android:layout_width="wrap_content"
@@ -845,7 +839,7 @@
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginBottom="12dp"
+                            android:layout_marginBottom="10dp"
                             android:orientation="horizontal"
                             android:gravity="center_vertical">
                             <EditText
@@ -858,13 +852,13 @@
                                 android:imeOptions="actionDone"
                                 android:inputType="text"
                                 android:maxLines="1"
-                                android:paddingStart="14dp"
-                                android:paddingTop="10dp"
-                                android:paddingEnd="14dp"
-                                android:paddingBottom="10dp"
+                                android:paddingStart="12dp"
+                                android:paddingTop="9dp"
+                                android:paddingEnd="12dp"
+                                android:paddingBottom="9dp"
                                 android:textColor="#1E293B"
                                 android:textColorHint="#94A3B8"
-                                android:textSize="13sp" />
+                                android:textSize="12sp" />
                             <TextView
                                 android:id="@+id/classAssessmentSortPicker"
                                 android:layout_width="wrap_content"
@@ -872,12 +866,12 @@
                                 android:layout_marginStart="8dp"
                                 android:background="@drawable/bg_sort_pill"
                                 android:paddingStart="10dp"
-                                android:paddingTop="10dp"
+                                android:paddingTop="9dp"
                                 android:paddingEnd="10dp"
-                                android:paddingBottom="10dp"
+                                android:paddingBottom="9dp"
                                 android:text="Newest ▾"
                                 android:textColor="#1E293B"
-                                android:textSize="12sp" />
+                                android:textSize="11sp" />
                         </LinearLayout>
 
                         <LinearLayout
@@ -894,29 +888,29 @@
                             android:orientation="vertical"
                             android:gravity="center"
                             android:padding="40dp"
-                            android:layout_marginTop="40dp"
+                            android:layout_marginTop="30dp"
                             android:visibility="visible">
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="📋"
-                                android:textSize="52sp"
+                                android:textSize="48sp"
                                 android:alpha="0.4" />
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="No assessments yet"
                                 android:textColor="#64748B"
-                                android:textSize="15sp"
+                                android:textSize="14sp"
                                 android:textStyle="bold"
                                 android:fontFamily="@font/poppins_medium"
-                                android:layout_marginTop="12dp" />
+                                android:layout_marginTop="10dp" />
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="Tap + to add an assessment"
                                 android:textColor="#94A3B8"
-                                android:textSize="13sp"
+                                android:textSize="12sp"
                                 android:layout_marginTop="4dp" />
                         </LinearLayout>
 
@@ -939,16 +933,16 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:paddingStart="16dp"
-                        android:paddingEnd="16dp"
-                        android:paddingTop="16dp"
-                        android:paddingBottom="16dp">
+                        android:paddingStart="14dp"
+                        android:paddingEnd="14dp"
+                        android:paddingTop="14dp"
+                        android:paddingBottom="14dp">
 
                         <androidx.cardview.widget.CardView
                             android:id="@+id/scanCtaCard"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginBottom="20dp"
+                            android:layout_marginBottom="16dp"
                             android:clickable="true"
                             android:focusable="true"
                             android:foreground="?android:attr/selectableItemBackground"
@@ -979,16 +973,16 @@
                                     android:layout_height="wrap_content"
                                     android:orientation="vertical"
                                     android:gravity="center"
-                                    android:padding="24dp">
+                                    android:padding="20dp">
                                     <FrameLayout
-                                        android:layout_width="56dp"
-                                        android:layout_height="56dp"
+                                        android:layout_width="50dp"
+                                        android:layout_height="50dp"
                                         android:layout_gravity="center_horizontal"
-                                        android:layout_marginBottom="12dp"
+                                        android:layout_marginBottom="10dp"
                                         android:background="@drawable/bg_icon_box_white">
                                         <ImageView
-                                            android:layout_width="28dp"
-                                            android:layout_height="28dp"
+                                            android:layout_width="24dp"
+                                            android:layout_height="24dp"
                                             android:layout_gravity="center"
                                             android:src="@drawable/ic_camera"
                                             app:tint="#FFFFFF" />
@@ -998,16 +992,16 @@
                                         android:layout_height="wrap_content"
                                         android:text="Start Scanning"
                                         android:textColor="#FFFFFF"
-                                        android:textSize="18sp"
+                                        android:textSize="16sp"
                                         android:textStyle="bold"
-                                        android:layout_marginBottom="6dp" />
+                                        android:layout_marginBottom="4dp" />
                                     <TextView
                                         android:id="@+id/scanCtaSub"
                                         android:layout_width="wrap_content"
                                         android:layout_height="wrap_content"
                                         android:text="ZPH30 · 30 items"
                                         android:textColor="#C7D2FE"
-                                        android:textSize="13sp" />
+                                        android:textSize="12sp" />
                                 </LinearLayout>
                             </FrameLayout>
                         </androidx.cardview.widget.CardView>
@@ -1018,7 +1012,7 @@
                             android:layout_height="wrap_content"
                             android:orientation="horizontal"
                             android:gravity="center_vertical"
-                            android:layout_marginBottom="12dp"
+                            android:layout_marginBottom="10dp"
                             android:visibility="gone">
                             <TextView
                                 android:layout_width="0dp"
@@ -1026,7 +1020,7 @@
                                 android:layout_weight="1"
                                 android:text="SCANNED PAPERS"
                                 android:textColor="#94A3B8"
-                                android:textSize="11sp"
+                                android:textSize="10sp"
                                 android:textStyle="bold"
                                 android:letterSpacing="0.10" />
                             <TextView
@@ -1035,7 +1029,7 @@
                                 android:layout_height="wrap_content"
                                 android:text="0 total"
                                 android:textColor="#F43F5E"
-                                android:textSize="11sp"
+                                android:textSize="10sp"
                                 android:textStyle="bold" />
                         </LinearLayout>
 
@@ -1058,23 +1052,23 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="🗒"
-                                android:textSize="52sp"
+                                android:textSize="48sp"
                                 android:alpha="0.4" />
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="No scans yet"
                                 android:textColor="#64748B"
-                                android:textSize="15sp"
+                                android:textSize="14sp"
                                 android:textStyle="bold"
                                 android:fontFamily="@font/poppins_medium"
-                                android:layout_marginTop="12dp" />
+                                android:layout_marginTop="10dp" />
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="Tap 'Start Scanning' to begin"
                                 android:textColor="#94A3B8"
-                                android:textSize="13sp"
+                                android:textSize="12sp"
                                 android:layout_marginTop="4dp" />
                         </LinearLayout>
 
@@ -1085,22 +1079,13 @@
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
-    <!-- ═══ FAB SPACER — always reserves the button zone height so the
-         contentCard top never shifts when the FAB is GONE ═══ -->
-    <View
-        android:id="@+id/fabSpacer"
-        android:layout_width="0dp"
-        android:layout_height="56dp"
-        app:layout_constraintBottom_toTopOf="@id/footer"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- ═══ FAB — floats over the spacer zone ═══ -->
+    <!-- ═══ FAB — proper margin from footer (was 4dp → now 16dp) ═══ -->
     <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
         android:id="@+id/fab"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="4dp"
+        android:layout_marginBottom="16dp"
         android:text="Class"
         android:textAllCaps="false"
         android:textColor="#FFFFFF"
@@ -1108,7 +1093,7 @@
         android:gravity="center"
         app:icon="@drawable/ic_plus"
         app:iconTint="#FFFFFF"
-        app:iconSize="20dp"
+        app:iconSize="18dp"
         app:backgroundTint="#F43F5E"
         app:elevation="8dp"
         app:cornerRadius="16dp"
@@ -1117,15 +1102,15 @@
         app:layout_constraintEnd_toEndOf="parent"
         android:visibility="visible" />
 
-    <!-- ═══ FOOTER ═══ -->
+    <!-- ═══ FOOTER — more breathing room (was 12dp → 16dp) ═══ -->
     <TextView
         android:id="@+id/footer"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="12dp"
+        android:layout_marginBottom="16dp"
         android:text="© 2026 OMR Scanner"
         android:textColor="#94A3B8"
-        android:textSize="11sp"
+        android:textSize="10sp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
