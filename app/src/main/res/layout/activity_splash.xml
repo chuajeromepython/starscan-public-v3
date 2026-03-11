@@ -1,19 +1,291 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!--
+    activity_splash.xml  ─ STARS Splash Screen
+    ─────────────────────────────────────────────────────────────────
+    Drawable files required in res/drawable/:
+      • bg_splash_gradient.xml      — white→light-blue radial/linear bg
+      • shape_glow_large.xml        — large soft radial glow (green-tinted)
+      • shape_glow_ring.xml         — subtle cobalt ring
+      • bg_accent_bar.xml           — rainbow gradient bar (4dp tall)
+      • shape_dot_green.xml         — 8dp circle  #4ADE80
+      • shape_dot_teal.xml          — 8dp circle  #38BDF8
+      • shape_dot_blue.xml          — 8dp circle  #818CF8
+
+    Particle dots (purely decorative, scattered around screen):
+      • shape_particle_green.xml    — small circle #4ADE80
+      • shape_particle_teal.xml     — small circle #38BDF8
+      • shape_particle_blue.xml     — small circle #818CF8
+      • shape_particle_yellow.xml   — small circle #FBBF24
+      • shape_particle_orange.xml   — small circle #F97316
+      • shape_particle_purple.xml   — small circle #A78BFA
+      • shape_particle_pink.xml     — small circle #F472B6
+
+    Mipmap / drawable required:
+      • stars_logo_foreground       — the STARS logo PNG (provided)
+
+    Animation:
+      • Particles are animated in SplashActivity.java via ObjectAnimator
+        (float up / fade / pulse). Assign each View an id like
+        particle1…particle14 and animate in Java.
+    ─────────────────────────────────────────────────────────────────
+-->
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:id="@+id/relativeLayout"
+    android:id="@+id/splashRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/bg_header_gradient">
+    android:background="@drawable/bg_splash_gradient">
 
+    <!-- ══════════════════════════════════════════════════════
+         BACKGROUND GLOW LAYERS
+    ══════════════════════════════════════════════════════ -->
+
+    <View
+        android:id="@+id/glowLarge"
+        android:layout_width="400dp"
+        android:layout_height="400dp"
+        android:background="@drawable/shape_glow_large"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+
+    <!-- ══════════════════════════════════════════════════════
+         SCATTERED DECORATIVE PARTICLES
+         Positions approximate the reference screenshot.
+         Animate these in Java (float up + fade + scale pulse).
+    ══════════════════════════════════════════════════════ -->
+
+    <!-- Top-left cluster -->
+    <View android:id="@+id/particle1"
+        android:layout_width="6dp" android:layout_height="6dp"
+        android:background="@drawable/shape_particle_purple"
+        android:alpha="0.7"
+        android:layout_marginStart="60dp" android:layout_marginTop="190dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <View android:id="@+id/particle2"
+        android:layout_width="5dp" android:layout_height="5dp"
+        android:background="@drawable/shape_particle_blue"
+        android:alpha="0.6"
+        android:layout_marginStart="100dp" android:layout_marginTop="240dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <View android:id="@+id/particle3"
+        android:layout_width="7dp" android:layout_height="7dp"
+        android:background="@drawable/shape_particle_green"
+        android:alpha="0.6"
+        android:layout_marginStart="140dp" android:layout_marginTop="350dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Top-right cluster -->
+    <View android:id="@+id/particle4"
+        android:layout_width="8dp" android:layout_height="8dp"
+        android:background="@drawable/shape_particle_green"
+        android:alpha="0.8"
+        android:layout_marginEnd="80dp" android:layout_marginTop="80dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <View android:id="@+id/particle5"
+        android:layout_width="5dp" android:layout_height="5dp"
+        android:background="@drawable/shape_particle_orange"
+        android:alpha="0.5"
+        android:layout_marginEnd="40dp" android:layout_marginTop="200dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <View android:id="@+id/particle6"
+        android:layout_width="7dp" android:layout_height="7dp"
+        android:background="@drawable/shape_particle_teal"
+        android:alpha="0.6"
+        android:layout_marginEnd="110dp" android:layout_marginTop="300dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Upper-center scattered -->
+    <View android:id="@+id/particle7"
+        android:layout_width="5dp" android:layout_height="5dp"
+        android:background="@drawable/shape_particle_orange"
+        android:alpha="0.5"
+        android:layout_marginStart="220dp" android:layout_marginTop="210dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <View android:id="@+id/particle8"
+        android:layout_width="5dp" android:layout_height="5dp"
+        android:background="@drawable/shape_particle_blue"
+        android:alpha="0.5"
+        android:layout_marginStart="195dp" android:layout_marginTop="250dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Bottom-left cluster -->
+    <View android:id="@+id/particle9"
+        android:layout_width="6dp" android:layout_height="6dp"
+        android:background="@drawable/shape_particle_purple"
+        android:alpha="0.5"
+        android:layout_marginStart="50dp" android:layout_marginBottom="220dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+    <View android:id="@+id/particle10"
+        android:layout_width="7dp" android:layout_height="7dp"
+        android:background="@drawable/shape_particle_green"
+        android:alpha="0.6"
+        android:layout_marginStart="80dp" android:layout_marginBottom="170dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+    <!-- Bottom-right cluster -->
+    <View android:id="@+id/particle11"
+        android:layout_width="9dp" android:layout_height="9dp"
+        android:background="@drawable/shape_particle_yellow"
+        android:alpha="0.7"
+        android:layout_marginEnd="50dp" android:layout_marginBottom="200dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+    <View android:id="@+id/particle12"
+        android:layout_width="6dp" android:layout_height="6dp"
+        android:background="@drawable/shape_particle_teal"
+        android:alpha="0.5"
+        android:layout_marginEnd="110dp" android:layout_marginBottom="280dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+    <!-- Center-right mid -->
+    <View android:id="@+id/particle13"
+        android:layout_width="7dp" android:layout_height="7dp"
+        android:background="@drawable/shape_particle_green"
+        android:alpha="0.6"
+        android:layout_marginEnd="60dp" android:layout_marginBottom="380dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+    <!-- Center-left mid -->
+    <View android:id="@+id/particle14"
+        android:layout_width="5dp" android:layout_height="5dp"
+        android:background="@drawable/shape_particle_pink"
+        android:alpha="0.45"
+        android:layout_marginStart="40dp" android:layout_marginBottom="390dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+    <!-- ══════════════════════════════════════════════════════
+         CORNER BRACKET ACCENTS
+         Backgrounds (CornerDrawable) set programmatically in Java.
+    ══════════════════════════════════════════════════════ -->
+
+    <View
+        android:id="@+id/cornerTopLeft"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:alpha="0.10"
+        android:layout_marginStart="20dp"
+        android:layout_marginTop="20dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <View
+        android:id="@+id/cornerBottomRight"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:alpha="0.10"
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="20dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+    <!-- ══════════════════════════════════════════════════════
+         VERTICAL CHAIN: logoImage → accentBar → tvTagline
+         Packed chain, centered with verticalBias = 0.45
+    ══════════════════════════════════════════════════════ -->
+
+    <!-- STARS logo (replace @mipmap/stars_logo_foreground with your asset) -->
     <ImageView
         android:id="@+id/logoImage"
-        android:layout_width="387dp"
-        android:layout_height="417dp"
-        android:src="@drawable/sagotsuri"
+        android:layout_width="300dp"
+        android:layout_height="wrap_content"
+        android:adjustViewBounds="true"
+        android:src="@mipmap/stars_16k_foreground"
+        android:contentDescription="STARS logo"
+        android:layout_marginBottom="14dp"
+        app:layout_constraintBottom_toTopOf="@id/accentBar"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_chainStyle="packed"
+        app:layout_constraintVertical_bias="0.45" />
+
+    <!-- Rainbow underline accent bar — same width as logo -->
+    <View
+        android:id="@+id/accentBar"
+        android:layout_width="0dp"
+        android:layout_height="4dp"
+        android:background="@drawable/bg_accent_bar"
+        android:layout_marginBottom="10dp"
+        app:layout_constraintBottom_toTopOf="@id/tvTagline"
+        app:layout_constraintEnd_toEndOf="@id/logoImage"
+        app:layout_constraintStart_toStartOf="@id/logoImage"
+        app:layout_constraintTop_toBottomOf="@id/logoImage" />
+
+    <!-- "SHINE BRIGHTER" tagline -->
+    <TextView
+        android:id="@+id/tvTagline"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Student Test Analysis Records System"
+        android:textColor="#6B7280"
+        android:textSize="11sp"
+        android:letterSpacing="0.25"
+        android:gravity="center"
+        android:fontFamily="sans-serif-medium"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintLeft_toLeftOf="parent"
-        app:layout_constraintRight_toRightOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/accentBar" />
+
+    <!-- ══════════════════════════════════════════════════════
+         LOADING DOTS — pinned to bottom
+         Animated in Java: sequential pulse (green → teal → blue)
+    ══════════════════════════════════════════════════════ -->
+    <LinearLayout
+        android:id="@+id/dotsRow"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="60dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <View
+            android:id="@+id/dot1"
+            android:layout_width="9dp"
+            android:layout_height="9dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/shape_dot_green" />
+
+        <View
+            android:id="@+id/dot2"
+            android:layout_width="9dp"
+            android:layout_height="9dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/shape_dot_teal" />
+
+        <View
+            android:id="@+id/dot3"
+            android:layout_width="9dp"
+            android:layout_height="9dp"
+            android:background="@drawable/shape_dot_blue" />
+
+    </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

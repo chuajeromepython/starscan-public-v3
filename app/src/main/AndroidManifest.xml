@@ -12,9 +12,8 @@
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@drawable/sagotsuri"
-        android:label="SagotSuri"
-        android:roundIcon="@drawable/sagotsuri"
+        android:icon="@mipmap/star_plain_foreground"
+        android:label="STARS"
         android:supportsRtl="true"
         android:theme="@style/Theme.OMRScanner">
 

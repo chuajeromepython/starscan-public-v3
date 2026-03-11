@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    shape_splash_ring.xml
+    Cobalt ring — rendered at alpha 0.08 in the layout,
+    so it appears as a very faint circle watermark behind the logo.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <stroke
+        android:width="2dp"
+        android:color="#3D35C0" />
+    <solid android:color="@android:color/transparent" />
+</shape>

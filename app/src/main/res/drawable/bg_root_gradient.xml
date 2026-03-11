@@ -1,9 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android">
+<!--
+    bg_root_gradient.xml
+    Very subtle — keeps the page background near-white with
+    a faint indigo tint so it harmonises with the header.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+
     <gradient
         android:type="linear"
-        android:angle="135"
-        android:startColor="#F8FAFC"
-        android:centerColor="#EFF6FF"
-        android:endColor="#EEF2FF" />
+        android:angle="180"
+        android:startColor="#EEEEF8"
+        android:endColor="#F4F4FB" />
+
 </shape>

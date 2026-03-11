@@ -1,19 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-╔══════════════════════════════════════════════════════════════╗
-║  activity_dashboard.xml                                       ║
-║  MERGED: Doc 1 visual design  +  Doc 2 functional structure   ║
-║                                                               ║
-║  Key rules applied:                                           ║
-║  • Root stays ConstraintLayout (Doc 2) so splash→dashboard   ║
-║    transition works correctly.                                ║
-║  • breadcrumbSep1 / breadcrumbSep2 remain TextView (Doc 2)   ║
-║    so Java casts succeed — no ClassCastException.             ║
-║  • All visual/decorative elements come from Doc 1:            ║
-║    gradient header, floating content card, decorative         ║
-║    circles, stats row, hero class card, FAB colour, etc.      ║
-╚══════════════════════════════════════════════════════════════╝
--->
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -22,115 +7,96 @@
     android:background="@drawable/bg_root_gradient">
 
     <!-- ═══════════════════════════════════════════════════════
-         HEADER  (Doc 1 visual: gradient bg, decorative circles,
-                  icon box, title+badge, menu button)
-         Kept as a plain FrameLayout so the gradient drawable
-         and the decorative circles layer correctly, exactly as
-         Doc 1 does it.
+         HEADER  ·  Compact version (was 36dp/60dp → now 16dp/36dp)
     ═══════════════════════════════════════════════════════════ -->
     <FrameLayout
         android:id="@+id/headerCard"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@drawable/bg_header_gradient"
-        android:paddingStart="20dp"
+        android:paddingStart="16dp"
         android:paddingEnd="20dp"
-        android:paddingTop="20dp"
-        android:paddingBottom="64dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="36dp"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
         <!-- Decorative circle — top-end -->
         <View
-            android:layout_width="128dp"
-            android:layout_height="128dp"
+            android:layout_width="100dp"
+            android:layout_height="100dp"
             android:layout_gravity="top|end"
-            android:layout_marginTop="-30dp"
-            android:layout_marginEnd="-20dp"
+            android:layout_marginTop="-20dp"
+            android:layout_marginEnd="-16dp"
             android:background="@drawable/shape_circle_white"
-            android:alpha="0.05" />
+            android:alpha="0.10" />
 
         <!-- Decorative circle — bottom-start -->
+
+        <!-- Small decorative circle — mid-right -->
         <View
-            android:layout_width="96dp"
-            android:layout_height="96dp"
-            android:layout_gravity="bottom|start"
-            android:layout_marginBottom="-10dp"
-            android:layout_marginStart="-15dp"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_gravity="top|end"
+            android:layout_marginTop="60dp"
+            android:layout_marginEnd="24dp"
             android:background="@drawable/shape_circle_white"
             android:alpha="0.05" />
 
-        <!-- Small decorative circle — top-end offset -->
-        <View
-            android:layout_width="64dp"
-            android:layout_height="64dp"
-            android:layout_gravity="top|end"
-            android:layout_marginTop="32dp"
-            android:layout_marginEnd="80dp"
-            android:background="@drawable/shape_circle_white"
-            android:alpha="0.03" />
-
-        <!-- App bar row: icon-box | title+badge | menu -->
-        <LinearLayout
+        <!-- ══ HEADER CONTENT ══ -->
+        <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_vertical"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:layout_height="match_parent"
+            android:layout_gravity="center_vertical">
 
-            <!-- App icon box: bg-white/15 rounded-2xl -->
-            <FrameLayout
-                android:layout_width="70dp"
-                android:layout_height="70dp"
-                android:background="@drawable/logo_bg">
+            <!-- Logo wrapped nicely -->
+            <ImageView
+                android:id="@+id/headerLogo"
+                android:layout_width="75dp"
+                android:layout_height="75dp"
+                android:adjustViewBounds="true"
+                android:contentDescription="STARS logo"
+                android:src="@mipmap/star_plain_foreground"
+                android:background="@drawable/shape_circle_white"
+                android:backgroundTint="#33FFFFFF"
+                android:padding="6dp"
+                android:elevation="0dp"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent" />
 
-                <ImageView
-                    android:layout_width="70dp"
-                    android:layout_height="70dp"
-                    android:layout_gravity="center"
-                    android:src="@drawable/sagotsuri"
-                    android:contentDescription="@string/sagotsuri_logo" />
-            </FrameLayout>
-
-            <!-- Title + sub-badge + teacher name row -->
+            <!-- App name + teacher name -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
                 android:orientation="vertical"
-                android:layout_marginStart="12dp"
-                android:layout_marginEnd="8dp">
+                android:gravity="center_vertical"
+                android:layout_marginStart="8dp"
+                app:layout_constraintStart_toEndOf="@id/headerLogo"
+                app:layout_constraintEnd_toStartOf="@id/btnUpload"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent">
 
                 <TextView
-                    android:id="@+id/topBarTitle"
+                    android:id="@+id/tvAppName"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/sagotsuri"
+                    android:text="STARS"
                     android:textColor="#FFFFFF"
-                    android:textSize="18sp"
+                    android:textSize="25sp"
+                    android:fontFamily="@font/poppins_bold"
                     android:textStyle="bold"
-                    android:fontFamily="@font/poppins_black"
-                    android:singleLine="true"
-                    android:ellipsize="end" />
+                    android:letterSpacing="0.05"
+                    android:includeFontPadding="false" />
 
-                <TextView
-                    android:id="@+id/topBarBadge"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/classes_count"
-                    android:textColor="#BFDBFE"
-                    android:textSize="12sp"
-                    android:layout_marginTop="2dp" />
-
-                <!-- Teacher name row: name label + edit pencil icon -->
                 <LinearLayout
                     android:id="@+id/teacherNameRow"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
                     android:orientation="horizontal"
                     android:gravity="center_vertical"
-                    android:layout_marginTop="6dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:clickable="true"
                     android:focusable="true">
@@ -139,48 +105,68 @@
                         android:id="@+id/tvTeacherName"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="👤 Tap to set teacher name"
-                        android:textColor="#BFDBFE"
-                        android:textSize="12sp"
-                        android:maxLines="1"
-                        android:ellipsize="end" />
+                        android:ellipsize="end"
+                        android:includeFontPadding="false"
+                        android:maxLines="2"
+                        android:fontFamily="@font/poppins_medium"
+                        android:text="Tap to set teacher name"
+                        android:textColor="#FFFFFF"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
 
                     <ImageView
                         android:id="@+id/btnEditTeacherName"
-                        android:layout_width="16dp"
-                        android:layout_height="16dp"
+                        android:layout_width="14dp"
+                        android:layout_height="14dp"
                         android:src="@drawable/ic_edit_pencil"
                         android:layout_marginStart="6dp"
-                        android:alpha="0.7"
+                        android:layout_marginTop="3dp"
+                        android:alpha="0.9"
+                        app:tint="#E2E8F0"
                         android:contentDescription="Edit teacher name" />
 
                 </LinearLayout>
 
             </LinearLayout>
 
-            <!-- Upload button — top-right -->
+            <!-- Upload button — smaller (was 44dp → now 38dp) -->
             <ImageButton
                 android:id="@+id/btnUpload"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
                 android:src="@drawable/ic_upload"
                 android:contentDescription="Upload"
                 android:background="@drawable/bg_icon_circle_white"
-                android:padding="10dp"
+                android:padding="8dp"
                 android:elevation="2dp"
-                app:tint="#FFFFFF" />
+                app:tint="#FFFFFF"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent" />
 
-        </LinearLayout>
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+        <!-- topBarTitle: kept for Java compatibility — GONE -->
+        <TextView
+            android:id="@+id/topBarTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            android:textSize="0sp" />
+
+        <!-- topBarBadge: kept for Java compatibility — GONE by default -->
+        <TextView
+            android:id="@+id/topBarBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            android:textSize="0sp" />
+
     </FrameLayout>
 
     <!-- ═══════════════════════════════════════════════════════
-         CONTENT CARD  (Doc 1 visual: -mt-10 overlap, white/80,
-                        rounded-3xl, shadow, border)
-         Constrained below header with a negative top margin so
-         it floats up into the gradient header — identical to
-         Doc 1's -mt-10 / marginTop="-40dp" trick.
-         Inner structure stays Doc 2 (LinearLayout with
-         breadcrumb + FrameLayout screens).
+         CONTENT CARD
+         marginTop reduced (was -40dp → -28dp) to match smaller header overlap
     ═══════════════════════════════════════════════════════════ -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/contentCard"
@@ -188,8 +174,8 @@
         android:layout_height="0dp"
         android:layout_marginStart="12dp"
         android:layout_marginEnd="12dp"
-        android:layout_marginTop="-40dp"
-        android:layout_marginBottom="0dp"
+        android:layout_marginTop="-28dp"
+        android:layout_marginBottom="20dp"
         app:cardBackgroundColor="#F2FFFFFF"
         app:cardCornerRadius="24dp"
         app:cardElevation="6dp"
@@ -205,13 +191,7 @@
             android:layout_height="match_parent"
             android:orientation="vertical">
 
-            <!-- ── BREADCRUMB BAR ─────────────────────────────
-                 Doc 2 structure kept intact so Java works.
-                 breadcrumbSep1 / breadcrumbSep2 are TextView
-                 (NOT ImageView) — this is what prevents the
-                 ClassCastException crash.
-                 Doc 1 visual: #F8FAFC background, 48dp height.
-            ──────────────────────────────────────────────────── -->
+            <!-- ── BREADCRUMB BAR ── -->
             <LinearLayout
                 android:id="@+id/breadcrumbBar"
                 android:layout_width="match_parent"
@@ -223,7 +203,6 @@
                 android:background="#F8FAFC"
                 android:visibility="gone">
 
-                <!-- Back arrow button -->
                 <ImageButton
                     android:id="@+id/btnBack"
                     android:layout_width="40dp"
@@ -232,9 +211,8 @@
                     android:src="@drawable/ic_arrow_back"
                     android:contentDescription="@string/go_back"
                     android:padding="8dp"
-                    app:tint="#0038A8" />
+                    app:tint="#3730A3" />
 
-                <!-- Scrollable path row -->
                 <HorizontalScrollView
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -247,13 +225,12 @@
                         android:orientation="horizontal"
                         android:gravity="center_vertical">
 
-                        <!-- Root crumb: "Classes" — always tappable → home -->
                         <TextView
                             android:id="@+id/breadcrumbRoot"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="@string/classes"
-                            android:textColor="#0038A8"
+                            android:textColor="#3730A3"
                             android:textSize="13sp"
                             android:textStyle="bold"
                             android:fontFamily="@font/poppins_medium"
@@ -263,7 +240,6 @@
                             android:paddingTop="6dp"
                             android:paddingBottom="6dp" />
 
-                        <!-- Separator 1 — TextView (MUST stay TextView to match Java field type) -->
                         <TextView
                             android:id="@+id/breadcrumbSep1"
                             android:layout_width="wrap_content"
@@ -273,14 +249,13 @@
                             android:textSize="14sp"
                             android:visibility="gone" />
 
-                        <!-- Class name crumb -->
                         <TextView
                             android:id="@+id/breadcrumbClass"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:textSize="13sp"
                             android:textStyle="bold"
-                            android:textColor="#0038A8"
+                            android:textColor="#3730A3"
                             android:fontFamily="@font/poppins_medium"
                             android:background="?attr/selectableItemBackgroundBorderless"
                             android:paddingStart="4dp"
@@ -291,7 +266,6 @@
                             android:ellipsize="end"
                             android:visibility="gone" />
 
-                        <!-- Separator 2 — TextView (MUST stay TextView to match Java field type) -->
                         <TextView
                             android:id="@+id/breadcrumbSep2"
                             android:layout_width="wrap_content"
@@ -301,7 +275,6 @@
                             android:textSize="14sp"
                             android:visibility="gone" />
 
-                        <!-- Activity name crumb (current — not tappable) -->
                         <TextView
                             android:id="@+id/breadcrumbActivity"
                             android:layout_width="wrap_content"
@@ -329,7 +302,7 @@
                 android:background="#F1F5F9"
                 android:visibility="gone" />
 
-            <!-- ── SCREEN CONTAINER ──────────────────────────── -->
+            <!-- ── SCREEN CONTAINER ── -->
             <FrameLayout
                 android:id="@+id/contentFrame"
                 android:layout_width="match_parent"
@@ -338,8 +311,7 @@
                 android:clipChildren="false">
 
                 <!-- ════════════════════════════════════════════
-                     SCREEN 1 · HOME  (Doc 1 design: stats row
-                     + "Your Classes" header + class list)
+                     SCREEN 1 · HOME
                 ════════════════════════════════════════════════ -->
                 <LinearLayout
                     android:id="@+id/screenHome"
@@ -348,44 +320,44 @@
                     android:orientation="vertical"
                     android:visibility="visible">
 
-                    <!-- Stats row: 3 mini-cards — PINNED (does not scroll) -->
+                    <!-- Stats row — tighter padding (was 16dp → 12dp top/bottom) -->
                     <LinearLayout
                         android:id="@+id/statsRow"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal"
-                        android:paddingStart="16dp"
-                        android:paddingEnd="16dp"
-                        android:paddingTop="16dp"
-                        android:paddingBottom="12dp">
+                        android:paddingStart="14dp"
+                        android:paddingEnd="14dp"
+                        android:paddingTop="12dp"
+                        android:paddingBottom="8dp">
 
-                        <!-- Classes stat -->
                         <com.google.android.material.card.MaterialCardView
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:layout_marginEnd="5dp"
                             app:cardBackgroundColor="#FFFFFF"
-                            app:cardCornerRadius="16dp"
-                            app:cardElevation="1dp"
+                            app:cardCornerRadius="14dp"
+                            app:cardElevation="2dp"
                             app:strokeColor="#F1F5F9"
                             app:strokeWidth="1dp">
                             <LinearLayout
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:orientation="vertical"
-                                android:padding="12dp">
+                                android:gravity="center"
+                                android:padding="10dp">
                                 <FrameLayout
-                                    android:layout_width="32dp"
-                                    android:layout_height="32dp"
+                                    android:layout_width="34dp"
+                                    android:layout_height="34dp"
                                     android:background="@drawable/bg_stat_blue"
-                                    android:layout_marginBottom="8dp">
+                                    android:layout_marginBottom="6dp">
                                     <ImageView
-                                        android:layout_width="16dp"
+                                        android:layout_width="wrap_content"
                                         android:layout_height="16dp"
                                         android:layout_gravity="center"
                                         android:src="@drawable/ic_folder_open"
-                                        app:tint="#2563EB" />
+                                        app:tint="#3730A3" />
                                 </FrameLayout>
                                 <TextView
                                     android:id="@+id/statClasses"
@@ -394,18 +366,18 @@
                                     android:text="@string/four"
                                     android:textSize="20sp"
                                     android:textStyle="bold"
-                                    android:textColor="#0F172A" />
+                                    android:textColor="#3730A3" />
                                 <TextView
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
-                                    android:text="@string/classes"
-                                    android:textSize="11sp"
-                                    android:textColor="#64748B"
-                                    android:layout_marginTop="2dp" />
+                                    android:text="CLASSES"
+                                    android:textSize="9sp"
+                                    android:textColor="#94A3B8"
+                                    android:letterSpacing="0.08"
+                                    android:layout_marginTop="1dp" />
                             </LinearLayout>
                         </com.google.android.material.card.MaterialCardView>
 
-                        <!-- Activities stat -->
                         <com.google.android.material.card.MaterialCardView
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
@@ -413,20 +385,21 @@
                             android:layout_marginStart="5dp"
                             android:layout_marginEnd="5dp"
                             app:cardBackgroundColor="#FFFFFF"
-                            app:cardCornerRadius="16dp"
-                            app:cardElevation="1dp"
+                            app:cardCornerRadius="14dp"
+                            app:cardElevation="2dp"
                             app:strokeColor="#F1F5F9"
                             app:strokeWidth="1dp">
                             <LinearLayout
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:orientation="vertical"
-                                android:padding="12dp">
+                                android:gravity="center"
+                                android:padding="10dp">
                                 <FrameLayout
-                                    android:layout_width="32dp"
-                                    android:layout_height="32dp"
+                                    android:layout_width="34dp"
+                                    android:layout_height="34dp"
                                     android:background="@drawable/bg_stat_green"
-                                    android:layout_marginBottom="8dp">
+                                    android:layout_marginBottom="6dp">
                                     <ImageView
                                         android:layout_width="16dp"
                                         android:layout_height="16dp"
@@ -441,38 +414,39 @@
                                     android:text="@string/twenty_eight"
                                     android:textSize="20sp"
                                     android:textStyle="bold"
-                                    android:textColor="#0F172A" />
+                                    android:textColor="#059669" />
                                 <TextView
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
-                                    android:text="@string/Assessments"
-                                    android:textSize="11sp"
-                                    android:textColor="#64748B"
-                                    android:layout_marginTop="2dp" />
+                                    android:text="TESTS"
+                                    android:textSize="9sp"
+                                    android:textColor="#94A3B8"
+                                    android:letterSpacing="0.08"
+                                    android:layout_marginTop="1dp" />
                             </LinearLayout>
                         </com.google.android.material.card.MaterialCardView>
 
-                        <!-- Scans stat -->
                         <com.google.android.material.card.MaterialCardView
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:layout_marginStart="5dp"
                             app:cardBackgroundColor="#FFFFFF"
-                            app:cardCornerRadius="16dp"
-                            app:cardElevation="1dp"
+                            app:cardCornerRadius="14dp"
+                            app:cardElevation="2dp"
                             app:strokeColor="#F1F5F9"
                             app:strokeWidth="1dp">
                             <LinearLayout
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:orientation="vertical"
-                                android:padding="12dp">
+                                android:gravity="center"
+                                android:padding="10dp">
                                 <FrameLayout
-                                    android:layout_width="32dp"
-                                    android:layout_height="32dp"
+                                    android:layout_width="34dp"
+                                    android:layout_height="34dp"
                                     android:background="@drawable/bg_stat_violet"
-                                    android:layout_marginBottom="8dp">
+                                    android:layout_marginBottom="6dp">
                                     <ImageView
                                         android:layout_width="16dp"
                                         android:layout_height="16dp"
@@ -487,20 +461,20 @@
                                     android:text="142"
                                     android:textSize="20sp"
                                     android:textStyle="bold"
-                                    android:textColor="#0F172A" />
+                                    android:textColor="#7C3AED" />
                                 <TextView
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
-                                    android:text="Scans"
-                                    android:textSize="11sp"
-                                    android:textColor="#64748B"
-                                    android:layout_marginTop="2dp" />
+                                    android:text="SCANS"
+                                    android:textSize="9sp"
+                                    android:textColor="#94A3B8"
+                                    android:letterSpacing="0.08"
+                                    android:layout_marginTop="1dp" />
                             </LinearLayout>
                         </com.google.android.material.card.MaterialCardView>
 
                     </LinearLayout>
 
-                    <!-- Scrollable class list area -->
                     <ScrollView
                         android:layout_width="match_parent"
                         android:layout_height="0dp"
@@ -513,42 +487,48 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:orientation="vertical"
-                            android:paddingStart="16dp"
-                            android:paddingEnd="16dp"
-                            android:paddingBottom="16dp">
+                            android:paddingStart="14dp"
+                            android:paddingEnd="14dp"
+                            android:paddingBottom="80dp">
 
-                            <!-- "Your Classes" section header row -->
                             <LinearLayout
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:orientation="horizontal"
                                 android:gravity="center_vertical"
-                                android:layout_marginBottom="10dp">
+                                android:layout_marginBottom="8dp">
                                 <TextView
                                     android:layout_width="0dp"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="1"
-                                    android:text="Your Classes"
-                                    android:textSize="16sp"
+                                    android:text="MY CLASSES"
+                                    android:textSize="12sp"
                                     android:textStyle="bold"
                                     android:textColor="#1E293B"
+                                    android:letterSpacing="0.08"
                                     android:fontFamily="@font/poppins_medium" />
+
                                 <TextView
                                     android:id="@+id/homeClassCount"
                                     android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="4 total"
-                                    android:textSize="12sp"
-                                    android:textColor="#94A3B8" />
+                                    android:layout_height="match_parent"
+                                    android:background="@drawable/bg_stat_blue"
+                                    android:paddingStart="10dp"
+                                    android:paddingTop="3dp"
+                                    android:paddingEnd="10dp"
+                                    android:paddingBottom="3dp"
+                                    android:text="4"
+                                    android:textColor="#3730A3"
+                                    android:textSize="11sp"
+                                    android:textStyle="bold" />
                             </LinearLayout>
 
-                            <!-- Search bar — always visible -->
                             <LinearLayout
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:orientation="horizontal"
                                 android:gravity="center_vertical"
-                                android:layout_marginBottom="10dp">
+                                android:layout_marginBottom="8dp">
 
                                 <EditText
                                     android:id="@+id/homeClassSearchInput"
@@ -560,87 +540,75 @@
                                     android:imeOptions="actionDone"
                                     android:inputType="text"
                                     android:maxLines="1"
-                                    android:paddingStart="14dp"
-                                    android:paddingTop="10dp"
-                                    android:paddingEnd="14dp"
-                                    android:paddingBottom="10dp"
+                                    android:paddingStart="12dp"
+                                    android:paddingTop="9dp"
+                                    android:paddingEnd="12dp"
+                                    android:paddingBottom="9dp"
                                     android:textColor="#1E293B"
                                     android:textColorHint="#94A3B8"
-                                    android:textSize="13sp" />
+                                    android:textSize="12sp" />
 
-                                <!-- Filter toggle button -->
-                                <TextView
+                                <ImageView
                                     android:id="@+id/homeFilterToggle"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginStart="8dp"
-                                    android:background="@drawable/bg_sort_pill"
-                                    android:paddingStart="10dp"
-                                    android:paddingTop="10dp"
-                                    android:paddingEnd="10dp"
-                                    android:paddingBottom="10dp"
-                                    android:text="⚙"
-                                    android:textSize="16sp"
-                                    android:clickable="true"
-                                    android:focusable="true" />
+                                    android:layout_width="32dp"
+                                    android:layout_height="32dp"
+                                    android:layout_gravity="center"
+                                    android:src="@drawable/sort"
+                                    android:layout_marginStart="8dp" />
                             </LinearLayout>
 
-                            <!-- Collapsible filter panel — hidden by default -->
                             <LinearLayout
                                 android:id="@+id/homeFilterPanel"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:layout_marginBottom="10dp"
+                                android:layout_marginBottom="8dp"
                                 android:background="@drawable/bg_filter_panel"
                                 android:orientation="vertical"
-                                android:padding="12dp"
+                                android:padding="10dp"
                                 android:visibility="gone">
 
                                 <LinearLayout
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
-                                    android:layout_marginBottom="10dp"
+                                    android:layout_marginBottom="8dp"
                                     android:gravity="center_vertical"
                                     android:orientation="horizontal">
-
                                     <TextView
                                         android:layout_width="0dp"
                                         android:layout_height="wrap_content"
                                         android:layout_weight="1"
                                         android:text="Sort"
                                         android:textColor="#64748B"
-                                        android:textSize="12sp"
+                                        android:textSize="11sp"
                                         android:textStyle="bold" />
-
                                     <TextView
                                         android:id="@+id/homeClassSortPicker"
                                         android:layout_width="wrap_content"
                                         android:layout_height="wrap_content"
                                         android:background="@drawable/bg_sort_pill"
                                         android:paddingStart="10dp"
-                                        android:paddingTop="6dp"
+                                        android:paddingTop="5dp"
                                         android:paddingEnd="10dp"
-                                        android:paddingBottom="6dp"
+                                        android:paddingBottom="5dp"
                                         android:text="Newest ▾"
                                         android:textColor="#1E293B"
-                                        android:textSize="12sp" />
+                                        android:textSize="11sp" />
                                 </LinearLayout>
 
                                 <TextView
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
-                                    android:layout_marginBottom="6dp"
+                                    android:layout_marginBottom="5dp"
                                     android:text="Filter Grade"
                                     android:textColor="#64748B"
-                                    android:textSize="11sp"
+                                    android:textSize="10sp"
                                     android:textStyle="bold" />
 
                                 <HorizontalScrollView
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
-                                    android:layout_marginBottom="10dp"
+                                    android:layout_marginBottom="8dp"
                                     android:scrollbars="none">
-
                                     <LinearLayout
                                         android:id="@+id/homeGradeFilterChips"
                                         android:layout_width="wrap_content"
@@ -651,17 +619,16 @@
                                 <TextView
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
-                                    android:layout_marginBottom="6dp"
+                                    android:layout_marginBottom="5dp"
                                     android:text="Filter School Year"
                                     android:textColor="#64748B"
-                                    android:textSize="11sp"
+                                    android:textSize="10sp"
                                     android:textStyle="bold" />
 
                                 <HorizontalScrollView
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:scrollbars="none">
-
                                     <LinearLayout
                                         android:id="@+id/homeSchoolYearFilterChips"
                                         android:layout_width="wrap_content"
@@ -670,7 +637,6 @@
                                 </HorizontalScrollView>
                             </LinearLayout>
 
-                            <!-- Class list — populated by Java -->
                             <LinearLayout
                                 android:id="@+id/homeClassList"
                                 android:layout_width="match_parent"
@@ -678,7 +644,6 @@
                                 android:orientation="vertical"
                                 android:visibility="gone" />
 
-                            <!-- Empty state (Doc 1) -->
                             <LinearLayout
                                 android:id="@+id/homeEmpty"
                                 android:layout_width="match_parent"
@@ -686,29 +651,29 @@
                                 android:orientation="vertical"
                                 android:gravity="center"
                                 android:padding="40dp"
-                                android:layout_marginTop="60dp"
+                                android:layout_marginTop="40dp"
                                 android:visibility="visible">
                                 <TextView
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:text="📁"
-                                    android:textSize="52sp"
+                                    android:textSize="48sp"
                                     android:alpha="0.4" />
                                 <TextView
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:text="No class folders yet"
                                     android:textColor="#64748B"
-                                    android:textSize="15sp"
+                                    android:textSize="14sp"
                                     android:textStyle="bold"
                                     android:fontFamily="@font/poppins_medium"
-                                    android:layout_marginTop="12dp" />
+                                    android:layout_marginTop="10dp" />
                                 <TextView
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:text="Tap + to create your first class"
                                     android:textColor="#94A3B8"
-                                    android:textSize="13sp"
+                                    android:textSize="12sp"
                                     android:layout_marginTop="4dp" />
                             </LinearLayout>
 
@@ -718,9 +683,7 @@
                 </LinearLayout>
 
                 <!-- ════════════════════════════════════════════
-                     SCREEN 2 · CLASS  (Doc 1 design: hero card
-                     with gradient bg + decorative circles,
-                     teacher label, activity list)
+                     SCREEN 2 · CLASS
                 ════════════════════════════════════════════════ -->
                 <ScrollView
                     android:id="@+id/screenClass"
@@ -735,27 +698,23 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:paddingStart="16dp"
-                        android:paddingEnd="16dp"
-                        android:paddingTop="16dp"
-                        android:paddingBottom="16dp">
+                        android:paddingStart="14dp"
+                        android:paddingEnd="14dp"
+                        android:paddingTop="14dp"
+                        android:paddingBottom="72dp">
 
-                        <!-- Class info hero card (Doc 1) -->
                         <com.google.android.material.card.MaterialCardView
                             android:id="@+id/classInfoCard"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginBottom="20dp"
+                            android:layout_marginBottom="16dp"
                             app:cardCornerRadius="20dp"
                             app:cardElevation="3dp"
                             app:strokeWidth="0dp">
-
                             <FrameLayout
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:background="@drawable/bg_class_default">
-
-                                <!-- Decorative circle top-right -->
                                 <View
                                     android:layout_width="96dp"
                                     android:layout_height="96dp"
@@ -764,8 +723,6 @@
                                     android:layout_marginEnd="-10dp"
                                     android:background="@drawable/shape_circle_white"
                                     android:alpha="0.10" />
-
-                                <!-- Decorative circle bottom-center -->
                                 <View
                                     android:layout_width="64dp"
                                     android:layout_height="64dp"
@@ -773,70 +730,49 @@
                                     android:layout_marginBottom="-15dp"
                                     android:background="@drawable/shape_circle_white"
                                     android:alpha="0.05" />
-
                                 <LinearLayout
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:orientation="vertical"
-                                    android:padding="20dp">
-
-                                    <!-- Teacher row -->
+                                    android:padding="16dp">
                                     <LinearLayout
                                         android:layout_width="wrap_content"
                                         android:layout_height="wrap_content"
                                         android:orientation="horizontal"
                                         android:gravity="center_vertical"
-                                        android:layout_marginBottom="4dp">
+                                        android:layout_marginBottom="2dp">
                                         <ImageView
-                                            android:layout_width="16dp"
-                                            android:layout_height="16dp"
+                                            android:layout_width="14dp"
+                                            android:layout_height="14dp"
                                             android:src="@drawable/ic_graduation_cap"
                                             app:tint="#CCFFFFFF"
-                                            android:layout_marginEnd="6dp" />
+                                            android:layout_marginEnd="5dp" />
                                         <TextView
                                             android:id="@+id/classTeacherLabel"
                                             android:layout_width="wrap_content"
                                             android:layout_height="wrap_content"
                                             android:text="Teacher: Unknown"
                                             android:textColor="#CCFFFFFF"
-                                            android:textSize="13sp" />
+                                            android:textSize="12sp" />
                                     </LinearLayout>
-
-                                    <!-- Class name large -->
                                     <TextView
                                         android:id="@+id/classNameLabel"
                                         android:layout_width="wrap_content"
                                         android:layout_height="wrap_content"
                                         android:text="Grade 10 — Section A"
                                         android:textColor="#FFFFFF"
-                                        android:textSize="18sp"
+                                        android:textSize="16sp"
                                         android:textStyle="bold"
-                                        android:layout_marginTop="4dp"
-                                        android:layout_marginBottom="12dp" />
-
-                                    <!-- Students + activities pills -->
+                                        android:layout_marginTop="2dp"
+                                        android:layout_marginBottom="10dp" />
                                     <LinearLayout
                                         android:layout_width="wrap_content"
                                         android:layout_height="wrap_content"
                                         android:orientation="horizontal"
                                         android:gravity="center_vertical">
                                         <ImageView
-                                            android:layout_width="14dp"
-                                            android:layout_height="14dp"
-                                            android:src="@drawable/ic_users"
-                                            app:tint="#CCFFFFFF"
-                                            android:layout_marginEnd="4dp" />
-                                        <TextView
-                                            android:id="@+id/classStudentCount"
-                                            android:layout_width="wrap_content"
-                                            android:layout_height="wrap_content"
-                                            android:text="35 students"
-                                            android:textColor="#CCFFFFFF"
-                                            android:textSize="13sp"
-                                            android:layout_marginEnd="20dp" />
-                                        <ImageView
-                                            android:layout_width="14dp"
-                                            android:layout_height="14dp"
+                                            android:layout_width="12dp"
+                                            android:layout_height="12dp"
                                             android:src="@drawable/ic_book_open"
                                             app:tint="#CCFFFFFF"
                                             android:layout_marginEnd="4dp" />
@@ -846,42 +782,39 @@
                                             android:layout_height="wrap_content"
                                             android:text="8 assessments"
                                             android:textColor="#CCFFFFFF"
-                                            android:textSize="13sp" />
+                                            android:textSize="12sp" />
                                     </LinearLayout>
-
                                 </LinearLayout>
                             </FrameLayout>
                         </com.google.android.material.card.MaterialCardView>
 
-                        <!-- Activities section header (Doc 1) -->
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:orientation="horizontal"
                             android:gravity="center_vertical"
-                            android:layout_marginBottom="8dp">
+                            android:layout_marginBottom="6dp">
                             <TextView
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:text="Assessments"
-                                android:textSize="15sp"
+                                android:textSize="14sp"
                                 android:textStyle="bold"
                                 android:textColor="#1E293B" />
                             <TextView
                                 android:id="@+id/classAssessmentCount"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:textSize="12sp"
+                                android:textSize="11sp"
                                 android:textColor="#94A3B8" />
                         </LinearLayout>
 
-                        <!-- Sheet-type filter tabs -->
                         <HorizontalScrollView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:scrollbars="none"
-                            android:layout_marginBottom="12dp">
+                            android:layout_marginBottom="10dp">
                             <LinearLayout
                                 android:id="@+id/classSheetTabs"
                                 android:layout_width="wrap_content"
@@ -889,14 +822,12 @@
                                 android:orientation="horizontal" />
                         </HorizontalScrollView>
 
-                        <!-- Search + sort row for assessments -->
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginBottom="12dp"
+                            android:layout_marginBottom="10dp"
                             android:orientation="horizontal"
                             android:gravity="center_vertical">
-
                             <EditText
                                 android:id="@+id/classAssessmentSearchInput"
                                 android:layout_width="0dp"
@@ -907,14 +838,13 @@
                                 android:imeOptions="actionDone"
                                 android:inputType="text"
                                 android:maxLines="1"
-                                android:paddingStart="14dp"
-                                android:paddingTop="10dp"
-                                android:paddingEnd="14dp"
-                                android:paddingBottom="10dp"
+                                android:paddingStart="12dp"
+                                android:paddingTop="9dp"
+                                android:paddingEnd="12dp"
+                                android:paddingBottom="9dp"
                                 android:textColor="#1E293B"
                                 android:textColorHint="#94A3B8"
-                                android:textSize="13sp" />
-
+                                android:textSize="12sp" />
                             <TextView
                                 android:id="@+id/classAssessmentSortPicker"
                                 android:layout_width="wrap_content"
@@ -922,15 +852,14 @@
                                 android:layout_marginStart="8dp"
                                 android:background="@drawable/bg_sort_pill"
                                 android:paddingStart="10dp"
-                                android:paddingTop="10dp"
+                                android:paddingTop="9dp"
                                 android:paddingEnd="10dp"
-                                android:paddingBottom="10dp"
+                                android:paddingBottom="9dp"
                                 android:text="Newest ▾"
                                 android:textColor="#1E293B"
-                                android:textSize="12sp" />
+                                android:textSize="11sp" />
                         </LinearLayout>
 
-                        <!-- Activity cards — populated by Java -->
                         <LinearLayout
                             android:id="@+id/classActivityList"
                             android:layout_width="match_parent"
@@ -938,7 +867,6 @@
                             android:orientation="vertical"
                             android:visibility="gone" />
 
-                        <!-- Empty state (Doc 1) -->
                         <LinearLayout
                             android:id="@+id/classEmpty"
                             android:layout_width="match_parent"
@@ -946,29 +874,29 @@
                             android:orientation="vertical"
                             android:gravity="center"
                             android:padding="40dp"
-                            android:layout_marginTop="40dp"
+                            android:layout_marginTop="30dp"
                             android:visibility="visible">
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="📋"
-                                android:textSize="52sp"
+                                android:textSize="48sp"
                                 android:alpha="0.4" />
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="No assessments yet"
                                 android:textColor="#64748B"
-                                android:textSize="15sp"
+                                android:textSize="14sp"
                                 android:textStyle="bold"
                                 android:fontFamily="@font/poppins_medium"
-                                android:layout_marginTop="12dp" />
+                                android:layout_marginTop="10dp" />
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="Tap + to add an assessment"
                                 android:textColor="#94A3B8"
-                                android:textSize="13sp"
+                                android:textSize="12sp"
                                 android:layout_marginTop="4dp" />
                         </LinearLayout>
 
@@ -976,9 +904,7 @@
                 </ScrollView>
 
                 <!-- ════════════════════════════════════════════
-                     SCREEN 3 · ACTIVITY  (Doc 1 design: CSV bar,
-                     gradient scan CTA card with decorative
-                     circles, scans header, scan list)
+                     SCREEN 3 · ACTIVITY
                 ════════════════════════════════════════════════ -->
                 <ScrollView
                     android:id="@+id/screenActivity"
@@ -993,31 +919,25 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:paddingStart="16dp"
-                        android:paddingEnd="16dp"
-                        android:paddingTop="16dp"
-                        android:paddingBottom="16dp">
+                        android:paddingStart="14dp"
+                        android:paddingEnd="14dp"
+                        android:paddingTop="14dp"
+                        android:paddingBottom="14dp">
 
-                        <!-- Master CSV bar removed -->
-
-                        <!-- Scan CTA card (Doc 1: gradient bg + decorative circles) -->
                         <androidx.cardview.widget.CardView
                             android:id="@+id/scanCtaCard"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginBottom="20dp"
+                            android:layout_marginBottom="16dp"
                             android:clickable="true"
                             android:focusable="true"
                             android:foreground="?android:attr/selectableItemBackground"
                             app:cardCornerRadius="20dp"
                             app:cardElevation="8dp">
-
                             <FrameLayout
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:background="@drawable/bg_header_gradient">
-
-                                <!-- Decorative circles -->
                                 <View
                                     android:layout_width="128dp"
                                     android:layout_height="128dp"
@@ -1034,58 +954,51 @@
                                     android:layout_marginStart="-10dp"
                                     android:background="@drawable/shape_circle_white"
                                     android:alpha="0.05" />
-
                                 <LinearLayout
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:orientation="vertical"
                                     android:gravity="center"
-                                    android:padding="24dp">
-
-                                    <!-- Camera icon box (Doc 1) -->
+                                    android:padding="20dp">
                                     <FrameLayout
-                                        android:layout_width="56dp"
-                                        android:layout_height="56dp"
+                                        android:layout_width="50dp"
+                                        android:layout_height="50dp"
                                         android:layout_gravity="center_horizontal"
-                                        android:layout_marginBottom="12dp"
+                                        android:layout_marginBottom="10dp"
                                         android:background="@drawable/bg_icon_box_white">
                                         <ImageView
-                                            android:layout_width="28dp"
-                                            android:layout_height="28dp"
+                                            android:layout_width="24dp"
+                                            android:layout_height="24dp"
                                             android:layout_gravity="center"
                                             android:src="@drawable/ic_camera"
                                             app:tint="#FFFFFF" />
                                     </FrameLayout>
-
                                     <TextView
                                         android:layout_width="wrap_content"
                                         android:layout_height="wrap_content"
                                         android:text="Start Scanning"
                                         android:textColor="#FFFFFF"
-                                        android:textSize="18sp"
+                                        android:textSize="16sp"
                                         android:textStyle="bold"
-                                        android:layout_marginBottom="6dp" />
-
+                                        android:layout_marginBottom="4dp" />
                                     <TextView
                                         android:id="@+id/scanCtaSub"
                                         android:layout_width="wrap_content"
                                         android:layout_height="wrap_content"
                                         android:text="ZPH30 · 30 items"
-                                        android:textColor="#BFDBFE"
-                                        android:textSize="13sp" />
-
+                                        android:textColor="#C7D2FE"
+                                        android:textSize="12sp" />
                                 </LinearLayout>
                             </FrameLayout>
                         </androidx.cardview.widget.CardView>
 
-                        <!-- Scans section header (Doc 1) -->
                         <LinearLayout
                             android:id="@+id/scansHeader"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:orientation="horizontal"
                             android:gravity="center_vertical"
-                            android:layout_marginBottom="12dp"
+                            android:layout_marginBottom="10dp"
                             android:visibility="gone">
                             <TextView
                                 android:layout_width="0dp"
@@ -1093,7 +1006,7 @@
                                 android:layout_weight="1"
                                 android:text="SCANNED PAPERS"
                                 android:textColor="#94A3B8"
-                                android:textSize="11sp"
+                                android:textSize="10sp"
                                 android:textStyle="bold"
                                 android:letterSpacing="0.10" />
                             <TextView
@@ -1102,11 +1015,10 @@
                                 android:layout_height="wrap_content"
                                 android:text="0 total"
                                 android:textColor="#F43F5E"
-                                android:textSize="11sp"
+                                android:textSize="10sp"
                                 android:textStyle="bold" />
                         </LinearLayout>
 
-                        <!-- Scan list — populated by Java -->
                         <LinearLayout
                             android:id="@+id/activityScanList"
                             android:layout_width="match_parent"
@@ -1114,7 +1026,6 @@
                             android:orientation="vertical"
                             android:visibility="gone" />
 
-                        <!-- Empty state (Doc 1) -->
                         <LinearLayout
                             android:id="@+id/activityScansEmpty"
                             android:layout_width="match_parent"
@@ -1127,23 +1038,23 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="🗒"
-                                android:textSize="52sp"
+                                android:textSize="48sp"
                                 android:alpha="0.4" />
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="No scans yet"
                                 android:textColor="#64748B"
-                                android:textSize="15sp"
+                                android:textSize="14sp"
                                 android:textStyle="bold"
                                 android:fontFamily="@font/poppins_medium"
-                                android:layout_marginTop="12dp" />
+                                android:layout_marginTop="10dp" />
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="Tap 'Start Scanning' to begin"
                                 android:textColor="#94A3B8"
-                                android:textSize="13sp"
+                                android:textSize="12sp"
                                 android:layout_marginTop="4dp" />
                         </LinearLayout>
 
@@ -1154,13 +1065,13 @@
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
-    <!-- ═══ FAB (Fixed below content card, full-width button) ═══ -->
+
+    <!-- ═══ FAB — proper margin from footer (was 4dp → now 16dp) ═══ -->
     <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
         android:id="@+id/fab"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        android:layout_marginBottom="8dp"
+        android:layout_marginBottom="16dp"
         android:text="Class"
         android:textAllCaps="false"
         android:textColor="#FFFFFF"
@@ -1168,27 +1079,27 @@
         android:gravity="center"
         app:icon="@drawable/ic_plus"
         app:iconTint="#FFFFFF"
-        app:iconSize="20dp"
+        app:iconSize="18dp"
         app:backgroundTint="#F43F5E"
-        app:elevation="4dp"
+        app:elevation="8dp"
         app:cornerRadius="16dp"
-        app:layout_constraintTop_toBottomOf="@id/contentCard"
         app:layout_constraintBottom_toTopOf="@id/footer"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         android:visibility="visible" />
 
-    <!-- ═══ FOOTER (Doc 1 style) ═══ -->
+    <!-- ═══ FOOTER — more breathing room (was 12dp → 16dp) ═══ -->
     <TextView
         android:id="@+id/footer"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="12dp"
-        android:text="© 2026 OMR Scanner"
+        android:layout_marginBottom="16dp"
+        android:text="© 2026 Stars"
         android:textColor="#94A3B8"
-        android:textSize="11sp"
+        android:textSize="10sp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.498"
         app:layout_constraintStart_toStartOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
