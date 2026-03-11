@@ -724,7 +724,7 @@ public class CameraActivity extends AppCompatActivity {
                     @Override
                     public void onImageSaved(@NonNull ImageCapture.OutputFileResults output) {
                         runOnUiThread(() -> {
-                            Intent intent = new Intent(CameraActivity.this, PreviewActivity.class);
+                            Intent intent = new Intent(CameraActivity.this, com.example.omrscanner.ui.ResultActivity.class);
                             intent.putExtra(PreviewActivity.IMAGE_PATH, photoFile.getAbsolutePath());
                             intent.putExtra(PreviewActivity.IMAGE_SOURCE, PreviewActivity.SOURCE_CAMERA);
                             if (selectedSheetType != null)
