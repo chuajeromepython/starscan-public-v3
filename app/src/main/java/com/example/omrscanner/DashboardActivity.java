@@ -155,6 +155,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private TextView  scansTotalCount, scanCtaSub;
 
     private ExtendedFloatingActionButton fab;
+    private ExtendedFloatingActionButton fabAnswerKey;
 
     private LinearLayout breadcrumbBar;
     private View         breadcrumbDivider;
@@ -284,6 +285,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         activityScansEmpty = findViewById(R.id.activityScansEmpty);
 
         fab = findViewById(R.id.fab);
+        fabAnswerKey = findViewById(R.id.fabAnswerKey);
 
         breadcrumbBar      = findViewById(R.id.breadcrumbBar);
         breadcrumbDivider  = findViewById(R.id.breadcrumbDivider);
@@ -296,6 +298,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         btnBack.setOnClickListener(v -> navigateBack());
         btnUpload.setOnClickListener(v -> dialogs.showGlobalUploadClassDialog());
         fab.setOnClickListener(v -> onFabClicked());
+        fabAnswerKey.setOnClickListener(v -> dialogs.showNewAnswerKeyDialog());
         teacherNameRow.setOnClickListener(v -> dialogs.showEditTeacherNameDialog());
 
         breadcrumbRoot.setOnClickListener(v -> {
@@ -411,6 +414,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 }
                 fab.setText("Class");
                 fab.setVisibility(View.VISIBLE);
+                fabAnswerKey.setVisibility(View.VISIBLE);
                 breadcrumbBar.setVisibility(View.GONE);
                 breadcrumbDivider.setVisibility(View.GONE);
                 renderHomeScreen();
@@ -430,6 +434,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 updateSortPickers();
                 fab.setText("Assessment");
                 fab.setVisibility(View.VISIBLE);
+                fabAnswerKey.setVisibility(View.GONE);
                 breadcrumbBar.setVisibility(View.VISIBLE);
                 breadcrumbDivider.setVisibility(View.VISIBLE);
                 breadcrumbSep1.setVisibility(View.VISIBLE);
@@ -449,6 +454,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 topBarBadge.setVisibility(View.VISIBLE);
                 topBarBadge.setText(selectedActivity.getSheetType());
                 fab.setVisibility(View.GONE);
+                fabAnswerKey.setVisibility(View.GONE);
                 breadcrumbBar.setVisibility(View.VISIBLE);
                 breadcrumbDivider.setVisibility(View.VISIBLE);
                 breadcrumbSep1.setVisibility(View.VISIBLE);
@@ -641,6 +647,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                         classActivityList.addView(classRenderer.createActivityCard(
                                 row,
                                 () -> { ActivityFolder a = findActivityById(selectedClass, row.id); if (a != null) dialogs.showEditActivityDialog(a); },
+                                () -> { ActivityFolder a = findActivityById(selectedClass, row.id); if (a != null) dialogs.showAnswerKeyFolderDialog(a); },
                                 () -> { ActivityFolder a = findActivityById(selectedClass, row.id); if (a != null) dialogs.showDeleteActivityConfirmation(a); },
                                 () -> {
                                     ActivityFolder a = findActivityById(selectedClass, row.id);

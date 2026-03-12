@@ -1066,12 +1066,13 @@
     </com.google.android.material.card.MaterialCardView>
 
 
-    <!-- ═══ FAB — proper margin from footer (was 4dp → now 16dp) ═══ -->
+    <!-- ═══ FABs ═══ -->
     <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
         android:id="@+id/fab"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginBottom="16dp"
+        android:layout_marginEnd="8dp"
         android:text="Class"
         android:textAllCaps="false"
         android:textColor="#FFFFFF"
@@ -1084,8 +1085,32 @@
         app:elevation="8dp"
         app:cornerRadius="16dp"
         app:layout_constraintBottom_toTopOf="@id/footer"
+        app:layout_constraintEnd_toStartOf="@+id/fabAnswerKey"
+        app:layout_constraintHorizontal_chainStyle="packed"
         app:layout_constraintStart_toStartOf="parent"
+        app:layout_goneMarginEnd="0dp"
+        android:visibility="visible" />
+
+    <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+        android:id="@+id/fabAnswerKey"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:layout_marginStart="8dp"
+        android:text="Answer Key"
+        android:textAllCaps="false"
+        android:textColor="#FFFFFF"
+        android:textSize="15sp"
+        android:gravity="center"
+        app:icon="@drawable/ic_plus"
+        app:iconTint="#FFFFFF"
+        app:iconSize="18dp"
+        app:backgroundTint="#059669"
+        app:elevation="8dp"
+        app:cornerRadius="16dp"
+        app:layout_constraintBottom_toTopOf="@id/footer"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@+id/fab"
         android:visibility="visible" />
 
     <!-- ═══ FOOTER — more breathing room (was 12dp → 16dp) ═══ -->

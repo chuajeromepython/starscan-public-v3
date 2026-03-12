@@ -654,6 +654,162 @@ public class DashboardDialogs {
     }
 
     // ─────────────────────────────────────────────────────────────
+    // New ANSWER KEY
+    // ─────────────────────────────────────────────────────────────
+
+    public void showAnswerKeyFolderDialog(ActivityFolder act) {
+        Dialog dialog = new Dialog(activity);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setCancelable(true);
+
+        LinearLayout root = ui.buildSheet();
+        root.addView(ui.createDialogHandle());
+        root.addView(ui.buildSheetTitle("🗝️ Answer Keys: " + act.getName(), "#0038A8", Gravity.START, 20));
+
+        LinearLayout listContainer = new LinearLayout(activity);
+        listContainer.setOrientation(LinearLayout.VERTICAL);
+        listContainer.setPadding(0, ui.dp(8), 0, ui.dp(16));
+        
+        listContainer.addView(ui.createSelectionCard(dialog, "📁", act.getName() + " Answer Keys",
+                "No function / database yet", () -> {
+            ui.showToast("Feature coming soon");
+        }));
+        
+        root.addView(listContainer);
+
+        LinearLayout actions = ui.buildActionsRow(ui.dp(20));
+        TextView btnClose = ui.createDialogButton("Close", false);
+        btnClose.setOnClickListener(v -> dialog.dismiss());
+        actions.addView(btnClose);
+        root.addView(actions);
+
+        dialog.setContentView(root);
+        ui.configureBottomDialog(dialog);
+        dialog.show();
+    }
+
+    public void showNewAnswerKeyDialog() {
+        Dialog dialog = new Dialog(activity);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setCancelable(true);
+
+        LinearLayout root = ui.buildSheet();
+        root.addView(ui.createDialogHandle());
+        root.addView(ui.buildSheetTitle("🔑 New Answer Key", "#059669", Gravity.START, 20));
+
+        root.addView(ui.createFieldLabel("ASSESSMENT NAME *"));
+        EditText nameInput = ui.createLightInput("e.g. Midterm Exam");
+        root.addView(nameInput);
+
+        root.addView(ui.createFieldLabel("YEAR / SCHOOL YEAR *"));
+        final String[] syOptions = ui.buildSchoolYearOptions();
+        int curYr = Calendar.getInstance().get(Calendar.YEAR);
+        String defSY = curYr + "-" + (curYr + 1);
+        int defIdx = 0;
+        for (int i = 0; i < syOptions.length; i++) {
+            if (syOptions[i].equals(defSY)) { defIdx = i; break; }
+        }
+        final String[] selectedSY = {syOptions[defIdx]};
+        TextView syPicker = ui.createDropdownField(syOptions[defIdx]);
+        syPicker.setTextColor(Color.parseColor("#1E293B"));
+        syPicker.setOnClickListener(v ->
+                new android.app.AlertDialog.Builder(activity)
+                        .setTitle("Select School Year")
+                        .setItems(syOptions, (dlg, which) -> {
+                            selectedSY[0] = syOptions[which];
+                            syPicker.setText(syOptions[which] + "  ▾");
+                            syPicker.setTextColor(Color.parseColor("#1E293B"));
+                        }).show());
+        root.addView(syPicker);
+
+        root.addView(ui.createFieldLabel("OMR SHEET TYPE"));
+        String[][] sheetTypes = {{"ZPH30","30 Items"},{"ZPH40","40 Items"},{"ZPH50","50 Items"},{"ZPH60","60 Items"}};
+        final String[] selectedType = {"ZPH30"};
+
+        LinearLayout typeRow = new LinearLayout(activity);
+        typeRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams trLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        trLp.bottomMargin = ui.dp(16);
+        typeRow.setLayoutParams(trLp);
+
+        final String[] answerSelections = new String[60];
+        for (int i=0; i<60; i++) answerSelections[i] = "";
+        final int[] currentItemCount = {30};
+
+        ScrollView answersScroll = new ScrollView(activity);
+        answersScroll.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ui.dp(240))); // Keep list scrollable but bound height
+        LinearLayout gridContainer = new LinearLayout(activity);
+        gridContainer.setOrientation(LinearLayout.VERTICAL);
+        answersScroll.addView(gridContainer);
+
+        final TextView[] typeButtons = new TextView[sheetTypes.length];
+        for (int i = 0; i < sheetTypes.length; i++) {
+            final int idx = i;
+            TextView btn = new TextView(activity);
+            btn.setText(sheetTypes[i][0] + "\n" + sheetTypes[i][1]);
+            btn.setTextSize(12);
+            btn.setTypeface(null, Typeface.BOLD);
+            btn.setGravity(Gravity.CENTER);
+            btn.setPadding(ui.dp(10), ui.dp(10), ui.dp(10), ui.dp(10));
+            btn.setClickable(true);
+            btn.setFocusable(true);
+            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            if (i < sheetTypes.length - 1) blp.rightMargin = ui.dp(8);
+            btn.setLayoutParams(blp);
+            typeButtons[i] = btn;
+            btn.setOnClickListener(v -> {
+                selectedType[0] = sheetTypes[idx][0];
+                updateSheetTypeSelection(typeButtons, idx);
+                currentItemCount[0] = Integer.parseInt(sheetTypes[idx][1].split(" ")[0]);
+                renderAnswerGrid(gridContainer, answerSelections, currentItemCount[0]);
+            });
+            typeRow.addView(btn);
+        }
+        root.addView(typeRow);
+        updateSheetTypeSelection(typeButtons, 0);
+
+        root.addView(ui.createFieldLabel("ANSWER KEY"));
+        root.addView(answersScroll);
+        renderAnswerGrid(gridContainer, answerSelections, 30);
+
+        LinearLayout actions = ui.buildActionsRow(ui.dp(20));
+        TextView btnCancel = ui.createDialogButton("Cancel", false);
+        TextView btnSave   = ui.createDialogButton("Save", true);
+        actions.addView(btnCancel);
+        actions.addView(ui.spacer(ui.dp(10)));
+        actions.addView(btnSave);
+        root.addView(actions);
+
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+        btnSave.setOnClickListener(v -> {
+            String name = nameInput.getText().toString().trim();
+            if (name.isEmpty()) {
+                ui.showErrorDialog("Missing Name", "Please enter the assessment name for this answer key.");
+                return;
+            }
+            
+            StringBuilder answerKeyBuilder = new StringBuilder();
+            for (int i = 0; i < currentItemCount[0]; i++) {
+                String ans = answerSelections[i];
+                answerKeyBuilder.append(ans.isEmpty() ? "?" : ans);
+                if (i < currentItemCount[0] - 1) answerKeyBuilder.append(",");
+            }
+            String answerKey = answerKeyBuilder.toString();
+
+            // Temporarily dismiss. Can be connected to db save query later.
+            ui.showToast("Answer Key for " + name + " saved!");
+            dialog.dismiss();
+        });
+
+        dialog.setContentView(root);
+        ui.configureBottomDialog(dialog);
+        dialog.show();
+    }
+
+    // ─────────────────────────────────────────────────────────────
     // Scan method dialog
     // ─────────────────────────────────────────────────────────────
 
@@ -903,5 +1059,111 @@ public class DashboardDialogs {
             if (parsed != null) return parsed.getTime();
         } catch (Exception ignored) {}
         return fallback;
+    }
+
+    private void renderAnswerGrid(LinearLayout gridContainer, String[] answerSelections, int itemCount) {
+        gridContainer.removeAllViews();
+
+        // Header Row
+        LinearLayout headerRow = new LinearLayout(activity);
+        headerRow.setOrientation(LinearLayout.HORIZONTAL);
+        headerRow.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        headerRow.setPadding(ui.dp(16), 0, 0, ui.dp(8));
+
+        TextView headerLeft = new TextView(activity);
+        headerLeft.setText("ITEM");
+        headerLeft.setTextSize(11);
+        headerLeft.setTextColor(Color.parseColor("#94A3B8"));
+        headerLeft.setTypeface(null, Typeface.BOLD);
+        headerLeft.setLayoutParams(new LinearLayout.LayoutParams(ui.dp(40), ViewGroup.LayoutParams.WRAP_CONTENT));
+        headerRow.addView(headerLeft);
+
+        TextView headerRight = new TextView(activity);
+        headerRight.setText("ANSWER");
+        headerRight.setTextSize(11);
+        headerRight.setTextColor(Color.parseColor("#94A3B8"));
+        headerRight.setTypeface(null, Typeface.BOLD);
+        headerRow.addView(headerRight);
+
+        gridContainer.addView(headerRow);
+
+        for (int r = 0; r < itemCount; r++) {
+            LinearLayout row = new LinearLayout(activity);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+            int num = r + 1;
+            if (r % 2 == 0) {
+                row.setBackgroundColor(Color.parseColor("#FFFFFF"));
+            } else {
+                row.setBackgroundColor(Color.parseColor("#F8FAFC"));
+            }
+            row.setPadding(ui.dp(16), ui.dp(8), ui.dp(16), ui.dp(8));
+
+            TextView tNum = new TextView(activity);
+            tNum.setText("#" + num);
+            tNum.setTextSize(16);
+            tNum.setTextColor(Color.parseColor("#0038A8"));
+            tNum.setTypeface(null, Typeface.BOLD);
+            tNum.setLayoutParams(new LinearLayout.LayoutParams(ui.dp(40), ViewGroup.LayoutParams.WRAP_CONTENT));
+            row.addView(tNum);
+
+            row.addView(buildOptionGroup(r, answerSelections));
+
+            gridContainer.addView(row);
+        }
+    }
+
+    private View buildOptionGroup(int itemIndex, String[] answerSelections) {
+        LinearLayout group = new LinearLayout(activity);
+        group.setOrientation(LinearLayout.HORIZONTAL);
+        group.setGravity(Gravity.CENTER_VERTICAL);
+        group.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        String[] options = {"A", "B", "C", "D"};
+
+        for (String opt : options) {
+            TextView btn = new TextView(activity);
+            btn.setText(opt);
+            btn.setTextSize(14);
+            btn.setTypeface(null, Typeface.BOLD);
+            btn.setGravity(Gravity.CENTER);
+
+            // Using larger rounded rectangle/squares
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ui.dp(42), ui.dp(42));
+            lp.rightMargin = ui.dp(12); // Space between the larger boxes
+            btn.setLayoutParams(lp);
+
+            Runnable updateUi = () -> {
+                boolean selected = answerSelections[itemIndex].contains(opt);
+                GradientDrawable bg = new GradientDrawable();
+                bg.setCornerRadius(ui.dp(12)); // Rounded corners
+                if (selected) {
+                    bg.setColor(Color.parseColor("#0038A8")); // Dark blue background for selected
+                    btn.setTextColor(Color.WHITE);
+                } else {
+                    bg.setColor(Color.parseColor("#F0F6FF")); // Light blue tint background for unselected
+                    btn.setTextColor(Color.parseColor("#0038A8")); // Dark blue text
+                }
+                btn.setBackground(bg);
+            };
+
+            updateUi.run();
+
+            btn.setOnClickListener(v -> {
+                if (answerSelections[itemIndex].contains(opt)) {
+                    answerSelections[itemIndex] = answerSelections[itemIndex].replace(opt, "");
+                } else {
+                    answerSelections[itemIndex] += opt;
+                    char[] chars = answerSelections[itemIndex].toCharArray();
+                    java.util.Arrays.sort(chars);
+                    answerSelections[itemIndex] = new String(chars);
+                }
+                updateUi.run();
+            });
+            group.addView(btn);
+        }
+        return group;
     }
 }

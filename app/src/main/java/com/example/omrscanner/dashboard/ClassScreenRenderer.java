@@ -160,7 +160,7 @@ public class ClassScreenRenderer {
      * @param onOpen   called when the card body is tapped
      */
     public View createActivityCard(AssessmentListRow row,
-            Runnable onEdit, Runnable onDelete, Runnable onOpen) {
+            Runnable onEdit, Runnable onSelectAnswerKey, Runnable onDelete, Runnable onOpen) {
 
         LinearLayout card = new LinearLayout(activity);
         card.setOrientation(LinearLayout.VERTICAL);
@@ -244,7 +244,7 @@ public class ClassScreenRenderer {
         actionsRow.setOrientation(LinearLayout.HORIZONTAL);
         actionsRow.setLayoutParams(new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        actionsRow.setWeightSum(2f);
+        actionsRow.setWeightSum(3f);
 
         android.util.TypedValue outValue = new android.util.TypedValue();
         activity.getTheme().resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, outValue, true);
@@ -252,10 +252,14 @@ public class ClassScreenRenderer {
         TextView btnEdit = makeActionBtn("✏️ Edit", "#64748B", outValue.resourceId);
         btnEdit.setOnClickListener(v -> onEdit.run());
 
+        TextView btnSelectAnswerKey = makeActionBtn("🗝️ Answer Key", "#0038A8", outValue.resourceId);
+        btnSelectAnswerKey.setOnClickListener(v -> onSelectAnswerKey.run());
+
         TextView btnDelete = makeActionBtn("🗑️ Delete", "#EF4444", outValue.resourceId);
         btnDelete.setOnClickListener(v -> onDelete.run());
 
         actionsRow.addView(btnEdit);
+        actionsRow.addView(btnSelectAnswerKey);
         actionsRow.addView(btnDelete);
         card.addView(actionsRow);
 
