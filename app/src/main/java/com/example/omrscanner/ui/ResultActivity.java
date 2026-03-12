@@ -113,19 +113,22 @@ public class ResultActivity extends AppCompatActivity {
 
         Log.d(TAG, "Received sheet type: " + selectedSheetType + ", classId: " + classId + ", activityId: " + activityId);
 
-        if (originalImagePath == null || anchorData == null) {
+        if (originalImagePath == null) {
             Toast.makeText(this, "Missing image data", Toast.LENGTH_SHORT).show();
             finish();
             return;
         }
 
-        // Convert anchor data back to Point[]
-        Point[] anchors = new Point[4];
-        for (int i = 0; i < 4; i++) {
-            anchors[i] = new Point(
-                    anchorData[i * 2],
-                    anchorData[i * 2 + 1]
-            );
+        Point[] anchors = null;
+        if (anchorData != null) {
+            // Convert anchor data back to Point[]
+            anchors = new Point[4];
+            for (int i = 0; i < 4; i++) {
+                anchors[i] = new Point(
+                        anchorData[i * 2],
+                        anchorData[i * 2 + 1]
+                );
+            }
         }
 
         // Process image
@@ -192,21 +195,39 @@ public class ResultActivity extends AppCompatActivity {
                     return;
                 }
 
+                Point[] finalAnchors = anchors;
+                if (finalAnchors == null) {
+                    finalAnchors = com.example.omrscanner.omr.AnchorDetector.detectAnchors(original);
+                    if (finalAnchors == null || finalAnchors.length != 4) {
+                        runOnUiThread(() -> {
+                            Toast.makeText(
+                                    ResultActivity.this,
+                                    "⚠ Anchor detection failed. Please retake.",
+                                    Toast.LENGTH_LONG
+                            ).show();
+                            imageResult.setImageBitmap(original);
+                            showLoading(false);
+                        });
+                        return;
+                    }
+                }
+
                 // Validate anchors
-                if (!PerspectiveAligner.validateAnchors(anchors)) {
+                if (!PerspectiveAligner.validateAnchors(finalAnchors)) {
                     runOnUiThread(() -> {
                         Toast.makeText(
                                 this,
                                 "Invalid anchor points detected",
                                 Toast.LENGTH_LONG
                         ).show();
-                        finish();
+                        imageResult.setImageBitmap(original);
+                        showLoading(false);
                     });
                     return;
                 }
 
                 // STEP 1: Apply perspective alignment (now maintains correct aspect ratio!)
-                alignedBitmap = PerspectiveAligner.alignPerspective(original, anchors);
+                alignedBitmap = PerspectiveAligner.alignPerspective(original, finalAnchors);
 
                 if (alignedBitmap == null) {
                     runOnUiThread(() -> {

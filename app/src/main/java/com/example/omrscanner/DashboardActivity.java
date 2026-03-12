@@ -723,6 +723,78 @@ public class DashboardActivity extends AppCompatActivity {
         meta.setLayoutParams(mlp);
         content.addView(meta);
 
+        // Row 4: Actions (Edit, Download, Delete)
+        View divider = new View(this);
+        LinearLayout.LayoutParams divLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(1));
+        divLp.topMargin = dp(14);
+        divLp.bottomMargin = dp(4);
+        divider.setLayoutParams(divLp);
+        divider.setBackgroundColor(Color.parseColor("#F1F5F9"));
+        content.addView(divider);
+
+        LinearLayout actionsRow = new LinearLayout(this);
+        actionsRow.setOrientation(LinearLayout.HORIZONTAL);
+        actionsRow.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        actionsRow.setWeightSum(3f);
+
+        android.util.TypedValue outValue = new android.util.TypedValue();
+        getTheme().resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, outValue, true);
+
+        // Edit Button
+        TextView btnEdit = new TextView(this);
+        btnEdit.setText("✏️ Edit");
+        btnEdit.setTextColor(Color.parseColor("#64748B"));
+        btnEdit.setTextSize(12);
+        btnEdit.setGravity(Gravity.CENTER);
+        btnEdit.setPadding(0, dp(10), 0, dp(10));
+        btnEdit.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        btnEdit.setBackgroundResource(outValue.resourceId);
+        btnEdit.setOnClickListener(v -> {
+            ClassFolder cls = findClassById(row.id);
+            if (cls != null) {
+                showEditClassDialog(cls);
+            }
+        });
+
+        // Download Button
+        TextView btnDownload = new TextView(this);
+        btnDownload.setText("⬇️ Download");
+        btnDownload.setTextColor(Color.parseColor("#64748B"));
+        btnDownload.setTextSize(12);
+        btnDownload.setGravity(Gravity.CENTER);
+        btnDownload.setPadding(0, dp(10), 0, dp(10));
+        btnDownload.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        btnDownload.setBackgroundResource(outValue.resourceId);
+        btnDownload.setOnClickListener(v -> {
+            ClassFolder cls = findClassById(row.id);
+            if (cls != null) {
+                downloadClassData(cls);
+            }
+        });
+
+        // Delete Button
+        TextView btnDelete = new TextView(this);
+        btnDelete.setText("🗑️ Delete");
+        btnDelete.setTextColor(Color.parseColor("#EF4444")); // Red color
+        btnDelete.setTextSize(12);
+        btnDelete.setGravity(Gravity.CENTER);
+        btnDelete.setPadding(0, dp(10), 0, dp(10));
+        btnDelete.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        btnDelete.setBackgroundResource(outValue.resourceId);
+        btnDelete.setOnClickListener(v -> {
+            ClassFolder cls = findClassById(row.id);
+            if (cls != null) {
+                showDeleteClassConfirmation(cls);
+            }
+        });
+
+        actionsRow.addView(btnEdit);
+        actionsRow.addView(btnDownload);
+        actionsRow.addView(btnDelete);
+        content.addView(actionsRow);
+
         card.addView(content);
 
         card.setOnClickListener(v -> {
@@ -736,13 +808,7 @@ public class DashboardActivity extends AppCompatActivity {
             selectedAssessmentSort = ASSESSMENT_SORT_NEWEST;
             showScreen(SCREEN_CLASS);
         });
-        card.setOnLongClickListener(v -> {
-            ClassFolder cls = findClassById(row.id);
-            if (cls != null) {
-                showClassOptionsDialog(cls);
-            }
-            return true;
-        });
+        
         return card;
     }
 
@@ -978,6 +1044,61 @@ public class DashboardActivity extends AppCompatActivity {
         meta.setLayoutParams(mlp);
         card.addView(meta);
 
+        // Actions (Edit, Delete)
+        View divider = new View(this);
+        LinearLayout.LayoutParams divLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(1));
+        divLp.topMargin = dp(14);
+        divLp.bottomMargin = dp(4);
+        divider.setLayoutParams(divLp);
+        divider.setBackgroundColor(Color.parseColor("#F1F5F9"));
+        card.addView(divider);
+
+        LinearLayout actionsRow = new LinearLayout(this);
+        actionsRow.setOrientation(LinearLayout.HORIZONTAL);
+        actionsRow.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        actionsRow.setWeightSum(2f);
+
+        android.util.TypedValue outValue = new android.util.TypedValue();
+        getTheme().resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, outValue, true);
+
+        // Edit Button
+        TextView btnEdit = new TextView(this);
+        btnEdit.setText("✏️ Edit");
+        btnEdit.setTextColor(Color.parseColor("#64748B"));
+        btnEdit.setTextSize(12);
+        btnEdit.setGravity(Gravity.CENTER);
+        btnEdit.setPadding(0, dp(10), 0, dp(10));
+        btnEdit.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        btnEdit.setBackgroundResource(outValue.resourceId);
+        btnEdit.setOnClickListener(v -> {
+            ActivityFolder act = findActivityById(selectedClass, row.id);
+            if (act != null) {
+                showEditActivityDialog(act);
+            }
+        });
+
+        // Delete Button
+        TextView btnDelete = new TextView(this);
+        btnDelete.setText("🗑️ Delete");
+        btnDelete.setTextColor(Color.parseColor("#EF4444"));
+        btnDelete.setTextSize(12);
+        btnDelete.setGravity(Gravity.CENTER);
+        btnDelete.setPadding(0, dp(10), 0, dp(10));
+        btnDelete.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        btnDelete.setBackgroundResource(outValue.resourceId);
+        btnDelete.setOnClickListener(v -> {
+            ActivityFolder act = findActivityById(selectedClass, row.id);
+            if (act != null) {
+                showDeleteActivityConfirmation(act);
+            }
+        });
+
+        actionsRow.addView(btnEdit);
+        actionsRow.addView(btnDelete);
+        card.addView(actionsRow);
+
         card.setOnClickListener(v -> {
             ActivityFolder act = findActivityById(selectedClass, row.id);
             if (act == null) {
@@ -987,13 +1108,7 @@ public class DashboardActivity extends AppCompatActivity {
             selectedActivity = act;
             showScreen(SCREEN_ACTIVITY);
         });
-        card.setOnLongClickListener(v -> {
-            ActivityFolder act = findActivityById(selectedClass, row.id);
-            if (act != null) {
-                showActivityOptionsDialog(act);
-            }
-            return true;
-        });
+        
         return card;
     }
 
@@ -2526,7 +2641,8 @@ public class DashboardActivity extends AppCompatActivity {
                     continue;
                 }
 
-                String actDirName = sanitizeFilePart(act.getName());
+                String sectionStr = cls.getSection() != null ? cls.getSection().replaceAll("\\s+", "") : "Section";
+                String actDirName = sanitizeFilePart(sectionStr + "_" + act.getName() + "_" + timestamp);
                 File actDir = new File(classDir, actDirName);
                 File imagesDir = new File(actDir, "images");
                 File resultsDir = new File(actDir, "result");
@@ -2599,12 +2715,16 @@ public class DashboardActivity extends AppCompatActivity {
                     }
                     actCsv.append("\n");
                 }
-                File csvFile = new File(actDir, actDirName + ".csv");
+                File csvFile = new File(actDir, folderName + "_" + sanitizeFilePart(act.getName()) + ".csv");
                 writeTextFile(csvFile, actCsv.toString());
                 totalCsvs++;
             }
 
-            File zipFile = new File(omrDir, folderName + "_" + timestamp + ".zip");
+            File targetClassDir = new File(omrDir, folderName);
+            if (!targetClassDir.exists() && !targetClassDir.mkdirs()) {
+                throw new IllegalStateException("Unable to create class directory inside Downloads/OMRScanner");
+            }
+            File zipFile = new File(targetClassDir, folderName + "_" + timestamp + ".zip");
             createEncryptedZip(classDir, zipFile, password);
             scanMediaFile(zipFile);
             return new DownloadExportResult(zipFile, totalImages, totalCsvs);
@@ -2703,7 +2823,16 @@ public class DashboardActivity extends AppCompatActivity {
         zipParams.setAesKeyStrength(AesKeyStrength.KEY_STRENGTH_256);
 
         ZipFile protectedZip = new ZipFile(zipFile, password.toCharArray());
-        protectedZip.addFolder(sourceDir, zipParams);
+        File[] children = sourceDir.listFiles();
+        if (children != null) {
+            for (File child : children) {
+                if (child.isDirectory()) {
+                    protectedZip.addFolder(child, zipParams);
+                } else {
+                    protectedZip.addFile(child, zipParams);
+                }
+            }
+        }
     }
 
     private void deleteRecursively(File file) {
@@ -2764,7 +2893,7 @@ public class DashboardActivity extends AppCompatActivity {
         root.addView(info);
 
         TextView pathLabel = new TextView(this);
-        pathLabel.setText("📦 Downloads/OMRScanner/" + zipFile.getName());
+        pathLabel.setText("📦 Downloads/OMRScanner/" + zipFile.getParentFile().getName() + "/" + zipFile.getName());
         pathLabel.setTextSize(11);
         pathLabel.setTextColor(Color.parseColor("#0038A8"));
         pathLabel.setGravity(Gravity.CENTER);
@@ -2802,7 +2931,7 @@ public class DashboardActivity extends AppCompatActivity {
 
     private void openFolderInFileManager(File folder) {
         if (folder == null) {
-            showToast("File saved to: Downloads/OMRScanner/");
+            showToast("File saved to: Downloads/OMRScanner/.../");
             return;
         }
         try {
@@ -2811,9 +2940,9 @@ public class DashboardActivity extends AppCompatActivity {
             if (intent.resolveActivity(getPackageManager()) != null)
                 startActivity(intent);
             else
-                showToast("File saved to: Downloads/OMRScanner/");
+                showToast("File saved to: Downloads/OMRScanner/.../");
         } catch (Exception e) {
-            showToast("File saved to: Downloads/OMRScanner/");
+            showToast("File saved to: Downloads/OMRScanner/.../");
         }
     }
 

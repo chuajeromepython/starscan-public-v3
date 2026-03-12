@@ -12,6 +12,7 @@ import java.util.List;
  * These may differ from the actual bitmap dimensions; use TemplateManager.generateScaledPointList()
  * to map coordinates to the target bitmap size.
  */
+
 public class OmrTemplate {
 
     /** Unique template identifier, e.g. "ZPH30", "ZPH40", "ZPH50", "ZPH60" */
