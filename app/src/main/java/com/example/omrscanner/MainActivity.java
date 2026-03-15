@@ -8,6 +8,8 @@ import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 
+import com.example.omrscanner.utils.BetaExpiryChecker;
+
 public class MainActivity extends AppCompatActivity {
 
     @Override
@@ -28,12 +30,13 @@ public class MainActivity extends AppCompatActivity {
             getSupportActionBar().hide();
         }
 
-        // Delay for 2.5 seconds (2500 milliseconds)
+        // Wait for 1.5 s (splash display), then check beta expiry before navigating.
         new android.os.Handler().postDelayed(() -> {
-            // Navigate to Dashboard activity
-            Intent intent = new Intent(MainActivity.this, DashboardActivity.class);
-            startActivity(intent);
-            finish();
+            Class<?> destination = BetaExpiryChecker.isExpired()
+                    ? BetaExpiredActivity.class   // Beta over — show gate screen
+                    : DashboardActivity.class;    // Still active — proceed normally
+            startActivity(new Intent(MainActivity.this, destination));
+            finish(); // Remove splash from back-stack
         }, 1500);
     }
 }

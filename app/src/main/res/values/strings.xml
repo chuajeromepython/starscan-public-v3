@@ -81,4 +81,10 @@
     <string name="four">4</string>
     <string name="twenty_eight">28</string>
     <string name="Assessments">Assessments</string>
+
+    <!-- Beta expiry gate -->
+    <string name="beta_expired_title">This Beta Has Ended</string>
+    <string name="beta_expired_body">Thank you for being part of our early rollout!\nThe official STARS app is now available on Google Play. Please install the Play Store version to continue using the app.</string>
+    <string name="beta_open_play_store">Get it on Google Play</string>
+
 </resources>
