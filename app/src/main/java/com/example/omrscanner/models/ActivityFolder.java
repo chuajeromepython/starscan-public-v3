@@ -16,6 +16,8 @@ public class ActivityFolder {
     private long createdAt;
     private String examDate; // Date when the activity was taken
     private long examDateEpoch; // millis at local midnight, used for sorting
+    /** Soft-link to the assigned answer key's ID; null if none assigned. */
+    private String answerKeyId;
 
     public ActivityFolder() {
         // Default constructor for deserialization
@@ -87,6 +89,14 @@ public class ActivityFolder {
 
     public void setExamDateEpoch(long examDateEpoch) {
         this.examDateEpoch = examDateEpoch;
+    }
+
+    public String getAnswerKeyId() {
+        return answerKeyId;
+    }
+
+    public void setAnswerKeyId(String answerKeyId) {
+        this.answerKeyId = answerKeyId;
     }
 
     public void addScan(ScanEntry scan) {

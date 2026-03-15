@@ -560,7 +560,8 @@ public class ResultActivity extends AppCompatActivity {
             );
             entry.setImagePath(originalImagePath);
             entry.setCsvPath(csvFilePath);
-            entry.setScore(scanResult.getAnsweredCount());
+            // NOTE: do NOT call entry.setScore() here — score must stay null (ungraded)
+            //       until an answer key is assigned in DashboardActivity.saveScanResult().
 
             // Save overlay bitmap to disk
             if (scanResult.overlayBitmap != null && !scanResult.overlayBitmap.isRecycled()) {

@@ -35,6 +35,7 @@ import com.example.omrscanner.dashboard.DashboardUiHelper;
 import com.example.omrscanner.dashboard.HomeScreenRenderer;
 import com.example.omrscanner.database.DataMapper;
 import com.example.omrscanner.database.OMRRepository;
+import com.example.omrscanner.database.entities.AnswerKeyEntity;
 import com.example.omrscanner.database.entities.AssessmentEntity;
 import com.example.omrscanner.database.entities.ClassEntity;
 import com.example.omrscanner.database.entities.ScanEntity;
@@ -73,9 +74,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private static final String TAG = "DashboardActivity";
 
     // ── Intent extras used by CameraActivity / PreviewActivity ──
-    public static final String EXTRA_SHEET_TYPE  = "sheet_type";
-    public static final String EXTRA_CLASS_ID    = "class_id";
-    public static final String EXTRA_ACTIVITY_ID = "activity_id";
+    public static final String EXTRA_SHEET_TYPE    = "sheet_type";
+    public static final String EXTRA_CLASS_ID      = "class_id";
+    public static final String EXTRA_ACTIVITY_ID   = "activity_id";
+    public static final String EXTRA_ANSWER_KEY_ID = "answer_key_id";
 
     // ── Screen names ──
     private static final String SCREEN_HOME     = "home";
@@ -100,6 +102,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private String selectedSheetType      = null;
     private String selectedSheetFilter    = null;
     private String globalTeacherName      = "";
+    /** Cached list of all answer keys — refreshed on load and after CRUD operations. */
+    private List<AnswerKeyEntity> answerKeys = new ArrayList<>();
 
     private String classSearchQuery       = "";
     private String selectedClassGradeFilter      = null;
@@ -765,6 +769,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
     @Override
     public void loadDataFromDb() {
+        reloadAnswerKeys(); // keep the answer-key cache fresh
         final String prevClassId    = (selectedClass    != null) ? selectedClass.getId()    : null;
         final String prevActivityId = (selectedActivity != null) ? selectedActivity.getId() : null;
         final String prevScreen     = currentScreen;
@@ -811,6 +816,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     AtomicInteger assessmentCountdown = new AtomicInteger(assessmentEntities.size());
                     for (AssessmentEntity ae : assessmentEntities) {
                         ActivityFolder af = DataMapper.toActivityFolder(ae);
+                        af.setAnswerKeyId(ae.answerKeyId); // carry the soft-link into the in-memory model
                         repo.getScansByAssessment(ae.id, scanEntities -> {
                             List<ScanEntry> scanEntries = new ArrayList<>();
                             if (scanEntities == null || scanEntities.isEmpty()) {
@@ -898,6 +904,28 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         ScanEntity existing = (replace && scanEntry.getLrn() != null)
                 ? r.getScanByAssessmentAndLrnSync(activityId, scanEntry.getLrn()) : null;
         ScanEntity entity = DataMapper.toScanEntity(scanEntry, activityId);
+
+        // ── Auto-score: if the assessment has an answer key, compute real score now ──
+        com.example.omrscanner.database.entities.AssessmentEntity assessment =
+                r.getAssessmentByIdSync(activityId);
+        if (assessment != null && assessment.answerKeyId != null) {
+            com.example.omrscanner.database.entities.AnswerKeyEntity key =
+                    r.getAnswerKeyByIdSync(assessment.answerKeyId);
+            if (key != null && key.answers != null && !key.answers.isEmpty()) {
+                String[] correctAnswers = key.answers.split(",");
+                java.util.Map<Integer, String> studentAnswers = scanEntry.getAnswers();
+                int score = 0;
+                for (int i = 0; i < correctAnswers.length; i++) {
+                    String k = correctAnswers[i].trim();
+                    if (k.isEmpty() || k.equals("?")) continue;
+                    String s = (studentAnswers != null && studentAnswers.containsKey(i + 1))
+                            ? studentAnswers.get(i + 1) : "";
+                    if (k.equals(s)) score++;
+                }
+                entity.score = score;
+            }
+        }
+
         if (existing != null) {
             entity.id = existing.id;
             r.updateScan(entity, null);
@@ -943,4 +971,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     @Override public ActivityFolder     getSelectedActivity(){ return selectedActivity; }
     @Override public void   setSelectedActivity(ActivityFolder a){ selectedActivity = a; }
     @Override public void   setSelectedSheetType(String t) { selectedSheetType = t; }
+    @Override public List<AnswerKeyEntity> getAnswerKeys()  { return answerKeys; }
+    @Override public void reloadAnswerKeys() {
+        repo.getAllAnswerKeys(keys -> runOnUiThread(() ->
+            answerKeys = (keys != null) ? keys : new ArrayList<>()));
+    }
 }

@@ -17,6 +17,8 @@ public class ScanEntry {
     private String overlayImagePath; // path to the overlay image (with bubble highlights)
     private String csvPath;          // path to the individual CSV
     private long timestamp;
+    /** True when score was computed by comparing against an answer key; false = raw detected count. */
+    private boolean isScored;
 
     public ScanEntry() {
         // Default constructor for deserialization
@@ -59,6 +61,9 @@ public class ScanEntry {
 
     public long getTimestamp() { return timestamp; }
     public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
+
+    public boolean isScored() { return isScored; }
+    public void setScored(boolean scored) { isScored = scored; }
 
     /**
      * Count how many questions were answered (non-blank).

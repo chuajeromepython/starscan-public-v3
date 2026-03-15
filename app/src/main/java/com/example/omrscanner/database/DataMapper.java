@@ -1,5 +1,6 @@
 package com.example.omrscanner.database;
 
+import com.example.omrscanner.database.entities.AnswerKeyEntity;
 import com.example.omrscanner.database.entities.AssessmentEntity;
 import com.example.omrscanner.database.entities.ClassEntity;
 import com.example.omrscanner.database.entities.ScanEntity;
@@ -10,6 +11,7 @@ import com.example.omrscanner.models.ScanEntry;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * DataMapper — pure static helpers that convert between the in-memory model
@@ -124,8 +126,10 @@ public final class DataMapper {
         ScanEntity entity = new ScanEntity();
         entity.assessmentId = assessmentId;
         entity.studentLrn = scan.getLrn();
-        entity.detectedBubbles = scan.getScore(); // score == detected count currently
-        entity.score = scan.getScore();
+        entity.detectedBubbles = scan.getScore(); // always store detected count
+        // Only write the graded score when the scan has actually been graded by an answer key;
+        // otherwise keep it null so the UI knows no answer key evaluation has been done yet.
+        entity.score = scan.isScored() ? scan.getScore() : null;
         entity.numItems = scan.getNumItems();
         entity.imagePath = scan.getImagePath();
         entity.overlayImagePath = scan.getOverlayImagePath();
@@ -148,7 +152,9 @@ public final class DataMapper {
             Map<Integer, String> answers) {
         ScanEntry scan = new ScanEntry();
         scan.setLrn(entity.studentLrn);
-        scan.setScore(entity.score != null ? entity.score : entity.detectedBubbles);
+        boolean hasRealScore = (entity.score != null);
+        scan.setScore(hasRealScore ? entity.score : entity.detectedBubbles);
+        scan.setScored(hasRealScore);
         scan.setNumItems(entity.numItems);
         scan.setImagePath(entity.imagePath);
         scan.setOverlayImagePath(entity.overlayImagePath);
@@ -170,5 +176,44 @@ public final class DataMapper {
             }
         }
         return map;
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // ANSWER KEY
+    // ═════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Create a new {@link AnswerKeyEntity} from raw fields.
+     * Generates a 7-character UUID and sets timestamps automatically.
+     *
+     * @param name       display name, e.g. "Midterm Science Q1"
+     * @param schoolYear e.g. "2025-2026"
+     * @param sheetType  e.g. "ZPH50"
+     * @param answers    comma-separated answers, e.g. "A,B,C,D,..."
+     */
+    public static AnswerKeyEntity toAnswerKeyEntity(String name, String schoolYear,
+            String sheetType, String answers) {
+        // 7-char short UUID — consistent with AssessmentEntity / ClassEntity style
+        String id = UUID.randomUUID().toString().replace("-", "").substring(0, 7);
+        return new AnswerKeyEntity(id, name, schoolYear, sheetType, answers);
+    }
+
+    /**
+     * Returns a short, human-readable label for a UI chip or spinner entry.
+     * Format: "Name · ZPH50 · 2025-2026"
+     */
+    public static String answerKeyDisplayName(AnswerKeyEntity key) {
+        if (key == null) return "";
+        StringBuilder sb = new StringBuilder();
+        if (key.name != null && !key.name.isEmpty()) sb.append(key.name);
+        if (key.sheetType != null && !key.sheetType.isEmpty()) {
+            if (sb.length() > 0) sb.append(" · ");
+            sb.append(key.sheetType);
+        }
+        if (key.schoolYear != null && !key.schoolYear.isEmpty()) {
+            if (sb.length() > 0) sb.append(" · ");
+            sb.append(key.schoolYear);
+        }
+        return sb.toString();
     }
 }

@@ -42,12 +42,26 @@ public interface AssessmentDao {
   @Query("SELECT COUNT(*) FROM assessments")
   int countAll();
 
+  /** Lightweight update — links an answer key to an assessment without touching other fields. */
+  @Query("UPDATE assessments SET answer_key_id = :keyId WHERE id = :assessmentId")
+  void setAnswerKey(String assessmentId, String keyId);
+
+  /** Called when an answer key is deleted — nullifies all references to prevent stale links. */
+  @Query("UPDATE assessments SET answer_key_id = NULL WHERE answer_key_id = :keyId")
+  void clearAnswerKeyRef(String keyId);
+
+  /** Returns all assessments that currently reference the given answer key. */
+  @Query("SELECT * FROM assessments WHERE answer_key_id = :keyId")
+  List<AssessmentEntity> getByAnswerKeyId(String keyId);
+
   @Query("SELECT a.id AS id, a.class_id AS classId, a.name AS name, "
       + "a.sheet_type AS sheetType, a.exam_date AS examDate, "
       + "a.exam_date_epoch AS examDateEpoch, a.created_at AS createdAt, "
+      + "a.answer_key_id AS answerKeyId, ak.name AS answerKeyName, "
       + "COUNT(s.id) AS scanCount "
       + "FROM assessments a "
       + "LEFT JOIN scans s ON s.assessment_id = a.id "
+      + "LEFT JOIN answer_keys ak ON ak.id = a.answer_key_id "
       + "WHERE a.class_id = :classId "
       + "AND (:sheetTypeFilter IS NULL OR :sheetTypeFilter = '' OR a.sheet_type = :sheetTypeFilter) "
       + "AND (:search IS NULL OR :search = '' "

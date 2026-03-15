@@ -187,11 +187,18 @@ public class ActivityScreenRenderer {
         badge.setText(scan.getScore() + "/" + scan.getNumItems());
         badge.setTextSize(12);
         badge.setTypeface(null, Typeface.BOLD);
-        badge.setPadding(ui.dp(8), ui.dp(3), ui.dp(8), ui.dp(3));
+        badge.setPadding(ui.dp(10), ui.dp(4), ui.dp(10), ui.dp(4));
         GradientDrawable badgeBg = new GradientDrawable();
-        badgeBg.setCornerRadius(ui.dp(6));
-        badgeBg.setColor(Color.parseColor("#DCFCE7"));
-        badge.setTextColor(Color.parseColor("#059669"));
+        badgeBg.setCornerRadius(ui.dp(8));
+        if (scan.isScored()) {
+            // Real graded score — gold/amber to distinguish from raw count
+            badgeBg.setColor(Color.parseColor("#FEF9C3"));
+            badge.setTextColor(Color.parseColor("#854D0E"));
+        } else {
+            // Detected bubbles only — neutral green
+            badgeBg.setColor(Color.parseColor("#DCFCE7"));
+            badge.setTextColor(Color.parseColor("#059669"));
+        }
         badge.setBackground(badgeBg);
         return badge;
     }

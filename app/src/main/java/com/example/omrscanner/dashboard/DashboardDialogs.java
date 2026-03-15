@@ -18,6 +18,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.omrscanner.database.DataMapper;
 import com.example.omrscanner.database.OMRRepository;
+import com.example.omrscanner.database.entities.AnswerKeyEntity;
 import com.example.omrscanner.database.entities.AssessmentEntity;
 import com.example.omrscanner.database.entities.ClassEntity;
 import com.example.omrscanner.models.ActivityFolder;
@@ -49,6 +50,10 @@ public class DashboardDialogs {
         void loadDataFromDb();
         void openCamera();
         void openGallery();
+        /** Returns the cached list of all answer keys (loaded on app start). */
+        List<AnswerKeyEntity> getAnswerKeys();
+        /** Triggers a background reload of all answer keys from the DB. */
+        void reloadAnswerKeys();
     }
 
     private final AppCompatActivity activity;
@@ -664,24 +669,202 @@ public class DashboardDialogs {
 
         LinearLayout root = ui.buildSheet();
         root.addView(ui.createDialogHandle());
-        root.addView(ui.buildSheetTitle("🗝️ Answer Keys: " + act.getName(), "#0038A8", Gravity.START, 20));
+        root.addView(ui.buildSheetTitle("🗝️ Answer Key: " + act.getName(), "#0038A8", Gravity.START, 20));
 
+        // Scrollable key list
+        android.widget.ScrollView scrollView = new android.widget.ScrollView(activity);
+        scrollView.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ui.dp(320)));
         LinearLayout listContainer = new LinearLayout(activity);
         listContainer.setOrientation(LinearLayout.VERTICAL);
-        listContainer.setPadding(0, ui.dp(8), 0, ui.dp(16));
-        
-        listContainer.addView(ui.createSelectionCard(dialog, "📁", act.getName() + " Answer Keys",
-                "No function / database yet", () -> {
-            ui.showToast("Feature coming soon");
-        }));
-        
-        root.addView(listContainer);
+        listContainer.setPadding(0, ui.dp(4), 0, ui.dp(8));
+        scrollView.addView(listContainer);
 
-        LinearLayout actions = ui.buildActionsRow(ui.dp(20));
+        List<AnswerKeyEntity> allKeys = host.getAnswerKeys();
+        if (allKeys == null || allKeys.isEmpty()) {
+            TextView empty = new TextView(activity);
+            empty.setText("No answer keys yet. Tap \"+ Create New\" below.");
+            empty.setTextColor(Color.parseColor("#94A3B8"));
+            empty.setTextSize(13);
+            empty.setGravity(Gravity.CENTER);
+            empty.setPadding(0, ui.dp(24), 0, ui.dp(24));
+            listContainer.addView(empty);
+        } else {
+            // Filter to matching sheet type first, then show the rest
+            java.util.List<AnswerKeyEntity> matching = new java.util.ArrayList<>();
+            java.util.List<AnswerKeyEntity> other = new java.util.ArrayList<>();
+            for (AnswerKeyEntity k : allKeys) {
+                if (act.getSheetType() != null && act.getSheetType().equals(k.sheetType)) {
+                    matching.add(k);
+                } else {
+                    other.add(k);
+                }
+            }
+            java.util.List<AnswerKeyEntity> ordered = new java.util.ArrayList<>(matching);
+            ordered.addAll(other);
+
+            for (AnswerKeyEntity key : ordered) {
+                boolean isAssigned = key.id.equals(act.getAnswerKeyId());
+
+                // Card container (vertical stack)
+                LinearLayout card = new LinearLayout(activity);
+                card.setOrientation(LinearLayout.VERTICAL);
+                card.setPadding(ui.dp(16), ui.dp(14), ui.dp(16), ui.dp(14));
+
+                GradientDrawable cardBg = new GradientDrawable();
+                cardBg.setCornerRadius(ui.dp(14));
+                cardBg.setColor(isAssigned ? Color.parseColor("#ECFDF5") : Color.WHITE);
+                cardBg.setStroke(ui.dp(isAssigned ? 2 : 1),
+                        Color.parseColor(isAssigned ? "#059669" : "#E2E8F0"));
+                card.setBackground(cardBg);
+
+                LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                cardLp.bottomMargin = ui.dp(12);
+                card.setLayoutParams(cardLp);
+
+                // ── Row 1: icon + info ─────────────────────────────
+                LinearLayout infoRow = new LinearLayout(activity);
+                infoRow.setOrientation(LinearLayout.HORIZONTAL);
+                infoRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+
+                TextView iconView = new TextView(activity);
+                iconView.setText(isAssigned ? "✅" : "🔑");
+                iconView.setTextSize(20);
+                LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                iconLp.rightMargin = ui.dp(12);
+                iconView.setLayoutParams(iconLp);
+                infoRow.addView(iconView);
+
+                LinearLayout textCol = new LinearLayout(activity);
+                textCol.setOrientation(LinearLayout.VERTICAL);
+
+                TextView keyName = new TextView(activity);
+                keyName.setText(key.name != null ? key.name : "Unnamed");
+                keyName.setTextColor(Color.parseColor(isAssigned ? "#059669" : "#1E293B"));
+                keyName.setTextSize(15);
+                keyName.setTypeface(null, isAssigned ? Typeface.BOLD : Typeface.NORMAL);
+                textCol.addView(keyName);
+
+                TextView keyMeta = new TextView(activity);
+                keyMeta.setText((key.sheetType != null ? key.sheetType : "?") +
+                        "  ·  " + (key.schoolYear != null ? key.schoolYear : ""));
+                keyMeta.setTextColor(Color.parseColor("#94A3B8"));
+                keyMeta.setTextSize(12);
+                LinearLayout.LayoutParams metaLp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                metaLp.topMargin = ui.dp(2);
+                keyMeta.setLayoutParams(metaLp);
+                textCol.addView(keyMeta);
+
+                infoRow.addView(textCol);
+                card.addView(infoRow);
+
+                // ── Divider ────────────────────────────────────────
+                View divider = new View(activity);
+                divider.setBackgroundColor(Color.parseColor(isAssigned ? "#BBF7D0" : "#F1F5F9"));
+                LinearLayout.LayoutParams divLp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ui.dp(1));
+                divLp.topMargin = ui.dp(12);
+                divLp.bottomMargin = ui.dp(10);
+                divider.setLayoutParams(divLp);
+                card.addView(divider);
+
+                // ── Row 2: Assign · Edit · Delete ─────────────────
+                LinearLayout actionsRow = new LinearLayout(activity);
+                actionsRow.setOrientation(LinearLayout.HORIZONTAL);
+                actionsRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+
+                // Helper to build a styled pill button
+                java.util.function.Function<String[], TextView> makePill = (args) -> {
+                    // args = [label, textColor, bgColor]
+                    TextView btn = new TextView(activity);
+                    btn.setText(args[0]);
+                    btn.setTextColor(Color.parseColor(args[1]));
+                    btn.setTextSize(13);
+                    btn.setTypeface(null, Typeface.BOLD);
+                    btn.setGravity(android.view.Gravity.CENTER);
+                    btn.setPadding(ui.dp(16), ui.dp(8), ui.dp(16), ui.dp(8));
+                    GradientDrawable pillBg = new GradientDrawable();
+                    pillBg.setColor(Color.parseColor(args[2]));
+                    pillBg.setCornerRadius(ui.dp(20));
+                    btn.setBackground(pillBg);
+                    LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                    blp.rightMargin = ui.dp(8);
+                    btn.setLayoutParams(blp);
+                    return btn;
+                };
+
+                // Assign / Unlink
+                TextView btnAssign = makePill.apply(isAssigned
+                        ? new String[]{"Unlink", "#FFFFFF", "#EF4444"}
+                        : new String[]{"Assign", "#FFFFFF", "#0038A8"});
+                btnAssign.setOnClickListener(v -> {
+                    if (isAssigned) {
+                        repo.unlinkAnswerKeyFromAssessment(act.getId(), ignored ->
+                                activity.runOnUiThread(() -> {
+                                    act.setAnswerKeyId(null);
+                                    dialog.dismiss();
+                                    ui.showToast("Answer key unlinked");
+                                    host.loadDataFromDb();
+                                }));
+                    } else {
+                        repo.linkAnswerKeyToAssessment(act.getId(), key.id, ignored ->
+                                activity.runOnUiThread(() -> {
+                                    act.setAnswerKeyId(key.id);
+                                    dialog.dismiss();
+                                    ui.showToast("\"" + key.name + "\" assigned ✓");
+                                    host.loadDataFromDb();
+                                }));
+                    }
+                });
+                actionsRow.addView(btnAssign);
+
+                // Edit
+                TextView btnEdit = makePill.apply(new String[]{"Edit", "#475569", "#F1F5F9"});
+                btnEdit.setOnClickListener(v -> {
+                    dialog.dismiss();
+                    showEditAnswerKeyDialog(key);
+                });
+                actionsRow.addView(btnEdit);
+
+                // Delete
+                TextView btnDel = makePill.apply(new String[]{"Delete", "#EF4444", "#FEF2F2"});
+                LinearLayout.LayoutParams delLp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                btnDel.setLayoutParams(delLp); // no right margin on last button
+                btnDel.setOnClickListener(v -> {
+                    dialog.dismiss();
+                    showDeleteAnswerKeyConfirmation(key);
+                });
+                actionsRow.addView(btnDel);
+
+                card.addView(actionsRow);
+                listContainer.addView(card);
+            }
+        }
+        root.addView(scrollView);
+
+        LinearLayout actions = ui.buildActionsRow(ui.dp(12));
+        TextView btnCreate = ui.createDialogButton("+ Create New Answer Key", true);
+        GradientDrawable createBg = new GradientDrawable();
+        createBg.setColor(Color.parseColor("#059669"));
+        createBg.setCornerRadius(ui.dp(12));
+        btnCreate.setBackground(createBg);
+        btnCreate.setOnClickListener(v -> {
+            dialog.dismiss();
+            showNewAnswerKeyDialog();
+        });
+        actions.addView(btnCreate);
+        root.addView(actions);
+
+        LinearLayout closeRow = ui.buildActionsRow(ui.dp(8));
         TextView btnClose = ui.createDialogButton("Close", false);
         btnClose.setOnClickListener(v -> dialog.dismiss());
-        actions.addView(btnClose);
-        root.addView(actions);
+        closeRow.addView(btnClose);
+        root.addView(closeRow);
 
         dialog.setContentView(root);
         ui.configureBottomDialog(dialog);
@@ -790,19 +973,190 @@ public class DashboardDialogs {
                 ui.showErrorDialog("Missing Name", "Please enter the assessment name for this answer key.");
                 return;
             }
-            
+
             StringBuilder answerKeyBuilder = new StringBuilder();
             for (int i = 0; i < currentItemCount[0]; i++) {
                 String ans = answerSelections[i];
                 answerKeyBuilder.append(ans.isEmpty() ? "?" : ans);
                 if (i < currentItemCount[0] - 1) answerKeyBuilder.append(",");
             }
-            String answerKey = answerKeyBuilder.toString();
+            String answerKeyStr = answerKeyBuilder.toString();
 
-            // Temporarily dismiss. Can be connected to db save query later.
-            ui.showToast("Answer Key for " + name + " saved!");
-            dialog.dismiss();
+            AnswerKeyEntity entity = DataMapper.toAnswerKeyEntity(
+                    name, selectedSY[0], selectedType[0], answerKeyStr);
+            repo.insertAnswerKey(entity, ignored -> activity.runOnUiThread(() -> {
+                dialog.dismiss();
+                ui.showToast("Answer Key \"" + name + "\" saved ✓");
+                host.reloadAnswerKeys();
+            }));
         });
+
+        dialog.setContentView(root);
+        ui.configureBottomDialog(dialog);
+        dialog.show();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Edit Answer Key
+    // ─────────────────────────────────────────────────────────────
+
+    public void showEditAnswerKeyDialog(AnswerKeyEntity key) {
+        Dialog dialog = new Dialog(activity);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setCancelable(true);
+
+        LinearLayout root = ui.buildSheet();
+        root.addView(ui.createDialogHandle());
+        root.addView(ui.buildSheetTitle("✏️ Edit Answer Key", "#059669", Gravity.START, 20));
+
+        root.addView(ui.createFieldLabel("ASSESSMENT NAME *"));
+        EditText nameInput = ui.createLightInput("e.g. Midterm Exam");
+        if (key.name != null) nameInput.setText(key.name);
+        root.addView(nameInput);
+
+        root.addView(ui.createFieldLabel("YEAR / SCHOOL YEAR *"));
+        final String[] syOptions = ui.buildSchoolYearOptions();
+        String initSY = (key.schoolYear != null && !key.schoolYear.isEmpty())
+                ? key.schoolYear : syOptions[0];
+        final String[] selectedSY = {initSY};
+        TextView syPicker = ui.createDropdownField(initSY);
+        syPicker.setTextColor(Color.parseColor("#1E293B"));
+        syPicker.setOnClickListener(v ->
+                new android.app.AlertDialog.Builder(activity)
+                        .setTitle("Select School Year")
+                        .setItems(syOptions, (dlg, which) -> {
+                            selectedSY[0] = syOptions[which];
+                            syPicker.setText(syOptions[which] + "  ▾");
+                            syPicker.setTextColor(Color.parseColor("#1E293B"));
+                        }).show());
+        root.addView(syPicker);
+
+        // Sheet type is read-only on edit (changing it invalidates existing answers)
+        root.addView(ui.createFieldLabel("OMR SHEET TYPE (locked)"));
+        TextView sheetInfo = new TextView(activity);
+        String st = key.sheetType != null ? key.sheetType : "ZPH30";
+        int numItems = key.getNumItems();
+        sheetInfo.setText(st + " — " + numItems + " Items");
+        sheetInfo.setTextSize(14);
+        sheetInfo.setTypeface(null, Typeface.BOLD);
+        sheetInfo.setTextColor(Color.parseColor("#64748B"));
+        sheetInfo.setPadding(ui.dp(12), ui.dp(10), ui.dp(12), ui.dp(10));
+        GradientDrawable siBg = new GradientDrawable();
+        siBg.setColor(Color.parseColor("#F8FAFC"));
+        siBg.setCornerRadius(ui.dp(10));
+        siBg.setStroke(ui.dp(1), Color.parseColor("#E2E8F0"));
+        sheetInfo.setBackground(siBg);
+        LinearLayout.LayoutParams silp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        silp.bottomMargin = ui.dp(12);
+        sheetInfo.setLayoutParams(silp);
+        root.addView(sheetInfo);
+
+        // Answer grid — pre-populate from the stored CSV
+        root.addView(ui.createFieldLabel("ANSWER KEY"));
+        final String[] answerSelections = new String[60];
+        for (int i = 0; i < 60; i++) answerSelections[i] = "";
+        if (key.answers != null && !key.answers.isEmpty()) {
+            String[] parts = key.answers.split(",");
+            for (int i = 0; i < parts.length && i < 60; i++) {
+                answerSelections[i] = "?".equals(parts[i]) ? "" : parts[i];
+            }
+        }
+
+        android.widget.ScrollView answersScroll = new android.widget.ScrollView(activity);
+        answersScroll.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ui.dp(240)));
+        LinearLayout gridContainer = new LinearLayout(activity);
+        gridContainer.setOrientation(LinearLayout.VERTICAL);
+        answersScroll.addView(gridContainer);
+        root.addView(answersScroll);
+        renderAnswerGrid(gridContainer, answerSelections, numItems);
+
+        LinearLayout actions = ui.buildActionsRow(ui.dp(20));
+        TextView btnCancel = ui.createDialogButton("Cancel", false);
+        TextView btnSave = ui.createDialogButton("Save", true);
+        actions.addView(btnCancel);
+        actions.addView(ui.spacer(ui.dp(10)));
+        actions.addView(btnSave);
+        root.addView(actions);
+
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+        btnSave.setOnClickListener(v -> {
+            String name = nameInput.getText().toString().trim();
+            if (name.isEmpty()) {
+                ui.showErrorDialog("Missing Name", "Please enter the assessment name for this answer key.");
+                return;
+            }
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < numItems; i++) {
+                String ans = answerSelections[i];
+                sb.append(ans.isEmpty() ? "?" : ans);
+                if (i < numItems - 1) sb.append(",");
+            }
+            key.name = name;
+            key.schoolYear = selectedSY[0];
+            key.answers = sb.toString();
+            repo.updateAnswerKey(key, ignored -> activity.runOnUiThread(() -> {
+                dialog.dismiss();
+                ui.showToast("Answer Key updated ✓");
+                host.reloadAnswerKeys();
+                host.loadDataFromDb();
+            }));
+        });
+
+        dialog.setContentView(root);
+        ui.configureBottomDialog(dialog);
+        dialog.show();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Delete Answer Key Confirmation
+    // ─────────────────────────────────────────────────────────────
+
+    public void showDeleteAnswerKeyConfirmation(AnswerKeyEntity key) {
+        Dialog dialog = new Dialog(activity);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setCancelable(true);
+
+        LinearLayout root = ui.buildSheet();
+
+        TextView title = new TextView(activity);
+        title.setText("Delete Answer Key?");
+        title.setTextSize(18);
+        title.setTypeface(null, Typeface.BOLD);
+        title.setTextColor(Color.parseColor("#CE1126"));
+        root.addView(title);
+
+        TextView msg = new TextView(activity);
+        msg.setText("Are you sure you want to delete \"" + (key.name != null ? key.name : "this key")
+                + "\"?\n\nThis will unlink it from all assessments that use it. No scan data will be lost.");
+        msg.setTextColor(Color.parseColor("#64748B"));
+        msg.setTextSize(14);
+        msg.setPadding(0, ui.dp(12), 0, ui.dp(24));
+        root.addView(msg);
+
+        LinearLayout actions = new LinearLayout(activity);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        TextView btnCancel = ui.createDialogButton("Cancel", false);
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+        actions.addView(btnCancel);
+        actions.addView(ui.spacer(ui.dp(10)));
+
+        TextView btnDelete = ui.createDialogButton("Delete", true);
+        GradientDrawable delBg = new GradientDrawable();
+        delBg.setColor(Color.parseColor("#CE1126"));
+        delBg.setCornerRadius(ui.dp(12));
+        btnDelete.setBackground(delBg);
+        btnDelete.setTextColor(Color.WHITE);
+        btnDelete.setOnClickListener(v ->
+                repo.deleteAnswerKey(key, ignored -> activity.runOnUiThread(() -> {
+                    dialog.dismiss();
+                    ui.showToast("Answer key deleted");
+                    host.reloadAnswerKeys();
+                    host.loadDataFromDb();
+                })));
+        actions.addView(btnDelete);
+        root.addView(actions);
 
         dialog.setContentView(root);
         ui.configureBottomDialog(dialog);
@@ -1122,48 +1476,55 @@ public class DashboardDialogs {
         group.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         String[] options = {"A", "B", "C", "D"};
+        TextView[] btns = new TextView[options.length];
 
-        for (String opt : options) {
+        Runnable[] refreshAll = {null}; // filled after loop
+
+        for (int i = 0; i < options.length; i++) {
+            final String opt = options[i];
             TextView btn = new TextView(activity);
             btn.setText(opt);
             btn.setTextSize(14);
             btn.setTypeface(null, Typeface.BOLD);
             btn.setGravity(Gravity.CENTER);
 
-            // Using larger rounded rectangle/squares
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ui.dp(42), ui.dp(42));
-            lp.rightMargin = ui.dp(12); // Space between the larger boxes
+            lp.rightMargin = ui.dp(12);
             btn.setLayoutParams(lp);
-
-            Runnable updateUi = () -> {
-                boolean selected = answerSelections[itemIndex].contains(opt);
-                GradientDrawable bg = new GradientDrawable();
-                bg.setCornerRadius(ui.dp(12)); // Rounded corners
-                if (selected) {
-                    bg.setColor(Color.parseColor("#0038A8")); // Dark blue background for selected
-                    btn.setTextColor(Color.WHITE);
-                } else {
-                    bg.setColor(Color.parseColor("#F0F6FF")); // Light blue tint background for unselected
-                    btn.setTextColor(Color.parseColor("#0038A8")); // Dark blue text
-                }
-                btn.setBackground(bg);
-            };
-
-            updateUi.run();
+            btns[i] = btn;
 
             btn.setOnClickListener(v -> {
-                if (answerSelections[itemIndex].contains(opt)) {
-                    answerSelections[itemIndex] = answerSelections[itemIndex].replace(opt, "");
+                // Radio logic: selecting the current letter replaces any previous selection;
+                // tapping the already-selected letter deselects it.
+                if (opt.equals(answerSelections[itemIndex])) {
+                    answerSelections[itemIndex] = ""; // deselect
                 } else {
-                    answerSelections[itemIndex] += opt;
-                    char[] chars = answerSelections[itemIndex].toCharArray();
-                    java.util.Arrays.sort(chars);
-                    answerSelections[itemIndex] = new String(chars);
+                    answerSelections[itemIndex] = opt; // select exclusively
                 }
-                updateUi.run();
+                if (refreshAll[0] != null) refreshAll[0].run();
             });
+
             group.addView(btn);
         }
+
+        // Refresh all buttons in this group at once (so siblings reflect the new state)
+        refreshAll[0] = () -> {
+            for (int j = 0; j < options.length; j++) {
+                boolean selected = options[j].equals(answerSelections[itemIndex]);
+                GradientDrawable bg = new GradientDrawable();
+                bg.setCornerRadius(ui.dp(12));
+                if (selected) {
+                    bg.setColor(Color.parseColor("#0038A8"));
+                    btns[j].setTextColor(Color.WHITE);
+                } else {
+                    bg.setColor(Color.parseColor("#F0F6FF"));
+                    btns[j].setTextColor(Color.parseColor("#0038A8"));
+                }
+                btns[j].setBackground(bg);
+            }
+        };
+        refreshAll[0].run(); // paint initial state
+
         return group;
     }
 }

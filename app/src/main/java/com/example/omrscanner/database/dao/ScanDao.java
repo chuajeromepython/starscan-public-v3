@@ -53,6 +53,21 @@ public interface ScanDao {
   void updateLrn(int scanId, String lrn, long updatedAt);
 
   /**
+   * Clear graded scores for all scans in a given assessment.
+   * Called when an answer key is unlinked — scores are no longer valid.
+   */
+  @Query("UPDATE scans SET score = NULL, updated_at = :updatedAt WHERE assessment_id = :assessmentId")
+  void clearScoresByAssessment(String assessmentId, long updatedAt);
+
+  /**
+   * Clear graded scores for all scans whose assessment uses the given answer key.
+   * Called BEFORE the answer key is deleted so the subquery still resolves.
+   */
+  @Query("UPDATE scans SET score = NULL, updated_at = :updatedAt " +
+         "WHERE assessment_id IN (SELECT id FROM assessments WHERE answer_key_id = :keyId)")
+  void clearScoresByAnswerKey(String keyId, long updatedAt);
+
+  /**
    * Look up a scan by assessment + LRN — used for duplicate-LRN detection
    * and for replace-on-rescan logic. Returns null if not found.
    */

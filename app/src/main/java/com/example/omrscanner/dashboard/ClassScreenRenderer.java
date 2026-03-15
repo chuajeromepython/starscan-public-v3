@@ -229,7 +229,26 @@ public class ClassScreenRenderer {
         meta.setLayoutParams(mlp);
         card.addView(meta);
 
-        // Divider
+        // Answer key badge (shown only when a key is assigned)
+        if (row.answerKeyName != null && !row.answerKeyName.isEmpty()) {
+            TextView keyBadge = new TextView(activity);
+            keyBadge.setText("🗝 " + row.answerKeyName);
+            keyBadge.setTextColor(Color.parseColor("#059669"));
+            keyBadge.setTextSize(11);
+            keyBadge.setTypeface(null, Typeface.ITALIC);
+            GradientDrawable badgeBg = new GradientDrawable();
+            badgeBg.setColor(Color.parseColor("#ECFDF5"));
+            badgeBg.setCornerRadius(ui.dp(8));
+            badgeBg.setStroke(ui.dp(1), Color.parseColor("#A7F3D0"));
+            keyBadge.setBackground(badgeBg);
+            keyBadge.setPadding(ui.dp(8), ui.dp(3), ui.dp(8), ui.dp(3));
+            LinearLayout.LayoutParams kblp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            kblp.topMargin = ui.dp(6);
+            keyBadge.setLayoutParams(kblp);
+            card.addView(keyBadge);
+        }
+
         View divider = new View(activity);
         LinearLayout.LayoutParams divLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ui.dp(1));
