@@ -25,7 +25,7 @@ public class BetaExpiryChecker {
     // Adjust EXPIRY_YEAR / MONTH / DAY if the rollout window changes.
     private static final int EXPIRY_YEAR  = 2026;
     private static final int EXPIRY_MONTH = Calendar.APRIL; // 0-indexed
-    private static final int EXPIRY_DAY   = 5;
+    private static final int EXPIRY_DAY   = 30;
 
     /**
      * Returns true if the beta period has ended (or FORCE_EXPIRED is on).
