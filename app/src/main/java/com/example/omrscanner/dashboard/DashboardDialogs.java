@@ -671,6 +671,17 @@ public class DashboardDialogs {
         root.addView(ui.createDialogHandle());
         root.addView(ui.buildSheetTitle("🗝️ Answer Key: " + act.getName(), "#0038A8", Gravity.START, 20));
 
+        // Subtitle: explain the sheet-type filter
+        TextView filterNote = new TextView(activity);
+        filterNote.setText("Showing " + act.getSheetType() + " answer keys only — sheet types must match.");
+        filterNote.setTextColor(Color.parseColor("#64748B"));
+        filterNote.setTextSize(12);
+        LinearLayout.LayoutParams filterNoteLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        filterNoteLp.bottomMargin = ui.dp(12);
+        filterNote.setLayoutParams(filterNoteLp);
+        root.addView(filterNote);
+
         // Scrollable key list
         android.widget.ScrollView scrollView = new android.widget.ScrollView(activity);
         scrollView.setLayoutParams(new LinearLayout.LayoutParams(
@@ -681,27 +692,29 @@ public class DashboardDialogs {
         scrollView.addView(listContainer);
 
         List<AnswerKeyEntity> allKeys = host.getAnswerKeys();
-        if (allKeys == null || allKeys.isEmpty()) {
+
+        // Only show keys that match the assessment's sheet type
+        java.util.List<AnswerKeyEntity> ordered = new java.util.ArrayList<>();
+        if (allKeys != null) {
+            for (AnswerKeyEntity k : allKeys) {
+                if (act.getSheetType() != null && act.getSheetType().equals(k.sheetType)) {
+                    ordered.add(k);
+                }
+            }
+        }
+
+        if (ordered.isEmpty()) {
             TextView empty = new TextView(activity);
-            empty.setText("No answer keys yet. Tap \"+ Create New\" below.");
+            boolean hasAnyKeys = (allKeys != null && !allKeys.isEmpty());
+            empty.setText(hasAnyKeys
+                    ? "No " + act.getSheetType() + " answer keys found. Tap \"+ Create New Answer Key\" below."
+                    : "No answer keys yet. Tap \"+ Create New Answer Key\" below.");
             empty.setTextColor(Color.parseColor("#94A3B8"));
             empty.setTextSize(13);
             empty.setGravity(Gravity.CENTER);
             empty.setPadding(0, ui.dp(24), 0, ui.dp(24));
             listContainer.addView(empty);
         } else {
-            // Filter to matching sheet type first, then show the rest
-            java.util.List<AnswerKeyEntity> matching = new java.util.ArrayList<>();
-            java.util.List<AnswerKeyEntity> other = new java.util.ArrayList<>();
-            for (AnswerKeyEntity k : allKeys) {
-                if (act.getSheetType() != null && act.getSheetType().equals(k.sheetType)) {
-                    matching.add(k);
-                } else {
-                    other.add(k);
-                }
-            }
-            java.util.List<AnswerKeyEntity> ordered = new java.util.ArrayList<>(matching);
-            ordered.addAll(other);
 
             for (AnswerKeyEntity key : ordered) {
                 boolean isAssigned = key.id.equals(act.getAnswerKeyId());
