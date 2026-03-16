@@ -25,6 +25,7 @@ import com.example.omrscanner.models.ActivityFolder;
 import com.example.omrscanner.models.ClassFolder;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
@@ -986,6 +987,21 @@ public class DashboardDialogs {
                 return;
             }
 
+            // Validate that every item has an answer selected
+            List<Integer> missingItems = new ArrayList<>();
+            for (int i = 0; i < currentItemCount[0]; i++) {
+                if (answerSelections[i] == null || answerSelections[i].isEmpty()) {
+                    missingItems.add(i + 1); // 1-based item number
+                }
+            }
+            if (!missingItems.isEmpty()) {
+                ui.showErrorDialog("Incomplete Answer Key",
+                        "Please select an answer for all " + currentItemCount[0] + " items before saving.\n\n"
+                                + missingItems.size() + " item(s) still unanswered: "
+                                + formatMissingItems(missingItems));
+                return;
+            }
+
             StringBuilder answerKeyBuilder = new StringBuilder();
             for (int i = 0; i < currentItemCount[0]; i++) {
                 String ans = answerSelections[i];
@@ -1099,6 +1115,22 @@ public class DashboardDialogs {
                 ui.showErrorDialog("Missing Name", "Please enter the assessment name for this answer key.");
                 return;
             }
+
+            // Validate that every item has an answer selected
+            List<Integer> missingItems = new ArrayList<>();
+            for (int i = 0; i < numItems; i++) {
+                if (answerSelections[i] == null || answerSelections[i].isEmpty()) {
+                    missingItems.add(i + 1); // 1-based item number
+                }
+            }
+            if (!missingItems.isEmpty()) {
+                ui.showErrorDialog("Incomplete Answer Key",
+                        "Please select an answer for all " + numItems + " items before saving.\n\n"
+                                + missingItems.size() + " item(s) still unanswered: "
+                                + formatMissingItems(missingItems));
+                return;
+            }
+
             StringBuilder sb = new StringBuilder();
             for (int i = 0; i < numItems; i++) {
                 String ans = answerSelections[i];
@@ -1282,6 +1314,23 @@ public class DashboardDialogs {
     // ─────────────────────────────────────────────────────────────
     // Sheet type selection helper
     // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Formats a list of missing item numbers into a compact readable string.
+     * Shows up to 10 items, then summarises the remainder.
+     */
+    private String formatMissingItems(List<Integer> missing) {
+        int show = Math.min(missing.size(), 10);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < show; i++) {
+            if (i > 0) sb.append(", ");
+            sb.append("#").append(missing.get(i));
+        }
+        if (missing.size() > show) {
+            sb.append(" … and ").append(missing.size() - show).append(" more");
+        }
+        return sb.toString();
+    }
 
     private void updateSheetTypeSelection(TextView[] buttons, int selectedIdx) {
         for (int i = 0; i < buttons.length; i++) {
