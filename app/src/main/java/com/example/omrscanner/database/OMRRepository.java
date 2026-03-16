@@ -3,6 +3,7 @@ package com.example.omrscanner.database;
 import android.content.Context;
 
 import com.example.omrscanner.database.entities.AnswerEntity;
+import com.example.omrscanner.database.entities.AnswerKeyEntity;
 import com.example.omrscanner.database.entities.AssessmentEntity;
 import com.example.omrscanner.database.entities.ClassEntity;
 import com.example.omrscanner.database.entities.ScanEntity;
@@ -318,7 +319,7 @@ public class OMRRepository {
    *
    * @param scanId  The scan this answer set belongs to (returned by insertScan
    *                callback).
-   * @param answers Map of item_number → answer string from the OMR engine.
+   * @param answers Map of item_number - answer string from the OMR engine.
    */
   public void insertAnswersFromMap(int scanId, Map<Integer, String> answers,
       Callback<Void> callback) {
@@ -424,5 +425,173 @@ public class OMRRepository {
    */
   public ScanEntity getScanByAssessmentAndLrnSync(String assessmentId, String lrn) {
     return db.scanDao().getByAssessmentAndLrn(assessmentId, lrn);
+  }
+
+  // ═════════════════════════════════════════════════════════════════════════
+  // ANSWER KEY
+  // ═════════════════════════════════════════════════════════════════════════
+
+  /** Insert a new answer key row. */
+  public void insertAnswerKey(AnswerKeyEntity key, Callback<Void> callback) {
+    executor.execute(() -> {
+      db.answerKeyDao().insert(key);
+      if (callback != null)
+        callback.onResult(null);
+    });
+  }
+
+  /** Update an existing answer key (name, school year, answers). */
+  public void updateAnswerKey(AnswerKeyEntity key, Callback<Void> callback) {
+    executor.execute(() -> {
+      key.updatedAt = System.currentTimeMillis();
+      db.answerKeyDao().update(key);
+      // Re-grade all assessments that reference this key so scores stay in sync
+      List<AssessmentEntity> linked = db.assessmentDao().getByAnswerKeyId(key.id);
+      for (AssessmentEntity assessment : linked) {
+        gradeAllScansSync(assessment.id, key);
+      }
+      if (callback != null)
+        callback.onResult(null);
+    });
+  }
+
+  /**
+   * Delete an answer key and nullify all assessment references to it.
+   * Also clears scores for all scans in those assessments — the scores are
+   * no longer valid without the key. Order matters: clear scores FIRST
+   * (while the subquery can still find the linked assessments), then nullify
+   * the reference, then delete the key row.
+   */
+  public void deleteAnswerKey(AnswerKeyEntity key, Callback<Void> callback) {
+    executor.execute(() -> {
+      // 1. Clear scores while we can still identify linked assessments
+      db.scanDao().clearScoresByAnswerKey(key.id, System.currentTimeMillis());
+      // 2. Nullify assessment references
+      db.assessmentDao().clearAnswerKeyRef(key.id);
+      // 3. Delete the key row
+      db.answerKeyDao().delete(key);
+      if (callback != null)
+        callback.onResult(null);
+    });
+  }
+
+  /** Load all answer keys, newest-first. */
+  public void getAllAnswerKeys(Callback<List<AnswerKeyEntity>> callback) {
+    executor.execute(() -> {
+      List<AnswerKeyEntity> list = db.answerKeyDao().getAll();
+      if (callback != null)
+        callback.onResult(list);
+    });
+  }
+
+  /** Load answer keys for a specific sheet type (for contextual assignment UI). */
+  public void getAnswerKeysBySheetType(String sheetType, Callback<List<AnswerKeyEntity>> callback) {
+    executor.execute(() -> {
+      List<AnswerKeyEntity> list = db.answerKeyDao().getBySheetType(sheetType);
+      if (callback != null)
+        callback.onResult(list);
+    });
+  }
+
+  /** Load a single answer key by its ID. */
+  public void getAnswerKeyById(String id, Callback<AnswerKeyEntity> callback) {
+    executor.execute(() -> {
+      AnswerKeyEntity key = db.answerKeyDao().getById(id);
+      if (callback != null)
+        callback.onResult(key);
+    });
+  }
+
+  /**
+   * Synchronous assessment fetch — safe to call from any background thread
+   * (used by the static saveScanResult helper in DashboardActivity).
+   */
+  public AssessmentEntity getAssessmentByIdSync(String id) {
+    return db.assessmentDao().getById(id);
+  }
+
+  /**
+   * Synchronous answer-key fetch — safe to call from any background thread
+   * (used by the static saveScanResult helper in DashboardActivity).
+   */
+  public AnswerKeyEntity getAnswerKeyByIdSync(String id) {
+    return db.answerKeyDao().getById(id);
+  }
+
+  /**
+   * Grade (or re-grade) every scan that belongs to an assessment against the
+   * supplied answer key. Writes the computed score to ScanEntity.score for
+   * each scan, then calls back with the number of scans graded.
+   *
+   * <p>Each item in the key's CSV is compared with the student's AnswerEntity
+   * for that item number. A "?" in the key means "any answer is correct".
+   * A blank student answer counts as wrong unless the key position is also
+   * blank or "?".
+   */
+  public void gradeAllScans(String assessmentId, AnswerKeyEntity key, Callback<Integer> callback) {
+    executor.execute(() -> {
+      int graded = gradeAllScansSync(assessmentId, key);
+      if (callback != null) callback.onResult(graded);
+    });
+  }
+
+  /**
+   * Synchronous version of gradeAllScans — can be called inline from another
+   * executor task (e.g. inside linkAnswerKeyToAssessment).
+   */
+  private int gradeAllScansSync(String assessmentId, AnswerKeyEntity key) {
+    String[] correctAnswers = (key.answers != null && !key.answers.isEmpty())
+        ? key.answers.split(",") : new String[0];
+
+    List<ScanEntity> scans = db.scanDao().getByAssessment(assessmentId);
+    int graded = 0;
+    for (ScanEntity scan : scans) {
+      List<AnswerEntity> answerEntities = db.answerDao().getByScan(scan.id);
+      java.util.Map<Integer, String> answerMap = new java.util.LinkedHashMap<>();
+      for (AnswerEntity ae : answerEntities) answerMap.put(ae.itemNumber, ae.answer);
+
+      int correct = 0;
+      for (int i = 0; i < correctAnswers.length; i++) {
+        String keyAns = correctAnswers[i].trim();
+        if (keyAns.isEmpty() || keyAns.equals("?")) continue; // skip blank/wildcard keys
+        String studentAns = answerMap.containsKey(i + 1) ? answerMap.get(i + 1) : "";
+        if (keyAns.equals(studentAns)) correct++;
+      }
+      db.scanDao().updateScore(scan.id, correct, System.currentTimeMillis());
+      graded++;
+    }
+    return graded;
+  }
+
+  /**
+   * Assign an answer key to an assessment, then immediately grade all existing
+   * scans for that assessment. Uses a targeted UPDATE — does not reload the
+   * full AssessmentEntity.
+   */
+  public void linkAnswerKeyToAssessment(String assessmentId, String answerKeyId,
+      Callback<Void> callback) {
+    executor.execute(() -> {
+      // 1. Persist the link
+      db.assessmentDao().setAnswerKey(assessmentId, answerKeyId);
+      // 2. Immediately grade all existing scans
+      AnswerKeyEntity key = db.answerKeyDao().getById(answerKeyId);
+      if (key != null) gradeAllScansSync(assessmentId, key);
+      if (callback != null) callback.onResult(null);
+    });
+  }
+
+  /**
+   * Remove the answer key assignment from an assessment (set to null).
+   * Also clears all graded scores — they are no longer valid without a key.
+   */
+  public void unlinkAnswerKeyFromAssessment(String assessmentId, Callback<Void> callback) {
+    executor.execute(() -> {
+      // Clear scores first — they have no source of truth without an answer key
+      db.scanDao().clearScoresByAssessment(assessmentId, System.currentTimeMillis());
+      // Then nullify the link
+      db.assessmentDao().setAnswerKey(assessmentId, null);
+      if (callback != null)
+        callback.onResult(null);
+    });
   }
 }

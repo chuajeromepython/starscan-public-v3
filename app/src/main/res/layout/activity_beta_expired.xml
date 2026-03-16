@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    activity_beta_expired.xml – "Beta Ended" full-screen gate
+    Uses the same splash gradient background and logo as the rest of the app.
+-->
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_splash_gradient">
+
+    <!-- Soft background glow (reuse from splash) -->
+    <View
+        android:id="@+id/expiryGlow"
+        android:layout_width="400dp"
+        android:layout_height="400dp"
+        android:background="@drawable/shape_glow_large"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- ── VERTICAL CHAIN: logo → accent bar → badge → title → body → button ── -->
+
+    <!-- STARS logo -->
+    <ImageView
+        android:id="@+id/expiryLogo"
+        android:layout_width="220dp"
+        android:layout_height="wrap_content"
+        android:adjustViewBounds="true"
+        android:src="@mipmap/stars_16k_foreground"
+        android:contentDescription="STARS logo"
+        android:layout_marginBottom="10dp"
+        app:layout_constraintBottom_toTopOf="@id/expiryAccentBar"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_chainStyle="packed"
+        app:layout_constraintVertical_bias="0.38" />
+
+    <!-- Rainbow accent bar -->
+    <View
+        android:id="@+id/expiryAccentBar"
+        android:layout_width="0dp"
+        android:layout_height="4dp"
+        android:background="@drawable/bg_accent_bar"
+        android:layout_marginBottom="24dp"
+        app:layout_constraintBottom_toTopOf="@id/expiryBadge"
+        app:layout_constraintEnd_toEndOf="@id/expiryLogo"
+        app:layout_constraintStart_toStartOf="@id/expiryLogo"
+        app:layout_constraintTop_toBottomOf="@id/expiryLogo" />
+
+    <!-- "BETA ENDED" pill badge -->
+    <TextView
+        android:id="@+id/expiryBadge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="BETA ENDED"
+        android:textColor="#FFFFFF"
+        android:textSize="11sp"
+        android:fontFamily="sans-serif-medium"
+        android:letterSpacing="0.15"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp"
+        android:background="@drawable/bg_badge_expired"
+        android:layout_marginBottom="16dp"
+        app:layout_constraintBottom_toTopOf="@id/expiryTitle"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/expiryAccentBar" />
+
+    <!-- Headline -->
+    <TextView
+        android:id="@+id/expiryTitle"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="@string/beta_expired_title"
+        android:textColor="#1F2937"
+        android:textSize="22sp"
+        android:fontFamily="sans-serif-medium"
+        android:gravity="center"
+        android:layout_marginStart="32dp"
+        android:layout_marginEnd="32dp"
+        android:layout_marginBottom="12dp"
+        app:layout_constraintBottom_toTopOf="@id/expiryBody"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/expiryBadge" />
+
+    <!-- Body text -->
+    <TextView
+        android:id="@+id/expiryBody"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="@string/beta_expired_body"
+        android:textColor="#6B7280"
+        android:textSize="14sp"
+        android:fontFamily="sans-serif"
+        android:gravity="center"
+        android:lineSpacingMultiplier="1.5"
+        android:layout_marginStart="40dp"
+        android:layout_marginEnd="40dp"
+        android:layout_marginBottom="32dp"
+        app:layout_constraintBottom_toTopOf="@id/btnPlayStore"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/expiryTitle" />
+
+    <!-- "Get it on Google Play" button -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnPlayStore"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/beta_open_play_store"
+        android:textColor="#FFFFFF"
+        android:textSize="14sp"
+        android:fontFamily="sans-serif-medium"
+        android:paddingStart="28dp"
+        android:paddingEnd="28dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="14dp"
+        app:backgroundTint="#2563EB"
+        app:cornerRadius="12dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/expiryBody" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

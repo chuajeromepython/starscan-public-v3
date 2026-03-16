@@ -29,4 +29,12 @@ public class AssessmentListRow {
 
   @ColumnInfo(name = "scanCount")
   public int scanCount;
+
+  /** Nullable: the ID of the assigned answer key, or null if none. */
+  @ColumnInfo(name = "answerKeyId")
+  public String answerKeyId;
+
+  /** Nullable: the name of the assigned answer key (from LEFT JOIN), or null if none. */
+  @ColumnInfo(name = "answerKeyName")
+  public String answerKeyName;
 }

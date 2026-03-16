@@ -1,6 +1,7 @@
 package com.example.omrscanner.database.entities;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.room.ColumnInfo;
 import androidx.room.Entity;
 import androidx.room.ForeignKey;
@@ -46,6 +47,13 @@ public class AssessmentEntity {
 
   @ColumnInfo(name = "updated_at")
   public long updatedAt;
+
+  /** Soft-link to answer_keys.id — null = no key assigned yet.
+   *  No @ForeignKey: deleting a key only nullifies this ref (via DAO query),
+   *  it does NOT cascade-delete the assessment. */
+  @Nullable
+  @ColumnInfo(name = "answer_key_id")
+  public String answerKeyId;
 
   public AssessmentEntity() {
   }
