@@ -49,7 +49,6 @@ public class DashboardDialogs {
         void ensureTeacherId(OMRRepository.Callback<Integer> callback);
         void loadDataFromDb();
         void openCamera();
-        void openGallery();
         /** Returns the cached list of all answer keys (loaded on app start). */
         List<AnswerKeyEntity> getAnswerKeys();
         /** Triggers a background reload of all answer keys from the DB. */
@@ -1177,117 +1176,6 @@ public class DashboardDialogs {
     }
 
     // ─────────────────────────────────────────────────────────────
-    // Scan method dialog
-    // ─────────────────────────────────────────────────────────────
-
-    public void showScanMethodDialog() {
-        Dialog dialog = new Dialog(activity);
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
-        dialog.setCancelable(true);
-
-        LinearLayout root = ui.buildSheet();
-        root.addView(ui.createDialogHandle());
-        root.addView(ui.buildSheetTitle("📷 Start Scanning", "#0038A8", Gravity.START, 4));
-
-        ActivityFolder selectedActivity = host.getSelectedActivity();
-        TextView subtitle = new TextView(activity);
-        subtitle.setText(selectedActivity.getSheetType() + " · " + selectedActivity.getNumItems() + " items");
-        subtitle.setTextSize(12);
-        subtitle.setTextColor(Color.parseColor("#64748B"));
-        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        slp.bottomMargin = ui.dp(20);
-        subtitle.setLayoutParams(slp);
-        root.addView(subtitle);
-
-        root.addView(createScanOptionCard(dialog, "📸", "Open Camera",
-                "Take a photo of the answer sheet", "camera"));
-        root.addView(createScanOptionCard(dialog, "🖼", "Upload Image",
-                "Choose from gallery", "gallery"));
-
-        TextView cancel = new TextView(activity);
-        cancel.setText("Cancel");
-        cancel.setTextSize(14);
-        cancel.setTextColor(Color.parseColor("#94A3B8"));
-        cancel.setGravity(Gravity.CENTER);
-        cancel.setPadding(0, ui.dp(16), 0, ui.dp(8));
-        cancel.setOnClickListener(v -> dialog.dismiss());
-        root.addView(cancel);
-
-        dialog.setContentView(root);
-        ui.configureBottomDialog(dialog);
-        dialog.show();
-    }
-
-    private View createScanOptionCard(Dialog dialog, String emoji, String label,
-            String desc, String action) {
-        ActivityFolder selectedActivity = host.getSelectedActivity();
-        LinearLayout card = new LinearLayout(activity);
-        card.setOrientation(LinearLayout.HORIZONTAL);
-        card.setGravity(Gravity.CENTER_VERTICAL);
-        card.setPadding(ui.dp(16), ui.dp(16), ui.dp(16), ui.dp(16));
-        card.setClickable(true);
-        card.setFocusable(true);
-
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.parseColor("#F8FAFC"));
-        bg.setCornerRadius(ui.dp(14));
-        bg.setStroke(ui.dp(1), Color.parseColor("#E2E8F0"));
-        card.setBackground(bg);
-
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.bottomMargin = ui.dp(10);
-        card.setLayoutParams(lp);
-
-        TextView iconView = new TextView(activity);
-        iconView.setText(emoji);
-        iconView.setTextSize(28);
-        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        ilp.rightMargin = ui.dp(14);
-        iconView.setLayoutParams(ilp);
-        card.addView(iconView);
-
-        LinearLayout textCol = new LinearLayout(activity);
-        textCol.setOrientation(LinearLayout.VERTICAL);
-        textCol.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-
-        TextView nameView = new TextView(activity);
-        nameView.setText(label);
-        nameView.setTextSize(15);
-        nameView.setTextColor(Color.parseColor("#1E293B"));
-        nameView.setTypeface(null, Typeface.BOLD);
-        textCol.addView(nameView);
-
-        TextView descView = new TextView(activity);
-        descView.setText(desc);
-        descView.setTextSize(12);
-        descView.setTextColor(Color.parseColor("#64748B"));
-        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        dlp.topMargin = ui.dp(2);
-        descView.setLayoutParams(dlp);
-        textCol.addView(descView);
-        card.addView(textCol);
-
-        TextView arrow = new TextView(activity);
-        arrow.setText("›");
-        arrow.setTextSize(18);
-        arrow.setTextColor(Color.parseColor("#94A3B8"));
-        card.addView(arrow);
-
-        card.setOnClickListener(v -> {
-            if (selectedActivity != null)
-                host.setSelectedSheetType(selectedActivity.getSheetType());
-            dialog.dismiss();
-            if ("camera".equals(action)) host.openCamera();
-            else host.openGallery();
-        });
-        return card;
-    }
-
-    // ─────────────────────────────────────────────────────────────
     // Global upload dialogs
     // ─────────────────────────────────────────────────────────────
 
@@ -1372,7 +1260,7 @@ public class DashboardDialogs {
                         host.setSelectedClass(cls);
                         host.setSelectedActivity(act);
                         host.setSelectedSheetType(act.getSheetType());
-                        host.openGallery();
+                        host.openCamera();
                     }));
         }
         root.addView(scrollView);

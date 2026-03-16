@@ -18,8 +18,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.OnBackPressedCallback;
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.cardview.widget.CardView;
 import androidx.core.view.WindowCompat;
@@ -166,7 +164,6 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private TextView     breadcrumbRoot, breadcrumbSep1, breadcrumbClass,
                          breadcrumbSep2, breadcrumbActivity;
 
-    private ActivityResultLauncher<String> galleryLauncher;
 
     // ═══════════════════════════════════════════════════════════════
     // LIFECYCLE
@@ -191,7 +188,6 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
         initViews();
         initBackHandler();
-        initGalleryLauncher();
         loadDataFromDb();
     }
 
@@ -316,7 +312,11 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 showScreen(SCREEN_CLASS);
             }
         });
-        scanCtaCard.setOnClickListener(v -> dialogs.showScanMethodDialog());
+        // Go directly to camera — no scan method picker
+        scanCtaCard.setOnClickListener(v -> {
+            if (selectedActivity != null) selectedSheetType = selectedActivity.getSheetType();
+            openCamera();
+        });
 
         homeClassSearchInput.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
@@ -374,15 +374,6 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             if (SCREEN_CLASS.equals(currentScreen)) renderClassScreen();
         };
         searchDebounceHandler.postDelayed(pendingAssessmentSearchRunnable, 220);
-    }
-
-    private void initGalleryLauncher() {
-        galleryLauncher = registerForActivityResult(
-                new ActivityResultContracts.GetContent(),
-                uri -> {
-                    if (uri != null) handleSelectedImage(uri);
-                    else Toast.makeText(this, "No image selected", Toast.LENGTH_SHORT).show();
-                });
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -692,7 +683,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // CAMERA / GALLERY
+    // CAMERA
     // ═══════════════════════════════════════════════════════════════
 
     @Override
@@ -706,60 +697,6 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         } catch (Exception e) {
             Log.e(TAG, "Error opening camera", e);
             Toast.makeText(this, "Error opening camera: " + e.getMessage(), Toast.LENGTH_LONG).show();
-        }
-    }
-
-    @Override
-    public void openGallery() {
-        try {
-            galleryLauncher.launch("image/*");
-        } catch (Exception e) {
-            Log.e(TAG, "Error opening gallery", e);
-            Toast.makeText(this, "Error opening gallery: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    private void handleSelectedImage(android.net.Uri imageUri) {
-        Toast.makeText(this, "Processing selected image...", Toast.LENGTH_SHORT).show();
-        new Thread(() -> {
-            try {
-                String savedPath = saveImageToFile(imageUri);
-                if (savedPath != null) {
-                    runOnUiThread(() -> {
-                        Intent intent = new Intent(DashboardActivity.this,
-                                com.example.omrscanner.ui.PreviewActivity.class);
-                        intent.putExtra(com.example.omrscanner.ui.PreviewActivity.IMAGE_PATH, savedPath);
-                        intent.putExtra(com.example.omrscanner.ui.PreviewActivity.IMAGE_SOURCE,
-                                com.example.omrscanner.ui.PreviewActivity.SOURCE_GALLERY);
-                        if (selectedSheetType != null) intent.putExtra(EXTRA_SHEET_TYPE, selectedSheetType);
-                        if (selectedClass    != null) intent.putExtra(EXTRA_CLASS_ID, selectedClass.getId());
-                        if (selectedActivity != null) intent.putExtra(EXTRA_ACTIVITY_ID, selectedActivity.getId());
-                        startActivity(intent);
-                    });
-                } else {
-                    runOnUiThread(() -> Toast.makeText(this, "Failed to process image", Toast.LENGTH_SHORT).show());
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-                runOnUiThread(() -> Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show());
-            }
-        }).start();
-    }
-
-    private String saveImageToFile(android.net.Uri imageUri) {
-        try {
-            android.graphics.Bitmap bitmap =
-                    android.provider.MediaStore.Images.Media.getBitmap(getContentResolver(), imageUri);
-            if (bitmap == null) return null;
-            java.io.File outputFile = java.io.File.createTempFile("omr_upload_", ".jpg", getCacheDir());
-            java.io.FileOutputStream fos = new java.io.FileOutputStream(outputFile);
-            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, fos);
-            fos.close();
-            bitmap.recycle();
-            return outputFile.getAbsolutePath();
-        } catch (Exception e) {
-            e.printStackTrace();
-            return null;
         }
     }
 

@@ -129,7 +129,7 @@
 
             </LinearLayout>
 
-            <!-- Upload button — smaller (was 44dp → now 38dp) -->
+            <!-- Upload button — hidden temporarily; function preserved in code -->
             <ImageButton
                 android:id="@+id/btnUpload"
                 android:layout_width="38dp"
@@ -139,6 +139,7 @@
                 android:background="@drawable/bg_icon_circle_white"
                 android:padding="8dp"
                 android:elevation="2dp"
+                android:visibility="gone"
                 app:tint="#FFFFFF"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintTop_toTopOf="parent"

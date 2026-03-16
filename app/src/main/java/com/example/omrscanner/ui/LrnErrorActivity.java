@@ -77,18 +77,13 @@ public class LrnErrorActivity extends AppCompatActivity {
         // Retake button
         MaterialButton btnRetake = findViewById(R.id.btnRetakeScan);
         btnRetake.setOnClickListener(v -> {
-            if (PreviewActivity.SOURCE_GALLERY.equals(imageSource)) {
-                // Go back to dashboard (user came from gallery)
-                finish();
-            } else {
-                // Go back to camera
-                Intent intent = new Intent(this, CameraActivity.class);
-                if (sheetType != null)  intent.putExtra(DashboardActivity.EXTRA_SHEET_TYPE, sheetType);
-                if (classId != null)    intent.putExtra(DashboardActivity.EXTRA_CLASS_ID, classId);
-                if (activityId != null) intent.putExtra(DashboardActivity.EXTRA_ACTIVITY_ID, activityId);
-                startActivity(intent);
-                finish();
-            }
+            // Always go back to camera
+            Intent intent = new Intent(this, CameraActivity.class);
+            if (sheetType  != null) intent.putExtra(DashboardActivity.EXTRA_SHEET_TYPE, sheetType);
+            if (classId    != null) intent.putExtra(DashboardActivity.EXTRA_CLASS_ID, classId);
+            if (activityId != null) intent.putExtra(DashboardActivity.EXTRA_ACTIVITY_ID, activityId);
+            startActivity(intent);
+            finish();
         });
     }
 

@@ -31,9 +31,9 @@ public class PreviewActivity extends AppCompatActivity {
     public static final String ANCHOR_POINTS = "anchor_points";
     public static final String IMAGE_SOURCE = "image_source";
 
-    // Source types
+    // Source type constants (SOURCE_GALLERY kept for ResultActivity / LrnErrorActivity / CameraActivity)
     public static final String SOURCE_CAMERA = "camera";
-    public static final String SOURCE_GALLERY = "gallery";
+    public static final String SOURCE_GALLERY = "gallery"; // no longer an active entry point
 
     private ImageView imagePreview;
     private Button btnRetake;
@@ -41,7 +41,6 @@ public class PreviewActivity extends AppCompatActivity {
     private ProgressBar progressBar;
 
     private String imagePath;
-    private String imageSource;
     private String selectedSheetType;
     private String classId;
     private String activityId;
@@ -74,14 +73,8 @@ public class PreviewActivity extends AppCompatActivity {
         btnScan = findViewById(R.id.btnScan);
         progressBar = findViewById(R.id.progressBar);
 
-        // Get image path and source from intent
+        // Get image path from intent
         imagePath = getIntent().getStringExtra(IMAGE_PATH);
-        imageSource = getIntent().getStringExtra(IMAGE_SOURCE);
-
-        // Default to camera if not specified (backward compatibility)
-        if (imageSource == null) {
-            imageSource = SOURCE_CAMERA;
-        }
 
         // Get sheet type from intent
         selectedSheetType = getIntent().getStringExtra(DashboardActivity.EXTRA_SHEET_TYPE);
@@ -171,16 +164,11 @@ public class PreviewActivity extends AppCompatActivity {
     }
 
     private void retakePhoto() {
-        if (SOURCE_GALLERY.equals(imageSource)) {
-            // Redirect to dashboard for gallery retake
-            finish();
-        } else {
-            // Go back to camera for retake
-            Intent intent = new Intent(this, CameraActivity.class);
-            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-            startActivity(intent);
-            finish();
-        }
+        // Always go back to camera
+        Intent intent = new Intent(this, CameraActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        startActivity(intent);
+        finish();
     }
 
     private void proceedToAlignment() {
@@ -216,9 +204,6 @@ public class PreviewActivity extends AppCompatActivity {
         }
         if (activityId != null) {
             intent.putExtra(DashboardActivity.EXTRA_ACTIVITY_ID, activityId);
-        }
-        if (imageSource != null) {
-            intent.putExtra(IMAGE_SOURCE, imageSource);
         }
 
         startActivity(intent);
