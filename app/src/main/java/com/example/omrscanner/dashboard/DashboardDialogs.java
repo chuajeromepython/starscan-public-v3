@@ -25,6 +25,7 @@ import com.example.omrscanner.models.ActivityFolder;
 import com.example.omrscanner.models.ClassFolder;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
@@ -49,7 +50,6 @@ public class DashboardDialogs {
         void ensureTeacherId(OMRRepository.Callback<Integer> callback);
         void loadDataFromDb();
         void openCamera();
-        void openGallery();
         /** Returns the cached list of all answer keys (loaded on app start). */
         List<AnswerKeyEntity> getAnswerKeys();
         /** Triggers a background reload of all answer keys from the DB. */
@@ -987,6 +987,21 @@ public class DashboardDialogs {
                 return;
             }
 
+            // Validate that every item has an answer selected
+            List<Integer> missingItems = new ArrayList<>();
+            for (int i = 0; i < currentItemCount[0]; i++) {
+                if (answerSelections[i] == null || answerSelections[i].isEmpty()) {
+                    missingItems.add(i + 1); // 1-based item number
+                }
+            }
+            if (!missingItems.isEmpty()) {
+                ui.showErrorDialog("Incomplete Answer Key",
+                        "Please select an answer for all " + currentItemCount[0] + " items before saving.\n\n"
+                                + missingItems.size() + " item(s) still unanswered: "
+                                + formatMissingItems(missingItems));
+                return;
+            }
+
             StringBuilder answerKeyBuilder = new StringBuilder();
             for (int i = 0; i < currentItemCount[0]; i++) {
                 String ans = answerSelections[i];
@@ -1100,6 +1115,22 @@ public class DashboardDialogs {
                 ui.showErrorDialog("Missing Name", "Please enter the assessment name for this answer key.");
                 return;
             }
+
+            // Validate that every item has an answer selected
+            List<Integer> missingItems = new ArrayList<>();
+            for (int i = 0; i < numItems; i++) {
+                if (answerSelections[i] == null || answerSelections[i].isEmpty()) {
+                    missingItems.add(i + 1); // 1-based item number
+                }
+            }
+            if (!missingItems.isEmpty()) {
+                ui.showErrorDialog("Incomplete Answer Key",
+                        "Please select an answer for all " + numItems + " items before saving.\n\n"
+                                + missingItems.size() + " item(s) still unanswered: "
+                                + formatMissingItems(missingItems));
+                return;
+            }
+
             StringBuilder sb = new StringBuilder();
             for (int i = 0; i < numItems; i++) {
                 String ans = answerSelections[i];
@@ -1174,117 +1205,6 @@ public class DashboardDialogs {
         dialog.setContentView(root);
         ui.configureBottomDialog(dialog);
         dialog.show();
-    }
-
-    // ─────────────────────────────────────────────────────────────
-    // Scan method dialog
-    // ─────────────────────────────────────────────────────────────
-
-    public void showScanMethodDialog() {
-        Dialog dialog = new Dialog(activity);
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
-        dialog.setCancelable(true);
-
-        LinearLayout root = ui.buildSheet();
-        root.addView(ui.createDialogHandle());
-        root.addView(ui.buildSheetTitle("📷 Start Scanning", "#0038A8", Gravity.START, 4));
-
-        ActivityFolder selectedActivity = host.getSelectedActivity();
-        TextView subtitle = new TextView(activity);
-        subtitle.setText(selectedActivity.getSheetType() + " · " + selectedActivity.getNumItems() + " items");
-        subtitle.setTextSize(12);
-        subtitle.setTextColor(Color.parseColor("#64748B"));
-        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        slp.bottomMargin = ui.dp(20);
-        subtitle.setLayoutParams(slp);
-        root.addView(subtitle);
-
-        root.addView(createScanOptionCard(dialog, "📸", "Open Camera",
-                "Take a photo of the answer sheet", "camera"));
-        root.addView(createScanOptionCard(dialog, "🖼", "Upload Image",
-                "Choose from gallery", "gallery"));
-
-        TextView cancel = new TextView(activity);
-        cancel.setText("Cancel");
-        cancel.setTextSize(14);
-        cancel.setTextColor(Color.parseColor("#94A3B8"));
-        cancel.setGravity(Gravity.CENTER);
-        cancel.setPadding(0, ui.dp(16), 0, ui.dp(8));
-        cancel.setOnClickListener(v -> dialog.dismiss());
-        root.addView(cancel);
-
-        dialog.setContentView(root);
-        ui.configureBottomDialog(dialog);
-        dialog.show();
-    }
-
-    private View createScanOptionCard(Dialog dialog, String emoji, String label,
-            String desc, String action) {
-        ActivityFolder selectedActivity = host.getSelectedActivity();
-        LinearLayout card = new LinearLayout(activity);
-        card.setOrientation(LinearLayout.HORIZONTAL);
-        card.setGravity(Gravity.CENTER_VERTICAL);
-        card.setPadding(ui.dp(16), ui.dp(16), ui.dp(16), ui.dp(16));
-        card.setClickable(true);
-        card.setFocusable(true);
-
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.parseColor("#F8FAFC"));
-        bg.setCornerRadius(ui.dp(14));
-        bg.setStroke(ui.dp(1), Color.parseColor("#E2E8F0"));
-        card.setBackground(bg);
-
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.bottomMargin = ui.dp(10);
-        card.setLayoutParams(lp);
-
-        TextView iconView = new TextView(activity);
-        iconView.setText(emoji);
-        iconView.setTextSize(28);
-        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        ilp.rightMargin = ui.dp(14);
-        iconView.setLayoutParams(ilp);
-        card.addView(iconView);
-
-        LinearLayout textCol = new LinearLayout(activity);
-        textCol.setOrientation(LinearLayout.VERTICAL);
-        textCol.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-
-        TextView nameView = new TextView(activity);
-        nameView.setText(label);
-        nameView.setTextSize(15);
-        nameView.setTextColor(Color.parseColor("#1E293B"));
-        nameView.setTypeface(null, Typeface.BOLD);
-        textCol.addView(nameView);
-
-        TextView descView = new TextView(activity);
-        descView.setText(desc);
-        descView.setTextSize(12);
-        descView.setTextColor(Color.parseColor("#64748B"));
-        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        dlp.topMargin = ui.dp(2);
-        descView.setLayoutParams(dlp);
-        textCol.addView(descView);
-        card.addView(textCol);
-
-        TextView arrow = new TextView(activity);
-        arrow.setText("›");
-        arrow.setTextSize(18);
-        arrow.setTextColor(Color.parseColor("#94A3B8"));
-        card.addView(arrow);
-
-        card.setOnClickListener(v -> {
-            if (selectedActivity != null)
-                host.setSelectedSheetType(selectedActivity.getSheetType());
-            dialog.dismiss();
-            if ("camera".equals(action)) host.openCamera();
-            else host.openGallery();
-        });
-        return card;
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -1372,7 +1292,7 @@ public class DashboardDialogs {
                         host.setSelectedClass(cls);
                         host.setSelectedActivity(act);
                         host.setSelectedSheetType(act.getSheetType());
-                        host.openGallery();
+                        host.openCamera();
                     }));
         }
         root.addView(scrollView);
@@ -1394,6 +1314,23 @@ public class DashboardDialogs {
     // ─────────────────────────────────────────────────────────────
     // Sheet type selection helper
     // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Formats a list of missing item numbers into a compact readable string.
+     * Shows up to 10 items, then summarises the remainder.
+     */
+    private String formatMissingItems(List<Integer> missing) {
+        int show = Math.min(missing.size(), 10);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < show; i++) {
+            if (i > 0) sb.append(", ");
+            sb.append("#").append(missing.get(i));
+        }
+        if (missing.size() > show) {
+            sb.append(" … and ").append(missing.size() - show).append(" more");
+        }
+        return sb.toString();
+    }
 
     private void updateSheetTypeSelection(TextView[] buttons, int selectedIdx) {
         for (int i = 0; i < buttons.length; i++) {

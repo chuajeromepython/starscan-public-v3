@@ -158,25 +158,14 @@ public class ResultActivity extends AppCompatActivity {
     }
 
     private void retakePhoto() {
-        if (PreviewActivity.SOURCE_GALLERY.equals(imageSource)) {
-            // Redirect to dashboard for gallery retake
-            finish();
-        } else {
-            // Go back to camera for retake
-            Intent intent = new Intent(this, CameraActivity.class);
-            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-            if (selectedSheetType != null) {
-                intent.putExtra(DashboardActivity.EXTRA_SHEET_TYPE, selectedSheetType);
-            }
-            if (classId != null) {
-                intent.putExtra(DashboardActivity.EXTRA_CLASS_ID, classId);
-            }
-            if (activityId != null) {
-                intent.putExtra(DashboardActivity.EXTRA_ACTIVITY_ID, activityId);
-            }
-            startActivity(intent);
-            finish();
-        }
+        // Always go back to camera
+        Intent intent = new Intent(this, CameraActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        if (selectedSheetType != null) intent.putExtra(DashboardActivity.EXTRA_SHEET_TYPE, selectedSheetType);
+        if (classId    != null) intent.putExtra(DashboardActivity.EXTRA_CLASS_ID, classId);
+        if (activityId != null) intent.putExtra(DashboardActivity.EXTRA_ACTIVITY_ID, activityId);
+        startActivity(intent);
+        finish();
     }
 
     private void processImage(String imagePath, Point[] anchors) {
