@@ -28,20 +28,20 @@
     <string name="empty_folder_description">Scan or upload exam papers and save them to this folder</string>
     <string name="back_to_folders">Back to Folders</string>
 
-    <!-- Image Card -->
+    <!-- This is the Image Card -->
     <string name="filename">Filename</string>
     <string name="date">Date</string>
     <string name="convert_to_csv">Convert to CSV</string>
     <string name="view">View</string>
     <string name="save">Save</string>
 
-    <!-- Content Descriptions -->
+    <!-- This is the Content Descriptions -->
     <string name="folder_icon">Folder icon</string>
     <string name="empty_folder">Empty folder</string>
     <string name="exam_paper_image">Exam paper image</string>
     <string name="zoom_image">Zoom image</string>
 
-    <!-- Alerts -->
+    <!-- This is the Alerts -->
     <string name="csv_generated">CSV Generated</string>
     <string name="csv_generated_message">Successfully converted %s to CSV format.</string>
     <string name="error">Error</string>
@@ -55,7 +55,7 @@
     <string name="delete">Delete</string>
     <string name="ok">OK</string>
 
-    <!-- CSV Viewer -->
+    <!-- This is the CSV Viewer -->
     <string name="csv_content">CSV Content</string>
     <string name="csv_help_text">💡 Close this viewer and tap the "Save" button to save to your phone</string>
     <string name="save_csv_file">Save CSV File</string>
@@ -64,14 +64,14 @@
     <string name="close_image_viewer">Close image viewer</string>
     <string name="delete_image">Delete image</string>
 
-    <!--Camera -->
+    <!--This is the Camera -->
     <string name="toggle_desc">Toggle flash</string>
     <string name="back">Back</string>
     <string name="camera_capture">Camera Capture</string>
     <string name="capture_desc">Capture</string>
     <string name="rotate_phone_desc">Rotate phone to landscape</string>
 
-    <!--Dashboard-->
+    <!--This is the Dashboard-->
     <string name="sagotsuri_logo">SagotSuri Logo</string>
     <string name="sagotsuri">SagotSuri</string>
     <string name="classes_count">0 classes</string>
@@ -82,7 +82,7 @@
     <string name="twenty_eight">28</string>
     <string name="Assessments">Assessments</string>
 
-    <!-- Beta expiry gate -->
+    <!-- This is the Beta expiry gate -->
     <string name="beta_expired_title">This Beta Has Ended</string>
     <string name="beta_expired_body">Thank you for being part of our early rollout!\nThe official STARS app is now available on Google Play. Please install the Play Store version to continue using the app.</string>
     <string name="beta_open_play_store">Get it on Google Play</string>

@@ -17,7 +17,8 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.OMRScanner">
 
-        <activity android:name=".ui.ResultActivity"/>
+        <activity android:name=".ui.ResultActivity"
+            android:windowSoftInputMode="adjustResize"/>
         <activity android:name=".ui.PreviewActivity"/>
         <activity android:name=".ui.LrnErrorActivity"
             android:label="LRN Error"

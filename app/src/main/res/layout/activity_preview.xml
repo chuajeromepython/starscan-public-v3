@@ -6,7 +6,6 @@
     android:layout_height="match_parent"
     android:background="#FFFFFF">
 
-    <!-- Header with Status Bar Padding -->
     <TextView
         android:id="@+id/tvHeader"
         android:layout_width="0dp"
@@ -24,7 +23,6 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <!-- ScrollView to handle any image size without stretching -->
     <ScrollView
         android:id="@+id/scrollView"
         android:layout_width="0dp"
@@ -36,17 +34,12 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tvHeader">
 
-        <!-- Container for image - centers content and maintains aspect ratio -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:padding="12dp"
             android:layout_gravity="center">
 
-            <!-- Image Preview
-                 adjustViewBounds="true" - maintains aspect ratio
-                 scaleType="fitCenter" - scales down if needed but never stretches
-            -->
             <ImageView
                 android:id="@+id/imagePreview"
                 android:layout_width="match_parent"
@@ -55,7 +48,6 @@
                 android:contentDescription="Preview Image"
                 android:scaleType="fitCenter" />
 
-            <!-- Loading Progress -->
             <ProgressBar
                 android:id="@+id/progressBar"
                 android:layout_width="56dp"
@@ -68,7 +60,6 @@
 
     </ScrollView>
 
-    <!-- Bottom Control Panel with Navigation Bar Padding -->
     <LinearLayout
         android:id="@+id/bottomPanel"
         android:layout_width="0dp"
@@ -85,7 +76,6 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
-        <!-- Retake Button -->
         <Button
             android:id="@+id/btnRetake"
             android:layout_width="0dp"
@@ -100,7 +90,6 @@
             android:textStyle="bold"
             app:cornerRadius="12dp" />
 
-        <!-- Scan Button -->
         <Button
             android:id="@+id/btnScan"
             android:layout_width="0dp"

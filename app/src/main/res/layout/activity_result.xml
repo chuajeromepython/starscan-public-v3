@@ -6,7 +6,6 @@
     android:layout_height="match_parent"
     android:background="@color/bg_surface">
 
-    <!-- Header with Status Bar Padding -->
     <TextView
         android:id="@+id/tvHeader"
         android:layout_width="0dp"
@@ -24,180 +23,172 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <!-- ScrollView to handle any image size without stretching -->
     <ScrollView
         android:id="@+id/scrollView"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:fillViewport="false"
+        android:fillViewport="true"
         android:background="@color/bg_scan_text"
-        app:layout_constraintBottom_toTopOf="@id/lrnCard"
+        app:layout_constraintBottom_toTopOf="@id/bottomPanel"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tvHeader">
 
-        <!-- Container for image - centers content and maintains aspect ratio -->
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_margin="16dp"
-            android:layout_gravity="center"
-            app:cardCornerRadius="16dp"
-            app:cardElevation="2dp"
-            app:strokeWidth="1dp"
-            app:strokeColor="#E2E8F0">
-
-            <FrameLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:background="#FAFAFA"
-                android:padding="8dp">
-
-                <!-- Image Result Preview
-                     adjustViewBounds="true" - maintains aspect ratio
-                     scaleType="fitCenter" - scales down if needed but never stretches
-                -->
-                <ImageView
-                    android:id="@+id/imageResult"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:adjustViewBounds="true"
-                    android:contentDescription="Result Image"
-                    android:scaleType="fitCenter" />
-
-                <!-- Progress Bar overlay -->
-                <ProgressBar
-                    android:id="@+id/progressBar"
-                    android:layout_width="56dp"
-                    android:layout_height="56dp"
-                    android:layout_gravity="center"
-                    android:indeterminateTint="@color/primary_blue"
-                    android:visibility="gone" />
-            </FrameLayout>
-
-        </com.google.android.material.card.MaterialCardView>
-
-    </ScrollView>
-
-    <!-- ── LRN VERIFICATION CARD ──────────────────────────────── -->
-    <com.google.android.material.card.MaterialCardView
-        android:id="@+id/lrnCard"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="20dp"
-        android:layout_marginEnd="20dp"
-        android:layout_marginTop="8dp"
-        android:layout_marginBottom="16dp"
-        android:visibility="gone"
-        app:cardBackgroundColor="#FFFFFF"
-        app:cardCornerRadius="20dp"
-        app:cardElevation="8dp"
-        app:strokeColor="#E2E8F0"
-        app:strokeWidth="1dp"
-        app:layout_constraintTop_toBottomOf="@id/scrollView"
-        app:layout_constraintBottom_toTopOf="@id/bottomPanel"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
-
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="16dp">
+            android:orientation="vertical">
 
-            <!-- Label row -->
-            <LinearLayout
+            <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:layout_marginBottom="8dp">
+                android:layout_margin="16dp"
+                android:layout_gravity="center"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="2dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="#E2E8F0">
 
-                <View
-                    android:layout_width="4dp"
-                    android:layout_height="20dp"
-                    android:layout_marginEnd="12dp"
-                    android:background="@drawable/bg_header_rounded"
-                    android:backgroundTint="@color/primary_blue" />
-
-                <TextView
-                    android:id="@+id/tvLrnCardTitle"
-                    android:layout_width="0dp"
+                <FrameLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="VERIFY LRN"
-                    android:textColor="#1E293B"
-                    android:textSize="13sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="0.08"
-                    android:fontFamily="@font/poppins_black" />
+                    android:background="#FAFAFA"
+                    android:padding="8dp">
 
-                <TextView
-                    android:id="@+id/tvLrnStatus"
-                    android:layout_width="wrap_content"
+                    <ImageView
+                        android:id="@+id/imageResult"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:adjustViewBounds="true"
+                        android:contentDescription="Result Image"
+                        android:scaleType="fitCenter" />
+
+                    <ProgressBar
+                        android:id="@+id/progressBar"
+                        android:layout_width="56dp"
+                        android:layout_height="56dp"
+                        android:layout_gravity="center"
+                        android:indeterminateTint="@color/primary_blue"
+                        android:visibility="gone" />
+                </FrameLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/lrnCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="20dp"
+                android:layout_marginEnd="20dp"
+                android:layout_marginTop="0dp"
+                android:layout_marginBottom="16dp"
+                android:visibility="gone"
+                app:cardBackgroundColor="#FFFFFF"
+                app:cardCornerRadius="20dp"
+                app:cardElevation="8dp"
+                app:strokeColor="#E2E8F0"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="⚠ Not verified"
-                    android:textColor="#F59E0B"
-                    android:textSize="11sp"
-                    android:textStyle="bold"
-                    android:fontFamily="@font/poppins_medium" />
-            </LinearLayout>
+                    android:orientation="vertical"
+                    android:padding="16dp">
 
-            <!-- LRN input + confirm row -->
-            <LinearLayout
-                android:id="@+id/lrnInputContainer"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_marginBottom="8dp">
 
-                <EditText
-                    android:id="@+id/etLrnResult"
-                    android:layout_width="0dp"
-                    android:layout_height="48dp"
-                    android:layout_weight="1"
-                    android:layout_marginEnd="12dp"
-                    android:background="@drawable/bg_stat_blue"
-                    android:hint="12-digit LRN"
-                    android:inputType="number"
-                    android:maxLength="12"
-                    android:maxLines="1"
-                    android:paddingStart="16dp"
-                    android:paddingEnd="16dp"
-                    android:textColor="#0F172A"
-                    android:textColorHint="#94A3B8"
-                    android:textSize="16sp"
-                    android:textStyle="bold"
-                    android:fontFamily="@font/poppins_medium" />
+                        <View
+                            android:layout_width="4dp"
+                            android:layout_height="20dp"
+                            android:layout_marginEnd="12dp"
+                            android:background="@drawable/bg_header_rounded"
+                            android:backgroundTint="@color/primary_blue" />
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnConfirmLrn"
-                    style="@style/Widget.Material3.Button.UnelevatedButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="48dp"
-                    android:text="CONFIRM"
-                    android:textAllCaps="true"
-                    android:textColor="#FFFFFF"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    app:backgroundTint="@color/primary_blue"
-                    app:cornerRadius="12dp" />
-            </LinearLayout>
+                        <TextView
+                            android:id="@+id/tvLrnCardTitle"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="VERIFY LRN"
+                            android:textColor="#1E293B"
+                            android:textSize="13sp"
+                            android:textStyle="bold"
+                            android:letterSpacing="0.08"
+                            android:fontFamily="@font/poppins_black" />
 
-            <!-- Helper text -->
-            <TextView
-                android:id="@+id/tvLrnHelper"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:text="Please verify the detected LRN is correct before saving."
-                android:textColor="#64748B"
-                android:textSize="11sp"
-                android:fontFamily="@font/poppins" />
+                        <TextView
+                            android:id="@+id/tvLrnStatus"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="⚠ Not verified"
+                            android:textColor="#F59E0B"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            android:fontFamily="@font/poppins_medium" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/lrnInputContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <EditText
+                            android:id="@+id/etLrnResult"
+                            android:layout_width="0dp"
+                            android:layout_height="48dp"
+                            android:layout_weight="1"
+                            android:layout_marginEnd="12dp"
+                            android:background="@drawable/bg_stat_blue"
+                            android:hint="12-digit LRN"
+                            android:inputType="number"
+                            android:maxLength="12"
+                            android:maxLines="1"
+                            android:paddingStart="16dp"
+                            android:paddingEnd="16dp"
+                            android:textColor="#0F172A"
+                            android:textColorHint="#94A3B8"
+                            android:textSize="16sp"
+                            android:textStyle="bold"
+                            android:fontFamily="@font/poppins_medium" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnConfirmLrn"
+                            style="@style/Widget.Material3.Button.UnelevatedButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="48dp"
+                            android:text="CONFIRM"
+                            android:textAllCaps="true"
+                            android:textColor="#FFFFFF"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            app:backgroundTint="@color/primary_blue"
+                            app:cornerRadius="12dp" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tvLrnHelper"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="Please verify the detected LRN is correct before saving."
+                        android:textColor="#64748B"
+                        android:textSize="11sp"
+                        android:fontFamily="@font/poppins" />
+
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
 
         </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
-    <!-- Bottom Action Panel with Navigation Bar Padding -->
+
+    </ScrollView>
+
     <LinearLayout
         android:id="@+id/bottomPanel"
         android:layout_width="0dp"
@@ -214,7 +205,6 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
-        <!-- Retry Button -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnRetry"
             style="@style/Widget.Material3.Button.TonalButton"
@@ -230,7 +220,6 @@
             app:backgroundTint="#FFEBEE"
             app:cornerRadius="16dp" />
 
-        <!-- Export Button -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnExport"
             style="@style/Widget.Material3.Button.UnelevatedButton"

@@ -6,7 +6,6 @@
     android:layout_height="match_parent"
     android:background="#000000">
 
-    <!-- ── CAMERA PREVIEW CONTAINER ───────────────────────────── -->
     <FrameLayout
         android:id="@+id/cameraPreviewCard"
         android:layout_width="match_parent"
@@ -24,13 +23,11 @@
             android:layout_height="match_parent"
             app:scaleType="fillCenter" />
 
-        <!-- ── Anchor detection overlay ─────────────────────── -->
         <com.example.omrscanner.camera.AnchorOverlayView
             android:id="@+id/anchorOverlay"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
-        <!-- ── Grid overlay ──────────────────────────────────── -->
         <FrameLayout
             android:id="@+id/gridOverlay"
             android:layout_width="match_parent"
@@ -66,10 +63,6 @@
 
         </FrameLayout>
 
-        <!-- REMOVED: scanFrame anchor box — it served no functional purpose -->
-        <!-- REMOVED: scanHintText — no longer needed without scan frame -->
-
-        <!-- ── Anchor detection status hint ──────────────────────── -->
         <LinearLayout
             android:id="@+id/anchorStatusBar"
             android:layout_width="match_parent"
@@ -105,7 +98,6 @@
 
         </LinearLayout>
 
-        <!-- ── Floating guidance hint (centered on preview) ──── -->
         <TextView
             android:id="@+id/floatingHintText"
             android:layout_width="wrap_content"
@@ -121,11 +113,8 @@
             android:visibility="visible"
             android:elevation="4dp" />
 
-        <!-- ── Zoom slider bar removed ──────────────────────────────────── -->
-
     </FrameLayout>
 
-    <!-- ── HEADER ROW ──────────────────────────────────────────── -->
     <LinearLayout
         android:id="@+id/cameraHeader"
         android:layout_width="match_parent"
@@ -137,7 +126,6 @@
         android:paddingTop="16dp"
         android:paddingBottom="12dp">
 
-        <!-- FIXED: Back button now calls finish() once and returns directly to the caller -->
         <FrameLayout
             android:id="@+id/btnCameraBack"
             android:layout_width="40dp"
@@ -182,8 +170,6 @@
         </FrameLayout>
 
     </LinearLayout>
-
-    <!-- ── BOTTOM CONTROLS ─────────────────────────────────────── -->
     <LinearLayout
         android:id="@+id/bottomControls"
         android:layout_width="match_parent"
@@ -196,9 +182,6 @@
         android:paddingTop="12dp"
         android:paddingBottom="32dp">
 
-        <!-- Zoom pills removed -->
-
-        <!-- Main action row: capture ring -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -207,7 +190,6 @@
             android:paddingStart="16dp"
             android:paddingEnd="16dp">
 
-            <!-- Capture button: outer ring + inner disc -->
             <FrameLayout
                 android:layout_width="80dp"
                 android:layout_height="80dp"
@@ -247,7 +229,6 @@
 
     </LinearLayout>
 
-    <!-- ── FLASH OVERLAY ───────────────────────────────────────── -->
     <View
         android:id="@+id/flashOverlay"
         android:layout_width="match_parent"
@@ -255,7 +236,5 @@
         android:background="#FFFFFFFF"
         android:alpha="0"
         android:visibility="invisible" />
-
-
 
 </FrameLayout>
