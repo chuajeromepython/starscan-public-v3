@@ -8,7 +8,6 @@
     android:gravity="center"
     android:background="#FAFAFA">
 
-    <!-- Success Icon -->
     <TextView
         android:layout_width="80dp"
         android:layout_height="80dp"
@@ -19,7 +18,6 @@
         android:background="@android:drawable/dialog_holo_light_frame"
         android:layout_marginBottom="24dp"/>
 
-    <!-- Title -->
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -29,7 +27,6 @@
         android:textColor="#212121"
         android:layout_marginBottom="8dp"/>
 
-    <!-- Subtitle -->
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -38,7 +35,6 @@
         android:textColor="#757575"
         android:layout_marginBottom="32dp"/>
 
-    <!-- File Info Card -->
     <androidx.cardview.widget.CardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -75,7 +71,6 @@
 
     </androidx.cardview.widget.CardView>
 
-    <!-- Share Button -->
     <Button
         android:id="@+id/btnShare"
         android:layout_width="match_parent"
@@ -87,7 +82,6 @@
         android:backgroundTint="#2196F3"
         android:layout_marginBottom="12dp"/>
 
-    <!-- Save to Downloads Button -->
     <Button
         android:id="@+id/btnSaveToDownloads"
         android:layout_width="match_parent"
@@ -99,7 +93,6 @@
         style="?android:attr/borderlessButtonStyle"
         android:layout_marginBottom="12dp"/>
 
-    <!-- Done Button -->
     <Button
         android:id="@+id/btnDone"
         android:layout_width="match_parent"

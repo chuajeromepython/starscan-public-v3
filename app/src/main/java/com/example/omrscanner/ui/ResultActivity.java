@@ -12,6 +12,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.view.Window;
@@ -49,6 +50,7 @@ public class ResultActivity extends AppCompatActivity {
     private Button btnExport;
     private Button btnRetry;
     private ProgressBar progressBar;
+    private ScrollView scrollView;
 
     // LRN verification views
     private MaterialCardView lrnCard;
@@ -93,6 +95,7 @@ public class ResultActivity extends AppCompatActivity {
         btnExport = findViewById(R.id.btnExport);
         btnRetry = findViewById(R.id.btnRetry);
         progressBar = findViewById(R.id.progressBar);
+        scrollView  = findViewById(R.id.scrollView);
 
         // LRN verification views
         lrnCard       = findViewById(R.id.lrnCard);
@@ -139,6 +142,15 @@ public class ResultActivity extends AppCompatActivity {
         btnExport.setOnClickListener(v -> exportResults());
         btnConfirmLrn.setOnClickListener(v -> confirmLrn());
 
+        // Auto-scroll to LRN card when the input gets focus (keyboard opens)
+        etLrnResult.setOnFocusChangeListener((v, hasFocus) -> {
+            if (hasFocus) {
+                // Small delay to let the keyboard finish appearing and layout to resize
+                scrollView.postDelayed(() ->
+                    scrollView.smoothScrollTo(0, lrnCard.getTop()), 300);
+            }
+        });
+
         // When user edits LRN after confirming, reset verification
         etLrnResult.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
@@ -151,6 +163,7 @@ public class ResultActivity extends AppCompatActivity {
                     tvLrnHelper.setTextColor(0xFFF59E0B);
                     btnExport.setEnabled(false);
                     btnConfirmLrn.setText("CONFIRM");
+                    btnConfirmLrn.setVisibility(View.VISIBLE);
                 }
             }
             @Override public void afterTextChanged(Editable s) {}
@@ -301,10 +314,8 @@ public class ResultActivity extends AppCompatActivity {
                         Toast.makeText(this, summary, Toast.LENGTH_LONG).show();
 
                         // Show LRN verification card with detected LRN
+                        // (auto-confirms if LRN is valid; shows manual edit if error)
                         showLrnVerification(scanResult.lnr);
-
-                        // SAVE stays disabled until LRN is confirmed
-                        btnExport.setEnabled(false);
 
                     } else {
                         Toast.makeText(
@@ -340,75 +351,107 @@ public class ResultActivity extends AppCompatActivity {
     // LRN VERIFICATION
     // ──────────────────────────────────────────────────────────
     private void showLrnVerification(String detectedLrn) {
-        lrnCard.setVisibility(View.VISIBLE);
         isLrnConfirmed = false;
 
         // Clean LRN for display: replace '_' and 'X' (double-shaded) with empty for editing
         String displayLrn = (detectedLrn != null)
                 ? detectedLrn.replace("_", "").replace("X", "") : "";
+
+        // ── VALID LRN: show as read-only, no confirm needed ────────
+        if (scanResult != null
+                && !scanResult.hasDoubleShadedLrn()
+                && !scanResult.hasUndetectedLrnDigits()
+                && displayLrn.length() == 12) {
+            lrnCard.setVisibility(View.VISIBLE);
+            lrnInputContainer.setVisibility(View.VISIBLE);
+            btnConfirmLrn.setVisibility(View.GONE);
+            
+            // Set text first (which triggers TextWatcher) while isLrnConfirmed is false
+            etLrnResult.setText(displayLrn);
+            
+            // Then mark it as confirmed so future edits will reset it
+            isLrnConfirmed = true;
+            
+            // disable editing
+            etLrnResult.setEnabled(false);
+            
+            tvLrnCardTitle.setText("STUDENT LRN");
+            tvLrnCardTitle.setTextColor(0xFF1E293B);
+            tvLrnStatus.setText("✓ Detected");
+            tvLrnStatus.setTextColor(0xFF22C55E);
+            tvLrnHelper.setText("LRN is correctly detected. You can proceed to save.");
+            tvLrnHelper.setTextColor(0xFF64748B);
+            tvLrnHelper.setTextSize(11);
+            btnExport.setEnabled(true);
+            return;
+        }
+
+        // ── ERROR CASES: show manual edit card ──────────────────────
+        lrnCard.setVisibility(View.VISIBLE);
+        lrnInputContainer.setVisibility(View.VISIBLE);
+        btnConfirmLrn.setVisibility(View.VISIBLE);
+        etLrnResult.setEnabled(true); // make sure it's editable
         etLrnResult.setText(displayLrn);
+        btnExport.setEnabled(false);
+        tvLrnHelper.setTextSize(11); // reset from valid-LRN large display
 
-        // Assume error by default to block input, reset to valid below if correct
-        boolean isError = true;
-
-        // ── DOUBLE-SHADED LRN: highest priority error ──────────────
         if (scanResult != null && scanResult.hasDoubleShadedLrn()) {
             // Build human-readable list of double-shaded positions (1-based)
             StringBuilder positions = new StringBuilder();
             for (int i = 0; i < scanResult.doubleShadedLnrPositions.size(); i++) {
                 if (i > 0) positions.append(", ");
-                positions.append(scanResult.doubleShadedLnrPositions.get(i) + 1); // 1-based
+                positions.append(scanResult.doubleShadedLnrPositions.get(i) + 1);
             }
             int count = scanResult.doubleShadedLnrPositions.size();
 
             tvLrnStatus.setText("⚠ " + count + " double-shaded");
-            tvLrnStatus.setTextColor(0xFFDC2626); // red
-            tvLrnHelper.setText("⚠ DOUBLE-SHADED LRN DETECTED!\n\n"
+            tvLrnStatus.setTextColor(0xFFDC2626);
+            tvLrnHelper.setText("⚠ DOUBLE-SHADED LRN DETECTED\n\n"
                     + count + " LRN column(s) have two or more shaded bubbles "
                     + "at position(s): " + positions + ".\n\n"
-                    + "The LRN identifies each student — "
-                    + "there must be ONLY ONE shaded bubble per column.\n\n"
-                    + "Red boxes on the image mark the affected areas. "
-                    + "Please fix the physical bubble sheet and scan again.");
-            tvLrnHelper.setTextColor(0xFFDC2626); // red
+                    + "Manually enter the correct 12-digit LRN below, "
+                    + "then tap CONFIRM to proceed.");
+            tvLrnHelper.setTextColor(0xFFDC2626);
+            tvLrnCardTitle.setText("⚠ MANUAL LRN ENTRY");
+            tvLrnCardTitle.setTextColor(0xFFDC2626);
 
-        // ── UNDETECTED digits ──────────────────────────────────────
         } else if (scanResult != null && scanResult.hasUndetectedLrnDigits()) {
-            // Build human-readable list of missing positions (1-based)
             StringBuilder positions = new StringBuilder();
             for (int i = 0; i < scanResult.undetectedLnrPositions.size(); i++) {
                 if (i > 0) positions.append(", ");
-                positions.append(scanResult.undetectedLnrPositions.get(i) + 1); // 1-based
+                positions.append(scanResult.undetectedLnrPositions.get(i) + 1);
             }
             int count = scanResult.undetectedLnrPositions.size();
 
             tvLrnStatus.setText("⚠ " + count + " digit(s) missing");
-            tvLrnStatus.setTextColor(0xFFEF4444); // red
+            tvLrnStatus.setTextColor(0xFFEF4444);
             tvLrnHelper.setText(count + " LRN digit(s) not detected at position(s): "
-                    + positions + ". Red boxes on the image mark undetected areas. "
-                    + "Please fix the physical bubble sheet and scan again.");
-            tvLrnHelper.setTextColor(0xFFEF4444); // red
+                    + positions + ".\n\n"
+                    + "Manually enter the correct 12-digit LRN below, "
+                    + "then tap CONFIRM to proceed.");
+            tvLrnHelper.setTextColor(0xFFEF4444);
+            tvLrnCardTitle.setText("⚠ MANUAL LRN ENTRY");
+            tvLrnCardTitle.setTextColor(0xFFEF4444);
+
         } else if (detectedLrn == null || detectedLrn.trim().isEmpty()) {
-            tvLrnHelper.setText("No LRN detected. No student ID found. Please fix the physical bubble sheet and scan again.");
-            tvLrnHelper.setTextColor(0xFFEF4444); // red
-        } else if (displayLrn.length() != 12) {
-            tvLrnHelper.setText("Detected LRN is " + displayLrn.length() + " digits — expected 12. Please fix the physical bubble sheet and scan again.");
-            tvLrnHelper.setTextColor(0xFFF59E0B); // amber
+            tvLrnStatus.setText("⚠ Not detected");
+            tvLrnStatus.setTextColor(0xFFEF4444);
+            tvLrnHelper.setText("No LRN detected — please enter the student's 12-digit LRN below.");
+            tvLrnHelper.setTextColor(0xFFEF4444);
+            tvLrnCardTitle.setText("⚠ MANUAL LRN ENTRY");
+            tvLrnCardTitle.setTextColor(0xFFEF4444);
+
         } else {
-            isError = false;
-            tvLrnHelper.setText("Please verify the detected LRN is correct before saving.");
-            tvLrnHelper.setTextColor(0xFF64748B); // muted
+            // displayLrn.length() != 12
+            tvLrnStatus.setText("⚠ " + displayLrn.length() + " digits");
+            tvLrnStatus.setTextColor(0xFFF59E0B);
+            tvLrnHelper.setText("Detected LRN is " + displayLrn.length() + " digits — expected 12. "
+                    + "Please correct the LRN below and tap CONFIRM.");
+            tvLrnHelper.setTextColor(0xFFF59E0B);
+            tvLrnCardTitle.setText("⚠ VERIFY LRN");
+            tvLrnCardTitle.setTextColor(0xFFF59E0B);
         }
 
-        if (isError) {
-            lrnInputContainer.setVisibility(View.GONE);
-            tvLrnCardTitle.setText("SCAN ERROR");
-            tvLrnCardTitle.setTextColor(0xFFDC2626); // red
-        } else {
-            lrnInputContainer.setVisibility(View.VISIBLE);
-            tvLrnCardTitle.setText("VERIFY STUDENT LRN");
-            tvLrnCardTitle.setTextColor(0xFF1E293B); // dark
-        }
     }
 
     private void confirmLrn() {
@@ -435,6 +478,14 @@ public class ResultActivity extends AppCompatActivity {
         // LRN is valid — confirm it
         isLrnConfirmed = true;
         scanResult.lnr = lrn;
+
+        // Clear double-shaded / undetected errors since teacher manually confirmed
+        if (scanResult.doubleShadedLnrPositions != null) {
+            scanResult.doubleShadedLnrPositions.clear();
+        }
+        if (scanResult.undetectedLnrPositions != null) {
+            scanResult.undetectedLnrPositions.clear();
+        }
 
         tvLrnStatus.setText("✓ Verified");
         tvLrnStatus.setTextColor(0xFF22C55E); // green
