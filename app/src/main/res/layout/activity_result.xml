@@ -136,32 +136,22 @@
                         android:id="@+id/lrnInputContainer"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical">
+                        android:orientation="vertical"
+                        android:gravity="center_horizontal">
 
-                        <EditText
-                            android:id="@+id/etLrnResult"
-                            android:layout_width="0dp"
-                            android:layout_height="48dp"
-                            android:layout_weight="1"
-                            android:layout_marginEnd="12dp"
-                            android:background="@drawable/bg_stat_blue"
-                            android:hint="12-digit LRN"
-                            android:inputType="number"
-                            android:maxLength="12"
-                            android:maxLines="1"
-                            android:paddingStart="16dp"
-                            android:paddingEnd="16dp"
-                            android:textColor="#0F172A"
-                            android:textColorHint="#94A3B8"
-                            android:textSize="16sp"
-                            android:textStyle="bold"
-                            android:fontFamily="@font/poppins_medium" />
+                        <LinearLayout
+                            android:id="@+id/lrnDigitContainer"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:weightSum="12"
+                            android:gravity="center"
+                            android:layout_marginBottom="12dp" />
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btnConfirmLrn"
                             style="@style/Widget.Material3.Button.UnelevatedButton"
-                            android:layout_width="wrap_content"
+                            android:layout_width="match_parent"
                             android:layout_height="48dp"
                             android:text="CONFIRM"
                             android:textAllCaps="true"

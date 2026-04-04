@@ -165,8 +165,18 @@ public class DashboardDialogs {
         root.addView(ui.buildSheetTitle("⊕ New Class Folder", "#0038A8", Gravity.START, 20));
 
         root.addView(ui.createFieldLabel("GRADE *"));
-        EditText gradeInput = ui.createLightInput("e.g. Grade 10");
-        root.addView(gradeInput);
+        final String[] gradeOptions = {"Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6", "Grade 7", "Grade 8", "Grade 9", "Grade 10", "Grade 11", "Grade 12"};
+        final String[] selectedGrade = {gradeOptions[0]};
+        TextView gradePicker = ui.createDropdownField(gradeOptions[0]);
+        gradePicker.setTextColor(Color.parseColor("#1E293B"));
+        gradePicker.setOnClickListener(v ->
+                new android.app.AlertDialog.Builder(activity)
+                        .setTitle("Select Grade Level")
+                        .setItems(gradeOptions, (dlg, which) -> {
+                            selectedGrade[0] = gradeOptions[which];
+                            gradePicker.setText(gradeOptions[which] + "  ▾");
+                        }).show());
+        root.addView(gradePicker);
 
         root.addView(ui.createFieldLabel("SECTION *"));
         EditText sectionInput = ui.createLightInput("e.g. Section A");
@@ -203,10 +213,10 @@ public class DashboardDialogs {
 
         btnCancel.setOnClickListener(v -> dialog.dismiss());
         btnDone.setOnClickListener(v -> {
-            String grade   = gradeInput.getText().toString().trim();
+            String grade   = selectedGrade[0];
             String section = sectionInput.getText().toString().trim();
-            if (grade.isEmpty()) {
-                ui.showErrorDialog("Missing Grade", "Please enter the grade level (e.g. Grade 10).");
+            if (grade == null || grade.trim().isEmpty()) {
+                ui.showErrorDialog("Missing Grade", "Please select the grade level.");
                 return;
             }
             if (section.isEmpty()) {
@@ -255,9 +265,19 @@ public class DashboardDialogs {
         root.addView(ui.buildSheetTitle("✏️ Edit Class Folder", "#0038A8", Gravity.START, 20));
 
         root.addView(ui.createFieldLabel("GRADE *"));
-        EditText gradeInput = ui.createLightInput("e.g. Grade 10");
-        gradeInput.setText(cls.getGrade());
-        root.addView(gradeInput);
+        final String[] gradeOptions = {"Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6", "Grade 7", "Grade 8", "Grade 9", "Grade 10", "Grade 11", "Grade 12"};
+        String currentGrade = (cls.getGrade() != null && !cls.getGrade().isEmpty()) ? cls.getGrade() : gradeOptions[0];
+        final String[] selectedGrade = {currentGrade};
+        TextView gradePicker = ui.createDropdownField(currentGrade);
+        gradePicker.setTextColor(Color.parseColor("#1E293B"));
+        gradePicker.setOnClickListener(v ->
+                new android.app.AlertDialog.Builder(activity)
+                        .setTitle("Select Grade Level")
+                        .setItems(gradeOptions, (dlg, which) -> {
+                            selectedGrade[0] = gradeOptions[which];
+                            gradePicker.setText(gradeOptions[which] + "  ▾");
+                        }).show());
+        root.addView(gradePicker);
 
         root.addView(ui.createFieldLabel("SECTION *"));
         EditText sectionInput = ui.createLightInput("e.g. Section A");
@@ -293,9 +313,9 @@ public class DashboardDialogs {
 
         btnCancel.setOnClickListener(v -> dialog.dismiss());
         btnSave.setOnClickListener(v -> {
-            String grade   = gradeInput.getText().toString().trim();
+            String grade   = selectedGrade[0];
             String section = sectionInput.getText().toString().trim();
-            if (grade.isEmpty() || section.isEmpty()) {
+            if (grade == null || grade.trim().isEmpty() || section.isEmpty()) {
                 ui.showErrorDialog("Missing Fields", "Grade and Section are required to save this class.");
                 return;
             }
@@ -868,7 +888,7 @@ public class DashboardDialogs {
         btnCreate.setBackground(createBg);
         btnCreate.setOnClickListener(v -> {
             dialog.dismiss();
-            showNewAnswerKeyDialog();
+            showNewAnswerKeyDialog(act);
         });
         actions.addView(btnCreate);
         root.addView(actions);
@@ -884,7 +904,7 @@ public class DashboardDialogs {
         dialog.show();
     }
 
-    public void showNewAnswerKeyDialog() {
+    public void showNewAnswerKeyDialog(ActivityFolder defaultAct) {
         Dialog dialog = new Dialog(activity);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setCancelable(true);
@@ -895,6 +915,13 @@ public class DashboardDialogs {
 
         root.addView(ui.createFieldLabel("ASSESSMENT NAME *"));
         EditText nameInput = ui.createLightInput("e.g. Midterm Exam");
+        if (defaultAct != null && defaultAct.getName() != null) {
+            nameInput.setText(defaultAct.getName());
+            nameInput.setEnabled(false);
+            nameInput.setFocusable(false);
+            nameInput.setFocusableInTouchMode(false);
+            nameInput.setTextColor(Color.parseColor("#94A3B8"));
+        }
         root.addView(nameInput);
 
         root.addView(ui.createFieldLabel("YEAR / SCHOOL YEAR *"));
@@ -905,6 +932,14 @@ public class DashboardDialogs {
         for (int i = 0; i < syOptions.length; i++) {
             if (syOptions[i].equals(defSY)) { defIdx = i; break; }
         }
+        
+        ClassFolder clsFolder = host.getSelectedClass();
+        if (defaultAct != null && clsFolder != null && clsFolder.getSchoolYear() != null) {
+            for (int i = 0; i < syOptions.length; i++) {
+                if (syOptions[i].equals(clsFolder.getSchoolYear())) { defIdx = i; break; }
+            }
+        }
+        
         final String[] selectedSY = {syOptions[defIdx]};
         TextView syPicker = ui.createDropdownField(syOptions[defIdx]);
         syPicker.setTextColor(Color.parseColor("#1E293B"));
@@ -920,7 +955,17 @@ public class DashboardDialogs {
 
         root.addView(ui.createFieldLabel("OMR SHEET TYPE"));
         String[][] sheetTypes = {{"ZPH30","30 Items"},{"ZPH40","40 Items"},{"ZPH50","50 Items"},{"ZPH60","60 Items"}};
-        final String[] selectedType = {"ZPH30"};
+        
+        String initType = "ZPH30";
+        if (defaultAct != null && defaultAct.getSheetType() != null) {
+            for (String[] st : sheetTypes) {
+                if (st[0].equals(defaultAct.getSheetType())) {
+                    initType = st[0];
+                    break;
+                }
+            }
+        }
+        final String[] selectedType = {initType};
 
         LinearLayout typeRow = new LinearLayout(activity);
         typeRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -931,7 +976,15 @@ public class DashboardDialogs {
 
         final String[] answerSelections = new String[60];
         for (int i=0; i<60; i++) answerSelections[i] = "";
-        final int[] currentItemCount = {30};
+        
+        int initialItemCount = 30;
+        for (String[] st : sheetTypes) {
+            if (st[0].equals(selectedType[0])) {
+                initialItemCount = Integer.parseInt(st[1].split(" ")[0]);
+                break;
+            }
+        }
+        final int[] currentItemCount = {initialItemCount};
 
         ScrollView answersScroll = new ScrollView(activity);
         answersScroll.setLayoutParams(new LinearLayout.LayoutParams(
@@ -957,6 +1010,7 @@ public class DashboardDialogs {
             btn.setLayoutParams(blp);
             typeButtons[i] = btn;
             btn.setOnClickListener(v -> {
+                if (defaultAct != null) return;
                 selectedType[0] = sheetTypes[idx][0];
                 updateSheetTypeSelection(typeButtons, idx);
                 currentItemCount[0] = Integer.parseInt(sheetTypes[idx][1].split(" ")[0]);
@@ -965,11 +1019,17 @@ public class DashboardDialogs {
             typeRow.addView(btn);
         }
         root.addView(typeRow);
-        updateSheetTypeSelection(typeButtons, 0);
+        int initIdx = 0;
+        for (int i = 0; i < sheetTypes.length; i++) {
+            if (sheetTypes[i][0].equals(selectedType[0])) {
+                initIdx = i; break;
+            }
+        }
+        updateSheetTypeSelection(typeButtons, initIdx);
 
         root.addView(ui.createFieldLabel("ANSWER KEY"));
         root.addView(answersScroll);
-        renderAnswerGrid(gridContainer, answerSelections, 30);
+        renderAnswerGrid(gridContainer, answerSelections, currentItemCount[0]);
 
         LinearLayout actions = ui.buildActionsRow(ui.dp(20));
         TextView btnCancel = ui.createDialogButton("Cancel", false);

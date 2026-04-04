@@ -54,7 +54,8 @@ public class ResultActivity extends AppCompatActivity {
 
     // LRN verification views
     private MaterialCardView lrnCard;
-    private EditText etLrnResult;
+    private android.widget.LinearLayout lrnDigitContainer;
+    private EditText[] digitBoxes = new EditText[12];
     private TextView tvLrnStatus;
     private TextView tvLrnHelper;
     private TextView tvLrnCardTitle;
@@ -99,12 +100,14 @@ public class ResultActivity extends AppCompatActivity {
 
         // LRN verification views
         lrnCard       = findViewById(R.id.lrnCard);
-        etLrnResult   = findViewById(R.id.etLrnResult);
+        lrnDigitContainer = findViewById(R.id.lrnDigitContainer);
         tvLrnStatus   = findViewById(R.id.tvLrnStatus);
         tvLrnHelper   = findViewById(R.id.tvLrnHelper);
         tvLrnCardTitle = findViewById(R.id.tvLrnCardTitle);
         lrnInputContainer = findViewById(R.id.lrnInputContainer);
         btnConfirmLrn = findViewById(R.id.btnConfirmLrn);
+
+        setupLrnBoxes();
 
         // Get data from intent
         originalImagePath = getIntent().getStringExtra(PreviewActivity.IMAGE_PATH);
@@ -142,32 +145,74 @@ public class ResultActivity extends AppCompatActivity {
         btnExport.setOnClickListener(v -> exportResults());
         btnConfirmLrn.setOnClickListener(v -> confirmLrn());
 
-        // Auto-scroll to LRN card when the input gets focus (keyboard opens)
-        etLrnResult.setOnFocusChangeListener((v, hasFocus) -> {
-            if (hasFocus) {
-                // Small delay to let the keyboard finish appearing and layout to resize
-                scrollView.postDelayed(() ->
-                    scrollView.smoothScrollTo(0, lrnCard.getTop()), 300);
-            }
-        });
+    }
 
-        // When user edits LRN after confirming, reset verification
-        etLrnResult.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
-                if (isLrnConfirmed) {
-                    isLrnConfirmed = false;
-                    tvLrnStatus.setText("⚠ Not verified");
-                    tvLrnStatus.setTextColor(0xFFF59E0B); // amber
-                    tvLrnHelper.setText("LRN was modified. Please re-confirm before saving.");
-                    tvLrnHelper.setTextColor(0xFFF59E0B);
-                    btnExport.setEnabled(false);
-                    btnConfirmLrn.setText("CONFIRM");
-                    btnConfirmLrn.setVisibility(View.VISIBLE);
+    private void setupLrnBoxes() {
+        int heightPx = (int) android.util.TypedValue.applyDimension(
+                android.util.TypedValue.COMPLEX_UNIT_DIP, 44, getResources().getDisplayMetrics());
+        int marginPx = (int) android.util.TypedValue.applyDimension(
+                android.util.TypedValue.COMPLEX_UNIT_DIP, 2, getResources().getDisplayMetrics());
+
+        for (int i = 0; i < 12; i++) {
+            EditText et = new EditText(this);
+            android.widget.LinearLayout.LayoutParams params = new android.widget.LinearLayout.LayoutParams(
+                    0, heightPx, 1.0f);
+            params.setMargins(marginPx, 0, marginPx, 0);
+            et.setLayoutParams(params);
+            et.setBackgroundResource(R.drawable.bg_lrn_digit);
+            et.setGravity(android.view.Gravity.CENTER);
+            et.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+            et.setMaxLines(1);
+            et.setFilters(new android.text.InputFilter[] { new android.text.InputFilter.LengthFilter(1) });
+            et.setTextSize(18);
+            et.setTextColor(0xFF0F172A);
+            et.setTypeface(null, android.graphics.Typeface.BOLD);
+            et.setPadding(0, 0, 0, 0);
+
+            final int index = i;
+
+            et.addTextChangedListener(new TextWatcher() {
+                @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+                @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                    if (isLrnConfirmed) {
+                        isLrnConfirmed = false;
+                        tvLrnStatus.setText("⚠ Not verified");
+                        tvLrnStatus.setTextColor(0xFFF59E0B);
+                        tvLrnHelper.setText("LRN was modified. Please re-confirm before saving.");
+                        tvLrnHelper.setTextColor(0xFFF59E0B);
+                        btnExport.setEnabled(false);
+                        btnConfirmLrn.setText("CONFIRM");
+                        btnConfirmLrn.setVisibility(View.VISIBLE);
+                    }
+                    if (s.length() == 1 && index < 11 && digitBoxes[index].hasFocus()) {
+                        digitBoxes[index + 1].requestFocus();
+                    }
                 }
-            }
-            @Override public void afterTextChanged(Editable s) {}
-        });
+                @Override public void afterTextChanged(Editable s) {}
+            });
+
+            et.setOnKeyListener((v, keyCode, event) -> {
+                if (keyCode == android.view.KeyEvent.KEYCODE_DEL
+                        && event.getAction() == android.view.KeyEvent.ACTION_DOWN) {
+                    if (et.getText().toString().isEmpty() && index > 0) {
+                        digitBoxes[index - 1].requestFocus();
+                        digitBoxes[index - 1].setText("");
+                        return true;
+                    }
+                }
+                return false;
+            });
+
+            et.setOnFocusChangeListener((v, hasFocus) -> {
+                if (hasFocus) {
+                    scrollView.postDelayed(() ->
+                        scrollView.smoothScrollTo(0, lrnCard.getTop()), 300);
+                }
+            });
+
+            digitBoxes[i] = et;
+            lrnDigitContainer.addView(et);
+        }
     }
 
     private void retakePhoto() {
@@ -353,9 +398,40 @@ public class ResultActivity extends AppCompatActivity {
     private void showLrnVerification(String detectedLrn) {
         isLrnConfirmed = false;
 
-        // Clean LRN for display: replace '_' and 'X' (double-shaded) with empty for editing
-        String displayLrn = (detectedLrn != null)
-                ? detectedLrn.replace("_", "").replace("X", "") : "";
+        // Reset all boxes
+        for (int i = 0; i < 12; i++) {
+            digitBoxes[i].setBackgroundResource(R.drawable.bg_lrn_digit);
+            digitBoxes[i].setText("");
+            digitBoxes[i].setEnabled(true);
+        }
+
+        // Fill detected LRN without triggering verification warning
+        String rawLrn = detectedLrn != null ? detectedLrn : "";
+        for (int i = 0; i < Math.min(rawLrn.length(), 12); i++) {
+            char c = rawLrn.charAt(i);
+            if (c != '_' && c != 'X') {
+                digitBoxes[i].setText(String.valueOf(c));
+            }
+        }
+
+        // Apply error borders
+        if (scanResult != null && scanResult.hasDoubleShadedLrn()) {
+            for (int pos : scanResult.doubleShadedLnrPositions) {
+                if (pos >= 0 && pos < 12) {
+                    digitBoxes[pos].setBackgroundResource(R.drawable.bg_lrn_digit_error);
+                }
+            }
+        }
+        if (scanResult != null && scanResult.hasUndetectedLrnDigits()) {
+            for (int pos : scanResult.undetectedLnrPositions) {
+                if (pos >= 0 && pos < 12) {
+                    digitBoxes[pos].setBackgroundResource(R.drawable.bg_lrn_digit_error);
+                }
+            }
+        }
+
+        // Clean LRN for checking valid length
+        String displayLrn = rawLrn.replace("_", "").replace("X", "");
 
         // ── VALID LRN: show as read-only, no confirm needed ────────
         if (scanResult != null
@@ -366,14 +442,10 @@ public class ResultActivity extends AppCompatActivity {
             lrnInputContainer.setVisibility(View.VISIBLE);
             btnConfirmLrn.setVisibility(View.GONE);
             
-            // Set text first (which triggers TextWatcher) while isLrnConfirmed is false
-            etLrnResult.setText(displayLrn);
-            
-            // Then mark it as confirmed so future edits will reset it
             isLrnConfirmed = true;
-            
-            // disable editing
-            etLrnResult.setEnabled(false);
+            for (int i = 0; i < 12; i++) {
+                digitBoxes[i].setEnabled(false);
+            }
             
             tvLrnCardTitle.setText("STUDENT LRN");
             tvLrnCardTitle.setTextColor(0xFF1E293B);
@@ -390,8 +462,6 @@ public class ResultActivity extends AppCompatActivity {
         lrnCard.setVisibility(View.VISIBLE);
         lrnInputContainer.setVisibility(View.VISIBLE);
         btnConfirmLrn.setVisibility(View.VISIBLE);
-        etLrnResult.setEnabled(true); // make sure it's editable
-        etLrnResult.setText(displayLrn);
         btnExport.setEnabled(false);
         tvLrnHelper.setTextSize(11); // reset from valid-LRN large display
 
@@ -455,7 +525,11 @@ public class ResultActivity extends AppCompatActivity {
     }
 
     private void confirmLrn() {
-        String lrn = etLrnResult.getText().toString().trim();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 12; i++) {
+            sb.append(digitBoxes[i].getText().toString().trim());
+        }
+        String lrn = sb.toString();
 
         if (lrn.isEmpty()) {
             tvLrnStatus.setText("✗ Empty");
@@ -487,16 +561,23 @@ public class ResultActivity extends AppCompatActivity {
             scanResult.undetectedLnrPositions.clear();
         }
 
+        for (int i = 0; i < 12; i++) {
+            digitBoxes[i].setBackgroundResource(R.drawable.bg_lrn_digit);
+        }
+
         tvLrnStatus.setText("✓ Verified");
         tvLrnStatus.setTextColor(0xFF22C55E); // green
         tvLrnHelper.setText("LRN confirmed: " + lrn + ". You can now save the result.");
         tvLrnHelper.setTextColor(0xFF22C55E);
         btnConfirmLrn.setText("CONFIRMED ✓");
 
-        // Enable the SAVE button
+        // Enable the SAVE button and auto-save
         btnExport.setEnabled(true);
 
-        Toast.makeText(this, "LRN verified ✓", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "LRN verified ✓ Saving...", Toast.LENGTH_SHORT).show();
+        
+        // Auto-save immediately after confirmation
+        exportResults();
     }
 
     private void exportResults() {

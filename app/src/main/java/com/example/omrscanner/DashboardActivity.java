@@ -298,7 +298,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         btnBack.setOnClickListener(v -> navigateBack());
         btnUpload.setOnClickListener(v -> dialogs.showGlobalUploadClassDialog());
         fab.setOnClickListener(v -> onFabClicked());
-        fabAnswerKey.setOnClickListener(v -> dialogs.showNewAnswerKeyDialog());
+        fabAnswerKey.setOnClickListener(v -> dialogs.showNewAnswerKeyDialog(null));
         teacherNameRow.setOnClickListener(v -> dialogs.showEditTeacherNameDialog());
 
         breadcrumbRoot.setOnClickListener(v -> {
