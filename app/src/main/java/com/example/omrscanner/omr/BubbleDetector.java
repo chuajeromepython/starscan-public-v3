@@ -188,7 +188,7 @@ public class BubbleDetector {
         for (MatOfPoint contour : contours) {
             Rect rect = Imgproc.boundingRect(contour);
 
-            // Area check
+        
             double area = rect.area();
             double areaRatio = area / imageArea;
 
@@ -196,13 +196,11 @@ public class BubbleDetector {
                 continue;
             }
 
-            // Aspect ratio check
             double aspectRatio = (double) rect.width / rect.height;
             if (aspectRatio < MIN_ASPECT_RATIO || aspectRatio > MAX_ASPECT_RATIO) {
                 continue;
             }
 
-            // Circularity check
             double perimeter = Imgproc.arcLength(
                     new org.opencv.core.MatOfPoint2f(contour.toArray()),
                     true

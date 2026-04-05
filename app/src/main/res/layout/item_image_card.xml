@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Image Card Item Layout -->
 <com.google.android.material.card.MaterialCardView
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -17,7 +16,6 @@
         android:orientation="vertical"
         android:padding="12dp">
 
-        <!-- Image Preview -->
         <FrameLayout
             android:id="@+id/imagePreviewContainer"
             android:layout_width="match_parent"
@@ -35,7 +33,6 @@
                 android:contentDescription="@string/exam_paper_image"
                 tools:src="@drawable/placeholder_exam" />
 
-            <!-- Processing Overlay -->
             <FrameLayout
                 android:id="@+id/processingOverlay"
                 android:layout_width="match_parent"
@@ -50,7 +47,6 @@
                     android:indeterminateTint="#FFFFFF" />
             </FrameLayout>
 
-            <!-- Zoom Indicator -->
             <ImageView
                 android:layout_width="22dp"
                 android:layout_height="23dp"
@@ -63,7 +59,6 @@
                 app:tint="#FFFFFF" />
         </FrameLayout>
 
-        <!-- Image Info -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -93,14 +88,12 @@
                 android:textColor="#64748B" />
         </LinearLayout>
 
-        <!-- Action Buttons -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical">
 
-            <!-- Convert to CSV Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/convertButton"
                 android:layout_width="0dp"
@@ -118,7 +111,6 @@
                 android:layout_marginEnd="4dp"
                 android:visibility="visible" />
 
-            <!-- View CSV Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/viewButton"
                 style="@style/Widget.Material3.Button.OutlinedButton"
@@ -137,7 +129,6 @@
                 android:layout_marginEnd="4dp"
                 android:visibility="gone" />
 
-            <!-- Save CSV Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/saveButton"
                 android:layout_width="0dp"
@@ -155,7 +146,6 @@
                 android:layout_marginEnd="4dp"
                 android:visibility="gone" />
 
-            <!-- Delete Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/deleteButton"
                 style="@style/Widget.Material3.Button.IconButton"

@@ -6,9 +6,6 @@
     android:layout_height="match_parent"
     android:background="@drawable/bg_root_gradient">
 
-    <!-- ═══════════════════════════════════════════════════════
-         HEADER  ·  Compact version (was 36dp/60dp → now 16dp/36dp)
-    ═══════════════════════════════════════════════════════════ -->
     <FrameLayout
         android:id="@+id/headerCard"
         android:layout_width="match_parent"
@@ -22,7 +19,6 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Decorative circle — top-end -->
         <View
             android:layout_width="100dp"
             android:layout_height="100dp"
@@ -32,9 +28,6 @@
             android:background="@drawable/shape_circle_white"
             android:alpha="0.10" />
 
-        <!-- Decorative circle — bottom-start -->
-
-        <!-- Small decorative circle — mid-right -->
         <View
             android:layout_width="44dp"
             android:layout_height="44dp"
@@ -44,13 +37,11 @@
             android:background="@drawable/shape_circle_white"
             android:alpha="0.05" />
 
-        <!-- ══ HEADER CONTENT ══ -->
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:layout_gravity="center_vertical">
 
-            <!-- Logo wrapped nicely -->
             <ImageView
                 android:id="@+id/headerLogo"
                 android:layout_width="75dp"
@@ -66,7 +57,6 @@
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toBottomOf="parent" />
 
-            <!-- App name + teacher name -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
@@ -129,7 +119,6 @@
 
             </LinearLayout>
 
-            <!-- Upload button — hidden temporarily; function preserved in code -->
             <ImageButton
                 android:id="@+id/btnUpload"
                 android:layout_width="38dp"
@@ -147,7 +136,6 @@
 
         </androidx.constraintlayout.widget.ConstraintLayout>
 
-        <!-- topBarTitle: kept for Java compatibility — GONE -->
         <TextView
             android:id="@+id/topBarTitle"
             android:layout_width="wrap_content"
@@ -155,7 +143,6 @@
             android:visibility="gone"
             android:textSize="0sp" />
 
-        <!-- topBarBadge: kept for Java compatibility — GONE by default -->
         <TextView
             android:id="@+id/topBarBadge"
             android:layout_width="wrap_content"
@@ -165,10 +152,6 @@
 
     </FrameLayout>
 
-    <!-- ═══════════════════════════════════════════════════════
-         CONTENT CARD
-         marginTop reduced (was -40dp → -28dp) to match smaller header overlap
-    ═══════════════════════════════════════════════════════════ -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/contentCard"
         android:layout_width="0dp"
@@ -192,7 +175,6 @@
             android:layout_height="match_parent"
             android:orientation="vertical">
 
-            <!-- ── BREADCRUMB BAR ── -->
             <LinearLayout
                 android:id="@+id/breadcrumbBar"
                 android:layout_width="match_parent"
@@ -295,7 +277,6 @@
                 </HorizontalScrollView>
             </LinearLayout>
 
-            <!-- Hairline divider under breadcrumb -->
             <View
                 android:id="@+id/breadcrumbDivider"
                 android:layout_width="match_parent"
@@ -303,7 +284,6 @@
                 android:background="#F1F5F9"
                 android:visibility="gone" />
 
-            <!-- ── SCREEN CONTAINER ── -->
             <FrameLayout
                 android:id="@+id/contentFrame"
                 android:layout_width="match_parent"
@@ -311,9 +291,6 @@
                 android:layout_weight="1"
                 android:clipChildren="false">
 
-                <!-- ════════════════════════════════════════════
-                     SCREEN 1 · HOME
-                ════════════════════════════════════════════════ -->
                 <LinearLayout
                     android:id="@+id/screenHome"
                     android:layout_width="match_parent"
@@ -321,7 +298,6 @@
                     android:orientation="vertical"
                     android:visibility="visible">
 
-                    <!-- Stats row — tighter padding (was 16dp → 12dp top/bottom) -->
                     <LinearLayout
                         android:id="@+id/statsRow"
                         android:layout_width="match_parent"
@@ -683,9 +659,6 @@
 
                 </LinearLayout>
 
-                <!-- ════════════════════════════════════════════
-                     SCREEN 2 · CLASS
-                ════════════════════════════════════════════════ -->
                 <ScrollView
                     android:id="@+id/screenClass"
                     android:layout_width="match_parent"
@@ -903,10 +876,6 @@
 
                     </LinearLayout>
                 </ScrollView>
-
-                <!-- ════════════════════════════════════════════
-                     SCREEN 3 · ACTIVITY
-                ════════════════════════════════════════════════ -->
                 <ScrollView
                     android:id="@+id/screenActivity"
                     android:layout_width="match_parent"
@@ -1065,9 +1034,6 @@
             </FrameLayout>
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
-
-
-    <!-- ═══ FABs ═══ -->
     <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
         android:id="@+id/fab"
         android:layout_width="wrap_content"
@@ -1114,7 +1080,6 @@
         app:layout_constraintStart_toEndOf="@+id/fab"
         android:visibility="visible" />
 
-    <!-- ═══ FOOTER — more breathing room (was 12dp → 16dp) ═══ -->
     <TextView
         android:id="@+id/footer"
         android:layout_width="wrap_content"

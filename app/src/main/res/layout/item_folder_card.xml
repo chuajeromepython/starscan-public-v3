@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Folder Card Item Layout -->
 <com.google.android.material.card.MaterialCardView
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -17,7 +16,6 @@
         android:padding="16dp"
         android:gravity="center">
 
-        <!-- Folder Icon with Badge -->
         <FrameLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -30,7 +28,6 @@
                 app:tint="#0038A8"
                 android:contentDescription="@string/folder_icon" />
 
-            <!-- Badge for item count -->
             <TextView
                 android:id="@+id/folderBadge"
                 android:layout_width="wrap_content"
@@ -49,7 +46,6 @@
                 android:visibility="gone" />
         </FrameLayout>
 
-        <!-- Folder Name -->
         <TextView
             android:id="@+id/folderName"
             android:layout_width="match_parent"
@@ -64,7 +60,6 @@
             android:layout_marginBottom="4dp"
             android:fontFamily="@font/poppins_medium" />
 
-        <!-- Folder Info -->
         <TextView
             android:id="@+id/folderInfo"
             android:layout_width="wrap_content"
