@@ -5,38 +5,30 @@ import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.ImageFormat;
-import android.graphics.Matrix;
 import android.graphics.PointF;
-import android.graphics.Rect;
-import android.graphics.YuvImage;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.util.Size;
 import android.view.View;
-import android.view.Window;
-import android.widget.LinearLayout;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.OptIn;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.camera.core.Camera;
 import androidx.camera.core.CameraControl;
 import androidx.camera.core.CameraInfo;
 import androidx.camera.core.CameraSelector;
-import androidx.camera.core.ExperimentalGetImage;
 import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageCapture;
 import androidx.camera.core.ImageCaptureException;
 import androidx.camera.core.ImageProxy;
 import androidx.camera.core.Preview;
+import androidx.camera.core.ZoomState;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
 import androidx.core.app.ActivityCompat;
@@ -54,9 +46,9 @@ import com.google.common.util.concurrent.ListenableFuture;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Point;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -64,9 +56,11 @@ public class CameraActivity extends AppCompatActivity {
 
     private static final int CAMERA_PERMISSION_REQUEST = 1001;
     private static final String TAG = "CameraActivity";
-
-    // Number of consecutive frames with anchors before auto-capture
-    private static final int STABLE_FRAME_THRESHOLD = 5;
+    public static final String EXTRA_FIXED_MOUNT_MODE = "fixed_mount_mode";
+    private static final Size ANALYSIS_TARGET_RESOLUTION = new Size(1280, 720);
+    private static final long FIXED_MOUNT_ZOOM_COOLDOWN_MS = 250L;
+    private static final int FIXED_MOUNT_MISS_THRESHOLD = 6;
+    private static final float[] FIXED_MOUNT_ZOOM_STEPS = {1.0f, 1.25f, 1.5f, 1.75f};
 
     // How long each hint stays visible before cycling (milliseconds)
     private static final long HINT_DISPLAY_DURATION_MS = 5000;
@@ -106,13 +100,13 @@ public class CameraActivity extends AppCompatActivity {
     // ── Camera state ──────────────────────────────────────────────
     private int cameraFacing = CameraSelector.LENS_FACING_BACK;
     private boolean isTorchOn = false;
+    private boolean fixedMountMode = false;
 
     // ── Auto-capture state ────────────────────────────────────────
     private int consecutiveDetections = 0;
     private int currentHintIndex = 0;
     private long lastHintChangeTime = 0;
     private boolean autoCaptureTriggered = false;
-    private boolean isAnalyzing = false;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     
     // ── Anchor Smoothing State ────────────────────────────────────
@@ -120,10 +114,10 @@ public class CameraActivity extends AppCompatActivity {
     private int missingFramesCount = 0;
     private static final int MAX_MISSING_FRAMES = 8;
     private static final float SMOOTHING_FACTOR = 0.25f;
-
-    // ── Frame skipping ───────────────────────────────────────────
-    private int frameSkipCounter = 0;
-    private static final int FRAME_SKIP_COUNT = 2; // analyze every 3rd frame
+    private int fixedMountMissCounter = 0;
+    private int fixedMountZoomIndex = 0;
+    private long lastZoomChangeTime = 0L;
+    private final List<Float> fixedMountZoomRatios = new ArrayList<>();
 
     // ── Intent extras ─────────────────────────────────────────────
     private String selectedSheetType = null;
@@ -149,6 +143,7 @@ public class CameraActivity extends AppCompatActivity {
             selectedSheetType = getIntent().getStringExtra(DashboardActivity.EXTRA_SHEET_TYPE);
             classId = getIntent().getStringExtra(DashboardActivity.EXTRA_CLASS_ID);
             activityId = getIntent().getStringExtra(DashboardActivity.EXTRA_ACTIVITY_ID);
+            fixedMountMode = getIntent().getBooleanExtra(EXTRA_FIXED_MOUNT_MODE, false);
             Log.d(TAG, "Received sheet type: " + selectedSheetType + ", classId: " + classId);
 
             // Full screen — hide status bar and navigation bar
@@ -273,6 +268,7 @@ public class CameraActivity extends AppCompatActivity {
         // ── ImageAnalysis for real-time anchor detection ──────────
         imageAnalysis = new ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .setTargetResolution(ANALYSIS_TARGET_RESOLUTION)
                 .build();
 
         imageAnalysis.setAnalyzer(cameraExecutor, this::analyzeFrame);
@@ -287,17 +283,19 @@ public class CameraActivity extends AppCompatActivity {
 
         cameraControl = camera.getCameraControl();
         cameraInfo    = camera.getCameraInfo();
+        initializeFixedMountZoomRatios();
+        applyFixedMountZoom(true);
 
         updateFlashButton();
 
-        Log.d(TAG, "Camera bound successfully with ImageAnalysis, facing=" + cameraFacing);
+        Log.d(TAG, "Camera bound successfully with ImageAnalysis, facing=" + cameraFacing
+                + ", fixedMountMode=" + fixedMountMode);
     }
 
     // ─────────────────────────────────────────────────────────────
     //  REAL-TIME ANCHOR DETECTION
     // ─────────────────────────────────────────────────────────────
 
-    @OptIn(markerClass = ExperimentalGetImage.class)
     private void analyzeFrame(@NonNull ImageProxy imageProxy) {
         // Skip if OpenCV not ready or already auto-captured
         if (!openCVReady || autoCaptureTriggered) {
@@ -305,142 +303,127 @@ public class CameraActivity extends AppCompatActivity {
             return;
         }
 
-        // ── Frame skipping: only analyze every (FRAME_SKIP_COUNT + 1)th frame ──
-        frameSkipCounter++;
-        if (frameSkipCounter <= FRAME_SKIP_COUNT) {
-            imageProxy.close();
-            return;
-        }
-        frameSkipCounter = 0;
-
         try {
-            // Convert ImageProxy to Bitmap
-            Bitmap bitmap = imageProxyToBitmap(imageProxy);
-            if (bitmap == null) {
-                imageProxy.close();
-                onAnchorsNotDetected();
-                return;
-            }
-
-            // Run anchor detection
-            Point[] anchors = AnchorDetector.detectAnchors(bitmap);
+            AnchorDetector.LiveDetectionMode liveDetectionMode = fixedMountMode
+                    ? AnchorDetector.LiveDetectionMode.FIXED_MOUNT
+                    : AnchorDetector.LiveDetectionMode.HANDHELD;
+            Point[] anchors = AnchorDetector.detectAnchors(imageProxy, liveDetectionMode);
 
             if (anchors != null && anchors.length == 4) {
-                // Scale anchor points from bitmap coordinates to overlay view coordinates
-                PointF[] viewPoints = scaleAnchorsToView(anchors, bitmap.getWidth(), bitmap.getHeight());
-                onAnchorsDetected(viewPoints);
+                onDetectionSuccess();
+                PointF[] viewPoints = scaleAnchorsToView(
+                        anchors,
+                        imageProxy.getWidth(),
+                        imageProxy.getHeight(),
+                        imageProxy.getImageInfo().getRotationDegrees()
+                );
+                boolean captureStarted = triggerAutoCapture();
+                onAnchorsDetected(viewPoints, captureStarted);
             } else {
+                onDetectionMiss();
                 onAnchorsNotDetected();
             }
-
-            bitmap.recycle();
 
         } catch (Exception e) {
             Log.e(TAG, "Error in frame analysis", e);
+            onDetectionMiss();
             onAnchorsNotDetected();
         } finally {
             imageProxy.close();
         }
     }
 
-    /**
-     * Convert CameraX ImageProxy to a Bitmap.
-     */
-    @OptIn(markerClass = ExperimentalGetImage.class)
-    private Bitmap imageProxyToBitmap(ImageProxy imageProxy) {
-        try {
-            if (imageProxy.getImage() == null) return null;
+    private void initializeFixedMountZoomRatios() {
+        fixedMountZoomRatios.clear();
 
-            ImageProxy.PlaneProxy[] planes = imageProxy.getPlanes();
-            if (planes.length < 1) return null;
-
-            // Get YUV data and convert to JPEG then Bitmap
-            int width = imageProxy.getWidth();
-            int height = imageProxy.getHeight();
-
-            // Use NV21 format for YuvImage
-            byte[] nv21 = yuv420ToNv21(imageProxy);
-            if (nv21 == null) return null;
-
-            YuvImage yuvImage = new YuvImage(nv21, ImageFormat.NV21, width, height, null);
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            yuvImage.compressToJpeg(new Rect(0, 0, width, height), 80, out);
-            byte[] jpegBytes = out.toByteArray();
-
-            Bitmap bitmap = BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.length);
-
-            // Apply rotation
-            int rotation = imageProxy.getImageInfo().getRotationDegrees();
-            if (rotation != 0 && bitmap != null) {
-                Matrix matrix = new Matrix();
-                matrix.postRotate(rotation);
-                Bitmap rotated = Bitmap.createBitmap(bitmap, 0, 0,
-                        bitmap.getWidth(), bitmap.getHeight(), matrix, true);
-                bitmap.recycle();
-                return rotated;
-            }
-
-            return bitmap;
-        } catch (Exception e) {
-            Log.e(TAG, "Error converting ImageProxy to Bitmap", e);
-            return null;
+        if (!fixedMountMode) {
+            fixedMountZoomRatios.add(1.0f);
+            fixedMountZoomIndex = 0;
+            fixedMountMissCounter = 0;
+            lastZoomChangeTime = 0L;
+            return;
         }
+
+        float minZoom = 1.0f;
+        float maxZoom = 1.0f;
+        if (cameraInfo != null && cameraInfo.getZoomState().getValue() != null) {
+            ZoomState zoomState = cameraInfo.getZoomState().getValue();
+            minZoom = zoomState.getMinZoomRatio();
+            maxZoom = zoomState.getMaxZoomRatio();
+        }
+
+        for (float zoomStep : FIXED_MOUNT_ZOOM_STEPS) {
+            float clamped = Math.max(minZoom, Math.min(maxZoom, zoomStep));
+            if (fixedMountZoomRatios.isEmpty()
+                    || Math.abs(fixedMountZoomRatios.get(fixedMountZoomRatios.size() - 1) - clamped) > 0.01f) {
+                fixedMountZoomRatios.add(clamped);
+            }
+        }
+
+        if (fixedMountZoomRatios.isEmpty()) {
+            fixedMountZoomRatios.add(Math.max(minZoom, 1.0f));
+        }
+
+        fixedMountZoomIndex = 0;
+        fixedMountMissCounter = 0;
+        lastZoomChangeTime = 0L;
     }
 
-    /**
-     * Convert YUV_420_888 ImageProxy to NV21 byte array.
-     */
-    private byte[] yuv420ToNv21(ImageProxy image) {
-        try {
-            ImageProxy.PlaneProxy yPlane = image.getPlanes()[0];
-            ImageProxy.PlaneProxy uPlane = image.getPlanes()[1];
-            ImageProxy.PlaneProxy vPlane = image.getPlanes()[2];
-
-            ByteBuffer yBuffer = yPlane.getBuffer();
-            ByteBuffer uBuffer = uPlane.getBuffer();
-            ByteBuffer vBuffer = vPlane.getBuffer();
-
-            int ySize = yBuffer.remaining();
-            int uSize = uBuffer.remaining();
-            int vSize = vBuffer.remaining();
-
-            byte[] nv21 = new byte[ySize + uSize + vSize];
-
-            // Y plane
-            yBuffer.get(nv21, 0, ySize);
-
-            // Interleave V and U (NV21 = YYYYVUVU)
-            byte[] vBytes = new byte[vSize];
-            byte[] uBytes = new byte[uSize];
-            vBuffer.get(vBytes);
-            uBuffer.get(uBytes);
-
-            // If pixel stride is 2, the data is already interleaved
-            int pixelStride = vPlane.getPixelStride();
-            if (pixelStride == 2) {
-                // Already semi-planar, just copy V plane (which includes interleaved U)
-                System.arraycopy(vBytes, 0, nv21, ySize, vSize);
-            } else {
-                // Pixel stride is 1: manually interleave V and U
-                int uvIndex = ySize;
-                int uvSize = Math.min(vBytes.length, uBytes.length);
-                for (int i = 0; i < uvSize; i++) {
-                    nv21[uvIndex++] = vBytes[i];
-                    nv21[uvIndex++] = uBytes[i];
-                }
-            }
-
-            return nv21;
-        } catch (Exception e) {
-            Log.e(TAG, "Error converting YUV to NV21", e);
-            return null;
+    private void applyFixedMountZoom(boolean resetToBase) {
+        if (!fixedMountMode || cameraControl == null || fixedMountZoomRatios.isEmpty()) {
+            return;
         }
+
+        if (resetToBase) {
+            fixedMountZoomIndex = 0;
+            fixedMountMissCounter = 0;
+            lastZoomChangeTime = 0L;
+        }
+
+        float zoomRatio = fixedMountZoomRatios.get(fixedMountZoomIndex);
+        cameraControl.setZoomRatio(zoomRatio);
+        Log.d(TAG, "Fixed-mount zoom set to " + zoomRatio + "x");
+    }
+
+    private void onDetectionSuccess() {
+        if (!fixedMountMode) {
+            return;
+        }
+
+        fixedMountMissCounter = 0;
+    }
+
+    private void onDetectionMiss() {
+        if (!fixedMountMode || autoCaptureTriggered || fixedMountZoomRatios.size() <= 1) {
+            return;
+        }
+
+        fixedMountMissCounter++;
+        long now = System.currentTimeMillis();
+        if (fixedMountMissCounter < FIXED_MOUNT_MISS_THRESHOLD) {
+            return;
+        }
+        if (now - lastZoomChangeTime < FIXED_MOUNT_ZOOM_COOLDOWN_MS) {
+            return;
+        }
+
+        fixedMountMissCounter = 0;
+        fixedMountZoomIndex = (fixedMountZoomIndex + 1) % fixedMountZoomRatios.size();
+        lastZoomChangeTime = now;
+        float zoomRatio = fixedMountZoomRatios.get(fixedMountZoomIndex);
+        cameraControl.setZoomRatio(zoomRatio);
+        Log.d(TAG, "Fixed-mount zoom advanced to " + zoomRatio + "x after repeated misses");
     }
 
     /**
      * Scale anchor coordinates from bitmap space to overlay view space.
      */
-    private PointF[] scaleAnchorsToView(Point[] anchors, int bitmapWidth, int bitmapHeight) {
+    private PointF[] scaleAnchorsToView(
+            Point[] anchors,
+            int imageWidth,
+            int imageHeight,
+            int rotationDegrees
+    ) {
         PointF[] viewPoints = new PointF[4];
 
         // The overlay is the same size as the preview view
@@ -453,30 +436,69 @@ public class CameraActivity extends AppCompatActivity {
         }
 
         if (viewWidth == 0 || viewHeight == 0) {
-            // Fallback: just use bitmap coordinates
+            // Fallback: just use analysis-image coordinates
             for (int i = 0; i < 4; i++) {
                 viewPoints[i] = new PointF((float) anchors[i].x, (float) anchors[i].y);
             }
             return viewPoints;
         }
 
-        float scaleX = (float) viewWidth / bitmapWidth;
-        float scaleY = (float) viewHeight / bitmapHeight;
+        boolean swapDimensions = rotationDegrees == 90 || rotationDegrees == 270;
+        int rotatedWidth = swapDimensions ? imageHeight : imageWidth;
+        int rotatedHeight = swapDimensions ? imageWidth : imageHeight;
+
+        float scaleX = (float) viewWidth / rotatedWidth;
+        float scaleY = (float) viewHeight / rotatedHeight;
 
         for (int i = 0; i < 4; i++) {
+            PointF rotatedPoint = rotatePointToDisplay(
+                    anchors[i],
+                    imageWidth,
+                    imageHeight,
+                    rotationDegrees
+            );
             viewPoints[i] = new PointF(
-                    (float) anchors[i].x * scaleX,
-                    (float) anchors[i].y * scaleY
+                    rotatedPoint.x * scaleX,
+                    rotatedPoint.y * scaleY
             );
         }
 
         return viewPoints;
     }
 
+    private PointF rotatePointToDisplay(
+            Point anchor,
+            int imageWidth,
+            int imageHeight,
+            int rotationDegrees
+    ) {
+        switch (rotationDegrees) {
+            case 90:
+                return new PointF((float) (imageHeight - anchor.y), (float) anchor.x);
+            case 180:
+                return new PointF((float) (imageWidth - anchor.x), (float) (imageHeight - anchor.y));
+            case 270:
+                return new PointF((float) anchor.y, (float) (imageWidth - anchor.x));
+            default:
+                return new PointF((float) anchor.x, (float) anchor.y);
+        }
+    }
+
+    private boolean triggerAutoCapture() {
+        if (autoCaptureTriggered) {
+            return false;
+        }
+
+        autoCaptureTriggered = true;
+        Log.d(TAG, "Auto-capture triggered on first valid anchor detection");
+        takePhoto();
+        return true;
+    }
+
     /**
      * Called when anchors ARE detected in a frame.
      */
-    private void onAnchorsDetected(PointF[] viewPoints) {
+    private void onAnchorsDetected(PointF[] viewPoints, boolean captureStarted) {
         missingFramesCount = 0; // reset missing counter
 
         if (smoothedAnchors == null) {
@@ -536,23 +558,16 @@ public class CameraActivity extends AppCompatActivity {
 
             // Update status text
             if (anchorStatusText != null) {
-                if (consecutiveDetections >= STABLE_FRAME_THRESHOLD && !autoCaptureTriggered) {
+                if (captureStarted) {
                     anchorStatusText.setText("✓ Anchors detected! Capturing…");
-                    if (anchorStatusIcon != null) {
-                        anchorStatusIcon.setColorFilter(
-                                ContextCompat.getColor(this, R.color.green),
-                                android.graphics.PorterDuff.Mode.SRC_IN);
-                    }
                 } else {
-                    anchorStatusText.setText("✓ Anchors detected (" + consecutiveDetections + "/" + STABLE_FRAME_THRESHOLD + ")");
+                    anchorStatusText.setText("✓ Anchors detected");
                 }
             }
-
-            // Auto-capture after stable detections
-            if (consecutiveDetections >= STABLE_FRAME_THRESHOLD && !autoCaptureTriggered) {
-                autoCaptureTriggered = true;
-                Log.d(TAG, "Auto-capture triggered after " + consecutiveDetections + " stable frames");
-                takePhoto();
+            if (anchorStatusIcon != null) {
+                anchorStatusIcon.setColorFilter(
+                        ContextCompat.getColor(this, R.color.green),
+                        android.graphics.PorterDuff.Mode.SRC_IN);
             }
         });
     }
@@ -579,7 +594,7 @@ public class CameraActivity extends AppCompatActivity {
                     anchorOverlay.setAnchors(finalAnchors);
                 }
                 if (anchorStatusText != null) {
-                    anchorStatusText.setText("Tracking anchors... (" + consecutiveDetections + "/" + STABLE_FRAME_THRESHOLD + ")");
+                    anchorStatusText.setText("Tracking anchors…");
                 }
                 if (anchorStatusIcon != null) {
                     anchorStatusIcon.setColorFilter(
@@ -727,6 +742,7 @@ public class CameraActivity extends AppCompatActivity {
                             Intent intent = new Intent(CameraActivity.this, com.example.omrscanner.ui.ResultActivity.class);
                             intent.putExtra(PreviewActivity.IMAGE_PATH, photoFile.getAbsolutePath());
                             intent.putExtra(PreviewActivity.IMAGE_SOURCE, PreviewActivity.SOURCE_CAMERA);
+                            intent.putExtra(EXTRA_FIXED_MOUNT_MODE, fixedMountMode);
                             if (selectedSheetType != null)
                                 intent.putExtra(DashboardActivity.EXTRA_SHEET_TYPE, selectedSheetType);
                             if (classId != null)
@@ -747,6 +763,7 @@ public class CameraActivity extends AppCompatActivity {
                             // Reset auto-capture if it fails
                             autoCaptureTriggered = false;
                             consecutiveDetections = 0;
+                            applyFixedMountZoom(true);
                         });
                     }
                 });
@@ -764,7 +781,10 @@ public class CameraActivity extends AppCompatActivity {
         lastHintChangeTime = 0;
         smoothedAnchors = null;
         missingFramesCount = 0;
-        frameSkipCounter = 0;
+        fixedMountMissCounter = 0;
+        fixedMountZoomIndex = 0;
+        lastZoomChangeTime = 0L;
+        applyFixedMountZoom(true);
     }
 
     @Override
