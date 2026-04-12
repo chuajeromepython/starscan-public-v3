@@ -61,6 +61,8 @@ public class CameraActivity extends AppCompatActivity {
     private static final long FIXED_MOUNT_ZOOM_COOLDOWN_MS = 250L;
     private static final int FIXED_MOUNT_MISS_THRESHOLD = 6;
     private static final float[] FIXED_MOUNT_ZOOM_STEPS = {1.0f, 1.25f, 1.5f, 1.75f};
+    private static final int HANDHELD_RECOVERY_MISS_THRESHOLD = 3;
+    private static final int HANDHELD_RECOVERY_FRAME_INTERVAL = 2;
 
     // How long each hint stays visible before cycling (milliseconds)
     private static final long HINT_DISPLAY_DURATION_MS = 5000;
@@ -117,6 +119,8 @@ public class CameraActivity extends AppCompatActivity {
     private int fixedMountMissCounter = 0;
     private int fixedMountZoomIndex = 0;
     private long lastZoomChangeTime = 0L;
+    private int handheldMissCounter = 0;
+    private int handheldRecoveryFrameCounter = 0;
     private final List<Float> fixedMountZoomRatios = new ArrayList<>();
 
     // ── Intent extras ─────────────────────────────────────────────
@@ -304,10 +308,23 @@ public class CameraActivity extends AppCompatActivity {
         }
 
         try {
-            AnchorDetector.LiveDetectionMode liveDetectionMode = fixedMountMode
-                    ? AnchorDetector.LiveDetectionMode.FIXED_MOUNT
-                    : AnchorDetector.LiveDetectionMode.HANDHELD;
-            Point[] anchors = AnchorDetector.detectAnchors(imageProxy, liveDetectionMode);
+            Point[] anchors;
+            if (fixedMountMode) {
+                anchors = AnchorDetector.detectAnchors(
+                        imageProxy,
+                        AnchorDetector.LiveDetectionMode.FIXED_MOUNT
+                );
+            } else {
+                boolean useRecoveryPass = shouldRunHandheldRecoveryPass();
+                anchors = AnchorDetector.detectAnchors(
+                        imageProxy,
+                        AnchorDetector.LiveDetectionMode.HANDHELD,
+                        useRecoveryPass
+                );
+                if (useRecoveryPass) {
+                    Log.d(TAG, "Running handheld recovery pass after repeated anchor misses");
+                }
+            }
 
             if (anchors != null && anchors.length == 4) {
                 onDetectionSuccess();
@@ -387,6 +404,8 @@ public class CameraActivity extends AppCompatActivity {
 
     private void onDetectionSuccess() {
         if (!fixedMountMode) {
+            handheldMissCounter = 0;
+            handheldRecoveryFrameCounter = 0;
             return;
         }
 
@@ -394,7 +413,12 @@ public class CameraActivity extends AppCompatActivity {
     }
 
     private void onDetectionMiss() {
-        if (!fixedMountMode || autoCaptureTriggered || fixedMountZoomRatios.size() <= 1) {
+        if (!fixedMountMode) {
+            handheldMissCounter++;
+            return;
+        }
+
+        if (autoCaptureTriggered || fixedMountZoomRatios.size() <= 1) {
             return;
         }
 
@@ -413,6 +437,32 @@ public class CameraActivity extends AppCompatActivity {
         float zoomRatio = fixedMountZoomRatios.get(fixedMountZoomIndex);
         cameraControl.setZoomRatio(zoomRatio);
         Log.d(TAG, "Fixed-mount zoom advanced to " + zoomRatio + "x after repeated misses");
+    }
+
+    private boolean shouldRunHandheldRecoveryPass() {
+        if (fixedMountMode) {
+            return false;
+        }
+        if (handheldMissCounter < HANDHELD_RECOVERY_MISS_THRESHOLD) {
+            return false;
+        }
+
+        handheldRecoveryFrameCounter++;
+        return shouldRunHandheldRecoveryPass(
+                handheldMissCounter,
+                handheldRecoveryFrameCounter,
+                HANDHELD_RECOVERY_MISS_THRESHOLD,
+                HANDHELD_RECOVERY_FRAME_INTERVAL
+        );
+    }
+
+    static boolean shouldRunHandheldRecoveryPass(int missCounter,
+                                                 int recoveryFrameCounter,
+                                                 int missThreshold,
+                                                 int frameInterval) {
+        return missCounter >= missThreshold
+                && frameInterval > 0
+                && recoveryFrameCounter % frameInterval == 0;
     }
 
     /**
@@ -763,6 +813,8 @@ public class CameraActivity extends AppCompatActivity {
                             // Reset auto-capture if it fails
                             autoCaptureTriggered = false;
                             consecutiveDetections = 0;
+                            handheldMissCounter = 0;
+                            handheldRecoveryFrameCounter = 0;
                             applyFixedMountZoom(true);
                         });
                     }
@@ -784,6 +836,8 @@ public class CameraActivity extends AppCompatActivity {
         fixedMountMissCounter = 0;
         fixedMountZoomIndex = 0;
         lastZoomChangeTime = 0L;
+        handheldMissCounter = 0;
+        handheldRecoveryFrameCounter = 0;
         applyFixedMountZoom(true);
     }
 
