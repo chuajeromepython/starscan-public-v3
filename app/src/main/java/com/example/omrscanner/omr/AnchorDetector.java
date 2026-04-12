@@ -90,6 +90,31 @@ public class AnchorDetector {
             false
     );
 
+    private static final DetectionProfile LIVE_HANDHELD_RECOVERY_PROFILE = new DetectionProfile(
+            "live-handheld-recovery",
+            1280,
+            5,
+            11,
+            3.0,
+            5,
+            Imgproc.RETR_TREE,
+            0.00012,
+            0.05,
+            0.6,
+            1.4,
+            0.62,
+            155.0,
+            0.42,
+            0.98,
+            0.15,
+            0.0,
+            0.0,
+            0.0,
+            true,
+            1.25,
+            false
+    );
+
     private static final DetectionProfile LIVE_FIXED_BASE_PROFILE = new DetectionProfile(
             "live-fixed-base",
             960,
@@ -175,6 +200,14 @@ public class AnchorDetector {
     }
 
     public static Point[] detectAnchors(@NonNull ImageProxy imageProxy, @NonNull LiveDetectionMode mode) {
+        return detectAnchors(imageProxy, mode, false);
+    }
+
+    public static Point[] detectAnchors(
+            @NonNull ImageProxy imageProxy,
+            @NonNull LiveDetectionMode mode,
+            boolean useRecoveryPass
+    ) {
         Mat gray = imageProxyToGrayMat(imageProxy);
         if (gray == null) {
             return null;
@@ -200,12 +233,30 @@ public class AnchorDetector {
                 );
             }
 
-            return detectWithProfile(
+            Point[] handheld = detectWithProfile(
                     gray,
                     imageProxy.getWidth(),
                     imageProxy.getHeight(),
                     LIVE_HANDHELD_PROFILE
             );
+
+            if (handheld != null || !useRecoveryPass) {
+                if (handheld != null && useRecoveryPass) {
+                    Log.d(TAG, "Handheld live detection succeeded on fast pass");
+                }
+                return handheld;
+            }
+
+            Point[] recovered = detectWithProfile(
+                    gray,
+                    imageProxy.getWidth(),
+                    imageProxy.getHeight(),
+                    LIVE_HANDHELD_RECOVERY_PROFILE
+            );
+            if (recovered != null) {
+                Log.d(TAG, "Handheld live detection succeeded on recovery pass");
+            }
+            return recovered;
         } finally {
             gray.release();
         }
