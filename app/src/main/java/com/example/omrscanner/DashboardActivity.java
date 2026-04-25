@@ -70,6 +70,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class DashboardActivity extends AppCompatActivity implements DashboardDialogs.DialogHost {
 
     private static final String TAG = "DashboardActivity";
+    private static final String CAMERA_MODE_PREFS = "camera_mode_prefs";
+    private static final String PREF_FIXED_MOUNT_MODE = "fixed_mount_mode";
 
     // ── Intent extras used by CameraActivity / PreviewActivity ──
     public static final String EXTRA_SHEET_TYPE    = "sheet_type";
@@ -689,15 +691,43 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     @Override
     public void openCamera() {
         try {
-            Intent intent = new Intent(this, CameraActivity.class);
-            if (selectedSheetType != null) intent.putExtra(EXTRA_SHEET_TYPE, selectedSheetType);
-            if (selectedClass    != null) intent.putExtra(EXTRA_CLASS_ID, selectedClass.getId());
-            if (selectedActivity != null) intent.putExtra(EXTRA_ACTIVITY_ID, selectedActivity.getId());
-            startActivity(intent);
+            showCameraModeDialog();
         } catch (Exception e) {
             Log.e(TAG, "Error opening camera", e);
             Toast.makeText(this, "Error opening camera: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
+    }
+
+    private void showCameraModeDialog() {
+        final String[] cameraModes = {
+                "Handheld Scan\nUse this when holding the phone and moving it closer to the sheet.",
+                "Fixed Mount Scan\nUse this for elevated phone mounts where sheets slide underneath automatically."
+        };
+
+        android.content.SharedPreferences prefs =
+                getSharedPreferences(CAMERA_MODE_PREFS, MODE_PRIVATE);
+        int defaultSelection = prefs.getBoolean(PREF_FIXED_MOUNT_MODE, false) ? 1 : 0;
+        final int[] selectedMode = {defaultSelection};
+
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Choose Camera Mode")
+                .setSingleChoiceItems(cameraModes, defaultSelection, (dialog, which) -> selectedMode[0] = which)
+                .setPositiveButton("Open Camera", (dialog, which) -> {
+                    boolean fixedMountMode = selectedMode[0] == 1;
+                    prefs.edit().putBoolean(PREF_FIXED_MOUNT_MODE, fixedMountMode).apply();
+                    launchCamera(fixedMountMode);
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void launchCamera(boolean fixedMountMode) {
+        Intent intent = new Intent(this, CameraActivity.class);
+        intent.putExtra(CameraActivity.EXTRA_FIXED_MOUNT_MODE, fixedMountMode);
+        if (selectedSheetType != null) intent.putExtra(EXTRA_SHEET_TYPE, selectedSheetType);
+        if (selectedClass    != null) intent.putExtra(EXTRA_CLASS_ID, selectedClass.getId());
+        if (selectedActivity != null) intent.putExtra(EXTRA_ACTIVITY_ID, selectedActivity.getId());
+        startActivity(intent);
     }
 
     // ═══════════════════════════════════════════════════════════════

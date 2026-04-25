@@ -26,7 +26,7 @@ import java.util.Map;
  *       ({@code THRESH_BINARY_INV + THRESH_OTSU}).</li>
  *   <li>{@code Core.countNonZero()} to count ink (foreground) pixels.</li>
  *   <li>Fill ratio = foreground / total pixels.
- *       If ratio &ge; {@link #FILL_THRESHOLD} the bubble is considered <b>FILLED</b>.</li>
+ *       If ratio &ge; the block threshold the bubble is considered <b>FILLED</b>.</li>
  * </ol>
  *
  * <h3>LNR (Student ID)</h3>
@@ -56,14 +56,14 @@ public class BubbleScanner {
      * Increase to 0.50 if shadows cause false positives;
      * decrease to 0.30 for faint pencil marks.
      */
-    private static final double FILL_THRESHOLD = 0.45;
+    private static final double QUESTION_FILL_THRESHOLD = 0.45;
 
     /**
      * Inner-circle factor for fill analysis.
      * We intentionally ignore the printed ring outline by measuring only
      * the inner disk.
      */
-    private static final double INNER_MASK_RADIUS_FACTOR = 0.60;
+    private static final double DEFAULT_INNER_MASK_RADIUS_FACTOR = 0.60;
 
     /**
      * Maximum fraction of bubble spacing allowed for per-block alignment offset.
@@ -78,6 +78,24 @@ public class BubbleScanner {
 
     // ── Choice labels ───────────────────────────────────────────────────────
     private static final char[] CHOICE_LABELS = {'A', 'B', 'C', 'D'};
+
+    private static final LnrReadProfile DEFAULT_LNR_PROFILE = new LnrReadProfile(
+            "default",
+            QUESTION_FILL_THRESHOLD,
+            DEFAULT_INNER_MASK_RADIUS_FACTOR,
+            0.0,
+            QUESTION_FILL_THRESHOLD,
+            0.0
+    );
+
+    private static final LnrReadProfile ZPH60_LNR_PROFILE = new LnrReadProfile(
+            "ZPH60",
+            0.52,
+            0.50,
+            0.08,
+            0.60,
+            0.04
+    );
 
     // =====================================================================
     //  Public API
@@ -126,6 +144,7 @@ public class BubbleScanner {
         result.templateId = template.templateId;
 
         int questionCounter = 0; // 1-based running counter across all question blocks
+        LnrReadProfile lnrProfile = resolveLnrReadProfile(template.templateId);
 
         for (OmrBlock block : template.blocks) {
             int scaledRadius = Math.max(1,
@@ -144,7 +163,7 @@ public class BubbleScanner {
             if (block.label.equals("LNR")) {
                 int[] safeOffset = sanitizeAlignmentOffset(block, scaleX, scaleY, scaledRadius, offX, offY);
                 result.lnr = scanLnrBlock(block, scaleX, scaleY, scaledRadius,
-                        gray, overlay, safeOffset[0], safeOffset[1], result);
+                        gray, overlay, safeOffset[0], safeOffset[1], result, lnrProfile);
             } else {
                 int[] safeOffset = sanitizeAlignmentOffset(block, scaleX, scaleY, scaledRadius, offX, offY);
                 questionCounter = scanQuestionBlock(block, scaleX, scaleY,
@@ -178,7 +197,7 @@ public class BubbleScanner {
      *
      * Layout: 10 rows (digits 0-9) x 12 columns (digit positions).
      * For each column, the row with the highest fill ratio wins.
-     * If no row in a column exceeds the FILL_THRESHOLD, the digit is
+     * If no row in a column exceeds the active LNR threshold, the digit is
      * marked as undetected ('_') and a red box is drawn on the overlay.
      *
      * @param offX   per-block horizontal offset from GridAligner
@@ -188,6 +207,14 @@ public class BubbleScanner {
     private String scanLnrBlock(OmrBlock block, double scaleX, double scaleY,
                                 int scaledRadius, Mat gray, Mat overlay,
                                 int offX, int offY, ScanResult result) {
+        return scanLnrBlock(block, scaleX, scaleY, scaledRadius, gray, overlay, offX, offY, result,
+                DEFAULT_LNR_PROFILE);
+    }
+
+    private String scanLnrBlock(OmrBlock block, double scaleX, double scaleY,
+                                int scaledRadius, Mat gray, Mat overlay,
+                                int offX, int offY, ScanResult result,
+                                LnrReadProfile profile) {
         // block.rows = 10 (digits 0-9), block.cols = 12 (positions)
         // Fill ratios: [col][row]
         double[][] ratios = new double[block.cols][block.rows];
@@ -197,7 +224,8 @@ public class BubbleScanner {
                 int cx = (int) Math.round((block.startX + col * block.dx) * scaleX) + offX;
                 int cy = (int) Math.round((block.startY + row * block.dy) * scaleY) + offY;
 
-                ratios[col][row] = measureFillRatio(gray, cx, cy, scaledRadius);
+                ratios[col][row] = measureFillRatio(gray, cx, cy, scaledRadius,
+                        profile.innerMaskRadiusFactor);
             }
         }
 
@@ -205,41 +233,26 @@ public class BubbleScanner {
         // Also detect double-shaded columns (2+ bubbles above threshold)
         StringBuilder lnr = new StringBuilder();
         for (int col = 0; col < block.cols; col++) {
-            // Count how many rows exceed the fill threshold in this column
-            int filledCount = 0;
-            int bestRow = 0;
-            double bestRatio = ratios[col][0];
-            for (int row = 0; row < block.rows; row++) {
-                if (ratios[col][row] >= FILL_THRESHOLD) {
-                    filledCount++;
-                }
-                if (ratios[col][row] > bestRatio) {
-                    bestRatio = ratios[col][row];
-                    bestRow = row;
-                }
-            }
+            LnrColumnDecision decision = classifyLnrColumn(ratios[col], profile);
 
-            if (filledCount >= 2) {
-                // DOUBLE-SHADED: 2 or more bubbles are filled in this column
+            if (decision.kind == LnrColumnDecision.Kind.DOUBLE_SHADED) {
                 lnr.append('X');
                 result.doubleShadedLnrPositions.add(col);
                 Log.w(TAG, String.format("LNR col %d: DOUBLE-SHADED (%d bubbles filled)",
-                        col, filledCount));
-            } else if (bestRatio >= FILL_THRESHOLD) {
-                // Digit clearly detected
-                lnr.append(bestRow);
+                        col, decision.filledCount));
+            } else if (decision.kind == LnrColumnDecision.Kind.DETECTED) {
+                lnr.append(decision.bestRow);
             } else {
-                // No bubble clearly shaded in this column
                 lnr.append('_');
                 result.undetectedLnrPositions.add(col);
-                Log.w(TAG, String.format("LNR col %d: UNDETECTED (best ratio=%.3f < %.3f)",
-                        col, bestRatio, FILL_THRESHOLD));
+                Log.w(TAG, String.format("LNR col %d: UNDETECTED (best ratio=%.3f < %.3f or ambiguous)",
+                        col, decision.bestRatio, profile.fillThreshold));
             }
 
             Log.d(TAG, String.format("LNR col %d: digit=%d (ratio=%.3f, filled=%d)%s",
-                    col, bestRow, bestRatio, filledCount,
-                    filledCount >= 2 ? " [DOUBLE-SHADED]" :
-                    bestRatio < FILL_THRESHOLD ? " [UNDETECTED]" : ""));
+                    col, decision.bestRow, decision.bestRatio, decision.filledCount,
+                    decision.kind == LnrColumnDecision.Kind.DOUBLE_SHADED ? " [DOUBLE-SHADED]" :
+                            decision.kind == LnrColumnDecision.Kind.UNDETECTED ? " [UNDETECTED]" : ""));
         }
 
         // Draw overlay for LNR block
@@ -247,7 +260,7 @@ public class BubbleScanner {
             for (int col = 0; col < block.cols; col++) {
                 int cx = (int) Math.round((block.startX + col * block.dx) * scaleX) + offX;
                 int cy = (int) Math.round((block.startY + row * block.dy) * scaleY) + offY;
-                boolean filled = ratios[col][row] >= FILL_THRESHOLD;
+                boolean filled = ratios[col][row] >= profile.fillThreshold;
                 drawBubble(overlay, cx, cy, scaledRadius, filled);
             }
         }
@@ -314,8 +327,9 @@ public class BubbleScanner {
                 int cx = (int) Math.round((block.startX + col * block.dx) * scaleX) + offX;
                 int cy = (int) Math.round((block.startY + row * block.dy) * scaleY) + offY;
 
-                double ratio = measureFillRatio(gray, cx, cy, scaledRadius);
-                boolean filled = ratio >= FILL_THRESHOLD;
+                double ratio = measureFillRatio(gray, cx, cy, scaledRadius,
+                        DEFAULT_INNER_MASK_RADIUS_FACTOR);
+                boolean filled = ratio >= QUESTION_FILL_THRESHOLD;
 
                 if (filled && col < CHOICE_LABELS.length) {
                     detected.append(CHOICE_LABELS[col]);
@@ -347,6 +361,10 @@ public class BubbleScanner {
      * @return fill ratio in [0.0, 1.0]
      */
     private double measureFillRatio(Mat gray, int cx, int cy, int radius) {
+        return measureFillRatio(gray, cx, cy, radius, DEFAULT_INNER_MASK_RADIUS_FACTOR);
+    }
+
+    private double measureFillRatio(Mat gray, int cx, int cy, int radius, double innerMaskRadiusFactor) {
         int x1 = Math.max(0, cx - radius);
         int y1 = Math.max(0, cy - radius);
         int x2 = Math.min(gray.cols(), cx + radius);
@@ -367,7 +385,7 @@ public class BubbleScanner {
         // Use an inner circular mask to ignore the printed ring outline.
         int localCx = cx - x1;
         int localCy = cy - y1;
-        int innerRadius = Math.max(1, (int) Math.round(radius * INNER_MASK_RADIUS_FACTOR));
+        int innerRadius = Math.max(1, (int) Math.round(radius * innerMaskRadiusFactor));
 
         Mat mask = Mat.zeros(h, w, CvType.CV_8UC1);
         Imgproc.circle(mask, new Point(localCx, localCy), innerRadius, new Scalar(255), -1);
@@ -384,6 +402,70 @@ public class BubbleScanner {
         patch.release();
 
         return (double) foreground / total;
+    }
+
+    static LnrReadProfile resolveLnrReadProfile(String templateId) {
+        if ("ZPH60".equalsIgnoreCase(templateId)) {
+            return ZPH60_LNR_PROFILE;
+        }
+        return DEFAULT_LNR_PROFILE;
+    }
+
+    static LnrColumnDecision classifyLnrColumn(double[] ratios, LnrReadProfile profile) {
+        int filledCount = 0;
+        int bestRow = 0;
+        int secondBestRow = -1;
+        double bestRatio = ratios[0];
+        double secondBestRatio = Double.NEGATIVE_INFINITY;
+
+        if (ratios[0] >= profile.fillThreshold) {
+            filledCount++;
+        }
+
+        for (int row = 1; row < ratios.length; row++) {
+            double ratio = ratios[row];
+            if (ratio >= profile.fillThreshold) {
+                filledCount++;
+            }
+            if (ratio > bestRatio) {
+                secondBestRatio = bestRatio;
+                secondBestRow = bestRow;
+                bestRatio = ratio;
+                bestRow = row;
+            } else if (ratio > secondBestRatio) {
+                secondBestRatio = ratio;
+                secondBestRow = row;
+            }
+        }
+
+        if (bestRatio < profile.fillThreshold) {
+            return new LnrColumnDecision(LnrColumnDecision.Kind.UNDETECTED,
+                    bestRow, secondBestRow, bestRatio, secondBestRatio, filledCount);
+        }
+
+        if (profile.winnerMargin <= 0.0) {
+            if (filledCount >= 2) {
+                return new LnrColumnDecision(LnrColumnDecision.Kind.DOUBLE_SHADED,
+                        bestRow, secondBestRow, bestRatio, secondBestRatio, filledCount);
+            }
+            return new LnrColumnDecision(LnrColumnDecision.Kind.DETECTED,
+                    bestRow, secondBestRow, bestRatio, secondBestRatio, filledCount);
+        }
+
+        double margin = bestRatio - secondBestRatio;
+        boolean closeStrongTie = secondBestRatio >= profile.doubleShadeStrongThreshold
+                && margin <= profile.doubleShadeTieMargin;
+        if (closeStrongTie) {
+            return new LnrColumnDecision(LnrColumnDecision.Kind.DOUBLE_SHADED,
+                    bestRow, secondBestRow, bestRatio, secondBestRatio, filledCount);
+        }
+        if (margin < profile.winnerMargin) {
+            return new LnrColumnDecision(LnrColumnDecision.Kind.UNDETECTED,
+                    bestRow, secondBestRow, bestRatio, secondBestRatio, filledCount);
+        }
+
+        return new LnrColumnDecision(LnrColumnDecision.Kind.DETECTED,
+                bestRow, secondBestRow, bestRatio, secondBestRatio, filledCount);
     }
 
     /**
@@ -443,5 +525,57 @@ public class BubbleScanner {
         Point br = new Point(x2, y2);
         // Outer red rectangle, 3px thick for visibility
         Imgproc.rectangle(overlay, tl, br, COLOUR_RED, 3);
+    }
+
+    static final class LnrReadProfile {
+        final String name;
+        final double fillThreshold;
+        final double innerMaskRadiusFactor;
+        final double winnerMargin;
+        final double doubleShadeStrongThreshold;
+        final double doubleShadeTieMargin;
+
+        LnrReadProfile(String name,
+                       double fillThreshold,
+                       double innerMaskRadiusFactor,
+                       double winnerMargin,
+                       double doubleShadeStrongThreshold,
+                       double doubleShadeTieMargin) {
+            this.name = name;
+            this.fillThreshold = fillThreshold;
+            this.innerMaskRadiusFactor = innerMaskRadiusFactor;
+            this.winnerMargin = winnerMargin;
+            this.doubleShadeStrongThreshold = doubleShadeStrongThreshold;
+            this.doubleShadeTieMargin = doubleShadeTieMargin;
+        }
+    }
+
+    static final class LnrColumnDecision {
+        enum Kind {
+            DETECTED,
+            UNDETECTED,
+            DOUBLE_SHADED
+        }
+
+        final Kind kind;
+        final int bestRow;
+        final int secondBestRow;
+        final double bestRatio;
+        final double secondBestRatio;
+        final int filledCount;
+
+        LnrColumnDecision(Kind kind,
+                          int bestRow,
+                          int secondBestRow,
+                          double bestRatio,
+                          double secondBestRatio,
+                          int filledCount) {
+            this.kind = kind;
+            this.bestRow = bestRow;
+            this.secondBestRow = secondBestRow;
+            this.bestRatio = bestRatio;
+            this.secondBestRatio = secondBestRatio;
+            this.filledCount = filledCount;
+        }
     }
 }
