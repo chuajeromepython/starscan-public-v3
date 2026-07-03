@@ -19,6 +19,8 @@ public class ActivityFolder {
     /** Soft-link to the assigned answer key's ID; null if none assigned. */
     private String answerKeyId;
 
+    private String assessmentType; // Assessment type, [diagnostic, summative, ECD]
+
     public ActivityFolder() {
         // Default constructor for deserialization
         this.scans = new ArrayList<>();
@@ -98,6 +100,9 @@ public class ActivityFolder {
     public void setAnswerKeyId(String answerKeyId) {
         this.answerKeyId = answerKeyId;
     }
+
+    public String getAssessmentType() { return assessmentType; }
+    public void setAssessmentType(String assessmentType) { this.assessmentType = assessmentType; }
 
     public void addScan(ScanEntry scan) {
         if (this.scans == null) {

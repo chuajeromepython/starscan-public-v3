@@ -94,6 +94,7 @@ public final class DataMapper {
                 ? act.getExamDateEpoch()
                 : entity.createdAt;
         entity.updatedAt = System.currentTimeMillis();
+        entity.assessmentType = act.getAssessmentType();
         return entity;
     }
 
@@ -109,6 +110,7 @@ public final class DataMapper {
         act.setExamDate(entity.examDate);
         act.setCreatedAt(entity.createdAt);
         act.setExamDateEpoch(entity.examDateEpoch > 0 ? entity.examDateEpoch : entity.createdAt);
+        act.setAssessmentType(entity.assessmentType);
         return act;
     }
 

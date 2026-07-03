@@ -64,7 +64,7 @@
                 android:gravity="center_vertical"
                 android:layout_marginStart="8dp"
                 app:layout_constraintStart_toEndOf="@id/headerLogo"
-                app:layout_constraintEnd_toStartOf="@id/btnUpload"
+                app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toBottomOf="parent">
 
@@ -133,6 +133,21 @@
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toBottomOf="parent" />
+
+            <ImageButton
+                android:id="@+id/btnScanner"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:src="@drawable/ic_qr_scan"
+                android:contentDescription="Open Scanner"
+                android:background="@drawable/bg_icon_circle_white"
+                android:padding="8dp"
+                android:elevation="2dp"
+                app:tint="#FFFFFF"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
+                android:layout_marginEnd="16dp" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
 
@@ -1078,6 +1093,29 @@
         app:layout_constraintBottom_toTopOf="@id/footer"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@+id/fab"
+        android:visibility="visible" />
+
+    <!-- ADD THIS after the fabAnswerKey closing /> -->
+    <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+        android:id="@+id/fabTest"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:layout_marginStart="8dp"
+        android:text="Test"
+        android:textAllCaps="false"
+        android:textColor="#FFFFFF"
+        android:textSize="15sp"
+        android:gravity="center"
+        app:icon="@drawable/ic_plus"
+        app:iconTint="#FFFFFF"
+        app:iconSize="18dp"
+        app:backgroundTint="#7C3AED"
+        app:elevation="8dp"
+        app:cornerRadius="16dp"
+        app:layout_constraintBottom_toTopOf="@id/footer"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@+id/fabAnswerKey"
         android:visibility="visible" />
 
     <TextView

@@ -465,7 +465,7 @@ public class AnchorDetector {
             return null;
         }
 
-        Point[] corners = {topLeft, topRight, bottomLeft, bottomRight};
+        Point[] corners = {topLeft, topRight, bottomLeft, bottomRight}; // point of interest
         if (!cornersAreDistinct(corners)) {
             if (profile.verboseLogging) {
                 Log.e(TAG, "Corner classification produced duplicate points for " + profile.name);

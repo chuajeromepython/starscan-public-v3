@@ -1,15 +1,18 @@
 package com.example.omrscanner.database;
 
 import android.content.Context;
+import android.util.Log;
 
 import com.example.omrscanner.database.entities.AnswerEntity;
 import com.example.omrscanner.database.entities.AnswerKeyEntity;
 import com.example.omrscanner.database.entities.AssessmentEntity;
 import com.example.omrscanner.database.entities.ClassEntity;
 import com.example.omrscanner.database.entities.ScanEntity;
+import com.example.omrscanner.database.entities.StudentLrnEntity;
 import com.example.omrscanner.database.entities.TeacherEntity;
 import com.example.omrscanner.database.projections.AssessmentListRow;
 import com.example.omrscanner.database.projections.ClassListRow;
+import com.example.omrscanner.database.entities.UserEntity;
 
 import java.util.List;
 import java.util.Map;
@@ -226,6 +229,26 @@ public class OMRRepository {
       int count = db.assessmentDao().countAll();
       if (callback != null)
         callback.onResult(count);
+    });
+  }
+
+  // ═════════════════════════════════════════════════════════════════════════
+// USER
+// ═════════════════════════════════════════════════════════════════════════
+
+  public void insertUser(UserEntity user, Callback<Long> callback) {
+    executor.execute(() -> {
+      long id = db.userDao().insert(user);
+      if (callback != null)
+        callback.onResult(id);
+    });
+  }
+
+  public void getAllUsers(Callback<List<UserEntity>> callback) {
+    executor.execute(() -> {
+      List<UserEntity> list = db.userDao().getAll();
+      if (callback != null)
+        callback.onResult(list);
     });
   }
 
@@ -577,6 +600,35 @@ public class OMRRepository {
       AnswerKeyEntity key = db.answerKeyDao().getById(answerKeyId);
       if (key != null) gradeAllScansSync(assessmentId, key);
       if (callback != null) callback.onResult(null);
+    });
+  }
+
+  // ═════════════════════════════════════════════════════════════════════════
+// STUDENT LRN
+// ═════════════════════════════════════════════════════════════════════════
+
+  public void insertStudentLrn(String lrn, String className, Callback<Void> callback) {
+    executor.execute(() -> {
+      try {
+        StudentLrnEntity student = new StudentLrnEntity();
+        student.lrn = lrn;  // just assign directly, no parseInt
+        student.className = className;
+        db.studentLrnDao().insert(student);
+        if (callback != null)
+          callback.onResult(null);
+      } catch (Exception e) {
+        Log.e("StudentLRN", "Failed to insert: " + lrn, e);
+        if (callback != null)
+          callback.onResult(null);
+      }
+    });
+  }
+
+  public void getAllStudentLrns(Callback<List<StudentLrnEntity>> callback) {
+    executor.execute(() -> {
+      List<StudentLrnEntity> list = db.studentLrnDao().getAll();
+      if (callback != null)
+        callback.onResult(list);
     });
   }
 

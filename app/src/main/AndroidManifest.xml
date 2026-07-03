@@ -26,6 +26,9 @@
         <activity android:name=".camera.CameraActivity"/>
         <activity android:name=".DashboardActivity"/>
 
+        <!-- QR Scanner -->
+        <activity android:name=".camera.QrScannerActivity"/>
+
         <!-- Beta expiry gate — launched when APK beta period has ended -->
         <activity
             android:name=".BetaExpiredActivity"

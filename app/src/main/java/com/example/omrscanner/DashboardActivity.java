@@ -17,6 +17,7 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.cardview.widget.CardView;
@@ -25,6 +26,7 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.example.omrscanner.camera.CameraActivity;
+import com.example.omrscanner.camera.QrScannerActivity;
 import com.example.omrscanner.dashboard.ActivityScreenRenderer;
 import com.example.omrscanner.dashboard.ClassExporter;
 import com.example.omrscanner.dashboard.ClassScreenRenderer;
@@ -132,7 +134,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     // VIEWS
     // ═══════════════════════════════════════════════════════════════
 
-    private ImageButton btnBack, btnUpload;
+    private ImageButton btnBack, btnUpload, btnScanner; // btnScanner for qr scan
     private TextView topBarTitle, topBarBadge;
     private TextView tvTeacherName;
     private LinearLayout teacherNameRow;
@@ -161,6 +163,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private ExtendedFloatingActionButton fab;
     private ExtendedFloatingActionButton fabAnswerKey;
 
+    private ExtendedFloatingActionButton fabTest;
+
     private LinearLayout breadcrumbBar;
     private View         breadcrumbDivider;
     private TextView     breadcrumbRoot, breadcrumbSep1, breadcrumbClass,
@@ -179,6 +183,43 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         enableFullScreen();
 
         repo = new OMRRepository(this);
+
+        // --- DB TEST ---
+        // Below handles storing data to users
+        com.example.omrscanner.database.entities.UserEntity user =
+                new com.example.omrscanner.database.entities.UserEntity();
+        user.username   = "jdelacruz";
+        user.userId     = 12345;
+        user.passkey    = "password123";
+        user.serverIp   = "192.168.1.1";
+        user.firstName  = "Juan";
+        user.middleName = "Santos";
+        user.lastName   = "dela Cruz";
+        user.suffix     = "Jr.";
+        user.school     = "Rizal Elementary School";
+
+        // Insert a user into user.db
+        repo.insertUser(user, id -> {
+            Log.d("DB_TEST", "User inserted! ID: " + id);
+            repo.getAllUsers((List<com.example.omrscanner.database.entities.UserEntity> users) -> {
+                Log.d("DB_TEST", "Total users in DB: " + users.size());
+                for (com.example.omrscanner.database.entities.UserEntity u : users) {
+                    Log.d("DB_TEST", "─────────────────────────");
+                    Log.d("DB_TEST", "ID         : " + u.id);
+                    Log.d("DB_TEST", "Username   : " + u.username);
+                    Log.d("DB_TEST", "User ID    : " + u.userId);
+                    Log.d("DB_TEST", "Passkey    : " + u.passkey);
+                    Log.d("DB_TEST", "Server IP  : " + u.serverIp);
+                    Log.d("DB_TEST", "First Name : " + u.firstName);
+                    Log.d("DB_TEST", "Middle Name: " + u.middleName);
+                    Log.d("DB_TEST", "Last Name  : " + u.lastName);
+                    Log.d("DB_TEST", "Suffix     : " + u.suffix);
+                    Log.d("DB_TEST", "School     : " + u.school);
+                    Log.d("DB_TEST", "─────────────────────────");
+                }
+            });
+        });
+// --- END DB TEST ---
 
         // Initialise helpers
         ui              = new DashboardUiHelper(this);
@@ -288,6 +329,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
         fab = findViewById(R.id.fab);
         fabAnswerKey = findViewById(R.id.fabAnswerKey);
+        fabTest = findViewById(R.id.fabTest);
 
         breadcrumbBar      = findViewById(R.id.breadcrumbBar);
         breadcrumbDivider  = findViewById(R.id.breadcrumbDivider);
@@ -297,10 +339,18 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         breadcrumbSep2     = findViewById(R.id.breadcrumbSep2);
         breadcrumbActivity = findViewById(R.id.breadcrumbActivity);
 
+        btnScanner = findViewById(R.id.btnScanner);
+        btnScanner.setOnClickListener(v -> showQrGuide());
+
         btnBack.setOnClickListener(v -> navigateBack());
         btnUpload.setOnClickListener(v -> dialogs.showGlobalUploadClassDialog());
         fab.setOnClickListener(v -> onFabClicked());
-        fabAnswerKey.setOnClickListener(v -> dialogs.showNewAnswerKeyDialog(null));
+        fabAnswerKey.setOnClickListener(v -> showDisclaimerThen(() -> dialogs.showNewAnswerKeyDialog(null)));
+        fabTest.setOnClickListener(v -> {
+            new DataInspector(this).printAll();
+            new DataExporter(this).exportAll();
+        });
+
         teacherNameRow.setOnClickListener(v -> dialogs.showEditTeacherNameDialog());
 
         breadcrumbRoot.setOnClickListener(v -> {
@@ -378,6 +428,219 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         searchDebounceHandler.postDelayed(pendingAssessmentSearchRunnable, 220);
     }
 
+    // Disclaimer Template
+    private void showDisclaimerThen(Runnable onConfirm) {
+        android.app.Dialog dialog = new android.app.Dialog(this);
+        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+        dialog.setCancelable(true);
+
+        android.widget.LinearLayout root = new android.widget.LinearLayout(this);
+        root.setOrientation(android.widget.LinearLayout.VERTICAL);
+        root.setPadding(ui.dp(20), ui.dp(24), ui.dp(20), ui.dp(20));
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(android.graphics.Color.WHITE);
+        bg.setCornerRadius(ui.dp(24));
+        root.setBackground(bg);
+        root.addView(ui.createDialogHandle());
+        root.addView(ui.buildSheetTitle("⚠️ Disclaimer", "#D97706",
+                android.view.Gravity.START, 16));
+
+        android.widget.TextView msg = new android.widget.TextView(this);
+        // Edit to the exact disclaimer verbatum
+        msg.setText("Please ensure all information entered is accurate. Data created here will be used for official assessment records.");
+        msg.setTextColor(android.graphics.Color.parseColor("#475569"));
+        msg.setTextSize(14);
+        msg.setPadding(ui.dp(24), ui.dp(4), ui.dp(24), ui.dp(16));
+        root.addView(msg);
+
+        android.widget.LinearLayout actions = ui.buildActionsRow(ui.dp(20));
+        android.widget.TextView btnCancel = ui.createDialogButton("Cancel", false);
+        android.widget.TextView btnConfirm = ui.createDialogButton("I Understand", true);
+        actions.addView(btnCancel);
+        actions.addView(ui.spacer(ui.dp(10)));
+        actions.addView(btnConfirm);
+        root.addView(actions);
+
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+        btnConfirm.setOnClickListener(v -> {
+            dialog.dismiss();
+            onConfirm.run();
+        });
+
+        dialog.setContentView(root);
+        ui.configureBottomDialog(dialog);
+        dialog.show();
+    }
+
+    // "How to guide" carousel
+    private void showQrGuide() {
+        com.google.android.material.bottomsheet.BottomSheetDialog dialog =
+                new com.google.android.material.bottomsheet.BottomSheetDialog(this);
+        dialog.setCancelable(true);
+        dialog.setCanceledOnTouchOutside(true);
+        //dialog.setCanceledOnTouchOutside(true);
+
+        android.widget.LinearLayout root = ui.buildSheet();
+
+        String[] titles = { "Open Your Camera", "Find a QR Code", "Get the Result" };
+        String[] descs  = {
+                "Point your phone camera at any QR code. Make sure you have good lighting for best results.",
+                "Align the QR code inside the frame. Hold your phone steady and keep the code fully visible.",
+                "Once scanned, the contents of the QR code will appear on screen automatically."
+        };
+
+        // Dots
+        android.widget.LinearLayout dotsRow = new android.widget.LinearLayout(this);
+        dotsRow.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+        dotsRow.setGravity(android.view.Gravity.CENTER);
+        android.widget.LinearLayout.LayoutParams dotsLp =
+                new android.widget.LinearLayout.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+        dotsLp.bottomMargin = ui.dp(16);
+        dotsRow.setLayoutParams(dotsLp);
+
+        android.widget.TextView[] dots = new android.widget.TextView[3];
+        for (int i = 0; i < 3; i++) {
+            android.widget.TextView dot = new android.widget.TextView(this);
+            dot.setText("●");
+            dot.setTextSize(10);
+            dot.setPadding(ui.dp(4), 0, ui.dp(4), 0);
+            dots[i] = dot;
+            dotsRow.addView(dot);
+        }
+
+        // ViewPager
+        androidx.viewpager2.widget.ViewPager2 viewPager =
+                new androidx.viewpager2.widget.ViewPager2(this);
+        android.widget.LinearLayout.LayoutParams vpLp =
+                new android.widget.LinearLayout.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        ui.dp(240));
+        viewPager.setLayoutParams(vpLp);
+
+        // Adapter
+        androidx.recyclerview.widget.RecyclerView.Adapter<androidx.recyclerview.widget.RecyclerView.ViewHolder> adapter =
+                new androidx.recyclerview.widget.RecyclerView.Adapter<androidx.recyclerview.widget.RecyclerView.ViewHolder>() {
+                    @NonNull
+                    @Override
+                    public androidx.recyclerview.widget.RecyclerView.ViewHolder onCreateViewHolder(
+                            @NonNull android.view.ViewGroup parent, int viewType) {
+                        android.widget.LinearLayout slide = new android.widget.LinearLayout(DashboardActivity.this);
+                        slide.setOrientation(android.widget.LinearLayout.VERTICAL);
+                        slide.setGravity(android.view.Gravity.CENTER);
+                        slide.setPadding(ui.dp(16), ui.dp(8), ui.dp(16), ui.dp(8));
+                        slide.setLayoutParams(new android.widget.LinearLayout.LayoutParams(
+                                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                                android.view.ViewGroup.LayoutParams.MATCH_PARENT));
+
+                        android.widget.ImageView icon = new android.widget.ImageView(DashboardActivity.this);
+                        icon.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+                        android.widget.LinearLayout.LayoutParams iconLp =
+                                new android.widget.LinearLayout.LayoutParams(
+                                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                                        ui.dp(64));
+                        iconLp.bottomMargin = ui.dp(12);
+                        icon.setLayoutParams(iconLp);
+                        icon.setColorFilter(android.graphics.Color.parseColor("#0038A8"));
+                        icon.setTag("icon");
+
+                        android.widget.TextView title = new android.widget.TextView(DashboardActivity.this);
+                        title.setTextSize(16);
+                        title.setTypeface(null, android.graphics.Typeface.BOLD);
+                        title.setTextColor(android.graphics.Color.parseColor("#0038A8"));
+                        title.setGravity(android.view.Gravity.CENTER);
+                        android.widget.LinearLayout.LayoutParams titleLp =
+                                new android.widget.LinearLayout.LayoutParams(
+                                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                                        android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+                        titleLp.bottomMargin = ui.dp(8);
+                        title.setLayoutParams(titleLp);
+                        title.setTag("title");
+
+                        android.widget.TextView desc = new android.widget.TextView(DashboardActivity.this);
+                        desc.setTextSize(14);
+                        desc.setTextColor(android.graphics.Color.parseColor("#475569"));
+                        desc.setGravity(android.view.Gravity.CENTER);
+                        desc.setTag("desc");
+
+                        slide.addView(icon);
+                        slide.addView(title);
+                        slide.addView(desc);
+
+                        return new androidx.recyclerview.widget.RecyclerView.ViewHolder(slide) {};
+                    }
+
+                    @Override
+                    public void onBindViewHolder(
+                            @NonNull androidx.recyclerview.widget.RecyclerView.ViewHolder holder,
+                            int position) {
+                        android.widget.LinearLayout slide =
+                                (android.widget.LinearLayout) holder.itemView;
+                        android.widget.ImageView iconView = slide.findViewWithTag("icon");
+                        int[] drawables = {
+                                R.drawable.ic_camera,
+                                R.drawable.ic_focus,
+                                R.drawable.ic_check
+                        };
+                        iconView.setImageResource(drawables[position]);
+                        ((android.widget.TextView) slide.findViewWithTag("title")).setText(titles[position]);
+                        ((android.widget.TextView) slide.findViewWithTag("desc")).setText(descs[position]);
+                    }
+
+                    @Override
+                    public int getItemCount() { return 3; }
+                };
+
+        viewPager.setAdapter(adapter);
+
+        // Dots update on swipe
+        viewPager.registerOnPageChangeCallback(new androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback() {
+            @Override
+            public void onPageSelected(int position) {
+                for (int d = 0; d < 3; d++) {
+                    dots[d].setTextColor(android.graphics.Color.parseColor(
+                            d == position ? "#0038A8" : "#CBD5E1"));
+                }
+            }
+        });
+
+        // Proceed button (only visible on last slide)
+        android.widget.TextView btnProceed = ui.createDialogButton("Proceed", true);
+        android.widget.LinearLayout.LayoutParams btnLp =
+                new android.widget.LinearLayout.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+        btnLp.topMargin = ui.dp(12);
+        btnProceed.setLayoutParams(btnLp);
+        btnProceed.setVisibility(android.view.View.GONE);
+
+        viewPager.registerOnPageChangeCallback(new androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback() {
+            @Override
+            public void onPageSelected(int position) {
+                btnProceed.setVisibility(position == 2
+                        ? android.view.View.VISIBLE : android.view.View.GONE);
+            }
+        });
+
+        btnProceed.setOnClickListener(v -> {
+            dialog.dismiss();
+            startActivity(new android.content.Intent(this,
+                    com.example.omrscanner.camera.QrScannerActivity.class));
+        });
+
+        root.addView(ui.createDialogHandle());
+        root.addView(dotsRow);
+        root.addView(viewPager);
+        root.addView(btnProceed);
+
+        dialog.setContentView(root);
+        dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.show();
+        }
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // NAVIGATION
     // ═══════════════════════════════════════════════════════════════
@@ -401,11 +664,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 }
                 updateSortPickers();
                 if (globalTeacherName != null && !globalTeacherName.isEmpty()) {
+                    // Automatically set name upon scan
                     tvTeacherName.setText(globalTeacherName);
                     tvTeacherName.setTextColor(Color.parseColor("#FFFFFF"));
                     tvTeacherName.setTypeface(null, Typeface.BOLD);
                 } else {
-                    tvTeacherName.setText("Tap to set teacher name");
+                    tvTeacherName.setText("Tap to set teacher name \n(automatic)"); //  put here the teacher data from the system
                     tvTeacherName.setTextColor(Color.parseColor("#BFDBFE"));
                     tvTeacherName.setTypeface(null, Typeface.NORMAL);
                 }
@@ -492,7 +756,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     noNameDialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
                     noNameDialog.setCancelable(true);
                     android.widget.LinearLayout root = ui.buildSheet();
-                    root.addView(ui.createDialogHandle());
+                    //root.addView(ui.createDialogHandle());
                     root.addView(ui.buildSheetTitle("⚠ Teacher Name Required", "#D97706",
                             android.view.Gravity.START, 20));
                     android.widget.TextView msg = new android.widget.TextView(this);
@@ -518,7 +782,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     noNameDialog.show();
                     return;
                 }
-                dialogs.showNewClassDialog();
+                showDisclaimerThen(() -> dialogs.showNewClassDialog());
                 break;
             case SCREEN_CLASS:
                 dialogs.showNewActivityDialog();
@@ -904,6 +1168,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     r.insertAnswersFromMap(newId.intValue(), scanEntry.getAnswers(), null);
             });
         }
+
+// ── Standalone write to student_lrn ──
+        r.insertStudentLrn(scanEntry.getLrn(), classId, null);
     }
 
     // ═══════════════════════════════════════════════════════════════

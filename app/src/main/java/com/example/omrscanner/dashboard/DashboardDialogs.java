@@ -426,6 +426,42 @@ public class DashboardDialogs {
         EditText nameInput = ui.createLightInput("e.g. Math Pop Quiz 1");
         root.addView(nameInput);
 
+        root.addView(ui.createFieldLabel("ASSESSMENT TYPE"));
+        String[] assessmentTypes = {"Diagnostic", "Summative", "ECD"};
+        final String[] selectedAssessmentType = {"Diagnostic"};
+
+        LinearLayout assessmentTypeRow = new LinearLayout(activity);
+        assessmentTypeRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams atLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        atLp.bottomMargin = ui.dp(16);
+        assessmentTypeRow.setLayoutParams(atLp);
+
+        final TextView[] assessmentTypeButtons = new TextView[assessmentTypes.length];
+        for (int i = 0; i < assessmentTypes.length; i++) {
+            final int idx = i;
+            TextView btn = new TextView(activity);
+            btn.setText(assessmentTypes[i]);
+            btn.setTextSize(12);
+            btn.setTypeface(null, Typeface.BOLD);
+            btn.setGravity(Gravity.CENTER);
+            btn.setPadding(ui.dp(10), ui.dp(10), ui.dp(10), ui.dp(10));
+            btn.setClickable(true);
+            btn.setFocusable(true);
+            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            if (i < assessmentTypes.length - 1) blp.rightMargin = ui.dp(8);
+            btn.setLayoutParams(blp);
+            assessmentTypeButtons[i] = btn;
+            btn.setOnClickListener(v -> {
+                selectedAssessmentType[0] = assessmentTypes[idx];
+                updateSheetTypeSelection(assessmentTypeButtons, idx);
+            });
+            assessmentTypeRow.addView(btn);
+        }
+        root.addView(assessmentTypeRow);
+        updateSheetTypeSelection(assessmentTypeButtons, 0);
+
         root.addView(ui.createFieldLabel("EXAM DATE"));
         EditText dateInput = ui.createLightInput("Select date");
         dateInput.setFocusable(false);
@@ -507,6 +543,7 @@ public class DashboardDialogs {
             String examDate = dateInput.getText().toString().trim();
             act.setExamDate(examDate);
             act.setExamDateEpoch(parseExamDateToEpoch(examDate, System.currentTimeMillis()));
+            act.setAssessmentType(selectedAssessmentType[0]);
             AssessmentEntity entity = DataMapper.toAssessmentEntity(act,
                     selectedClass != null ? selectedClass.getId() : "");
             repo.insertAssessment(entity, ignored -> activity.runOnUiThread(() -> {
@@ -534,6 +571,53 @@ public class DashboardDialogs {
         EditText nameInput = ui.createLightInput(act.getName());
         nameInput.setText(act.getName());
         root.addView(nameInput);
+
+        // ── ASSESSMENT TYPE ──────────────────────────────────────────────
+        root.addView(ui.createFieldLabel("ASSESSMENT TYPE"));
+        String[] assessmentTypes = {"Diagnostic", "Summative", "ECD"};
+        final String[] selectedAssessmentType = {
+                act.getAssessmentType() != null ? act.getAssessmentType() : "Diagnostic"
+        };
+
+        LinearLayout assessmentTypeRow = new LinearLayout(activity);
+        assessmentTypeRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams atLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        atLp.bottomMargin = ui.dp(16);
+        assessmentTypeRow.setLayoutParams(atLp);
+
+        final TextView[] assessmentTypeButtons = new TextView[assessmentTypes.length];
+        for (int i = 0; i < assessmentTypes.length; i++) {
+            final int idx = i;
+            TextView btn = new TextView(activity);
+            btn.setText(assessmentTypes[i]);
+            btn.setTextSize(12);
+            btn.setTypeface(null, Typeface.BOLD);
+            btn.setGravity(Gravity.CENTER);
+            btn.setPadding(ui.dp(10), ui.dp(10), ui.dp(10), ui.dp(10));
+            btn.setClickable(true);
+            btn.setFocusable(true);
+            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            if (i < assessmentTypes.length - 1) blp.rightMargin = ui.dp(8);
+            btn.setLayoutParams(blp);
+            assessmentTypeButtons[i] = btn;
+            btn.setOnClickListener(v -> {
+                selectedAssessmentType[0] = assessmentTypes[idx];
+                updateSheetTypeSelection(assessmentTypeButtons, idx);
+            });
+            assessmentTypeRow.addView(btn);
+        }
+        root.addView(assessmentTypeRow);
+
+        // Pre-select the existing type
+        for (int i = 0; i < assessmentTypes.length; i++) {
+            if (assessmentTypes[i].equals(selectedAssessmentType[0])) {
+                updateSheetTypeSelection(assessmentTypeButtons, i);
+                break;
+            }
+        }
+        // ────────────────────────────────────────────────────────────────
 
         root.addView(ui.createFieldLabel("EXAM DATE"));
         EditText dateInput = ui.createLightInput("Select date");
@@ -598,6 +682,7 @@ public class DashboardDialogs {
                 }
             }
             act.setName(name);
+            act.setAssessmentType(selectedAssessmentType[0]); // ← saves the type
             String examDate = dateInput.getText().toString().trim();
             act.setExamDate(examDate);
             act.setExamDateEpoch(parseExamDateToEpoch(examDate, act.getCreatedAt()));

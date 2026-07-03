@@ -32,9 +32,11 @@ public class MainActivity extends AppCompatActivity {
 
         // Wait for 1.5 s (splash display), then check beta expiry before navigating.
         new android.os.Handler().postDelayed(() -> {
-            Class<?> destination = BetaExpiryChecker.isExpired()
-                    ? BetaExpiredActivity.class   // Beta over — show gate screen
-                    : DashboardActivity.class;    // Still active — proceed normally
+            // Temporarily disable beta gate for testing, uncomment to revert back
+            // Class<?> destination = BetaExpiryChecker.isExpired()
+            //       ? BetaExpiredActivity.class   // Beta over — show gate screen
+            //      : DashboardActivity.class;    // Still active — proceed normally
+            Class<?> destination = DashboardActivity.class;
             startActivity(new Intent(MainActivity.this, destination));
             finish(); // Remove splash from back-stack
         }, 1500);
