@@ -320,7 +320,24 @@ public class ResultActivity extends AppCompatActivity {
                 }
 
                 BubbleScanner scanner = new BubbleScanner();
-                scanResult = scanner.scan(alignedBitmap, template, tm);
+                String[] correctAnswers = null;
+                if (activityId != null) {
+                    com.example.omrscanner.database.OMRRepository repo =
+                            new com.example.omrscanner.database.OMRRepository(ResultActivity.this);
+                    com.example.omrscanner.database.entities.AssessmentEntity assessment =
+                            repo.getAssessmentByIdSync(activityId);
+                    if (assessment != null && assessment.answerKeyId != null) {
+                        com.example.omrscanner.database.entities.AnswerKeyEntity key =
+                                repo.getAnswerKeyByIdSync(assessment.answerKeyId);
+                        if (key != null && key.answers != null && !key.answers.isEmpty()) {
+                            correctAnswers = key.answers.split(",");
+                        }
+                    }
+                }
+                android.util.Log.d("SCORE_DEBUG", "activityId=" + activityId
+                        + " correctAnswers=" + (correctAnswers == null ? "NULL" : java.util.Arrays.toString(correctAnswers)));
+                scanResult = scanner.scan(alignedBitmap, template, tm, correctAnswers);
+                scanResult = scanner.scan(alignedBitmap, template, tm, correctAnswers);
 
                 // Update UI
                 runOnUiThread(() -> {

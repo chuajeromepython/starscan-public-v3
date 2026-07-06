@@ -36,4 +36,7 @@ public class UserEntity {
 
     @ColumnInfo(name = "school")
     public String school;
+
+    @ColumnInfo(name = "is_active")
+    public int isActive = 1;
 }

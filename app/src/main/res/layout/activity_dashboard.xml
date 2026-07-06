@@ -181,7 +181,7 @@
         app:strokeColor="#33FFFFFF"
         app:strokeWidth="1dp"
         app:layout_constraintTop_toBottomOf="@id/headerCard"
-        app:layout_constraintBottom_toTopOf="@id/fab"
+        app:layout_constraintBottom_toTopOf="@id/fabMain"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
@@ -1049,74 +1049,112 @@
             </FrameLayout>
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
-    <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
-        android:id="@+id/fab"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="16dp"
-        android:layout_marginEnd="8dp"
-        android:text="Class"
-        android:textAllCaps="false"
-        android:textColor="#FFFFFF"
-        android:textSize="15sp"
-        android:gravity="center"
-        app:icon="@drawable/ic_plus"
-        app:iconTint="#FFFFFF"
-        app:iconSize="18dp"
-        app:backgroundTint="#F43F5E"
-        app:elevation="8dp"
-        app:cornerRadius="16dp"
-        app:layout_constraintBottom_toTopOf="@id/footer"
-        app:layout_constraintEnd_toStartOf="@+id/fabAnswerKey"
-        app:layout_constraintHorizontal_chainStyle="packed"
+    <!-- Scrim behind the expanded menu -->
+    <!-- Scrim behind the expanded menu -->
+    <View
+        android:id="@+id/fabScrim"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="#66000000"
+        android:visibility="gone"
+        android:elevation="11dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_goneMarginEnd="0dp"
-        android:visibility="visible" />
+        app:layout_constraintEnd_toEndOf="parent" />
 
-    <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
-        android:id="@+id/fabAnswerKey"
+    <LinearLayout
+        android:id="@+id/fabMenu"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="end"
+        android:visibility="gone"
+        android:layout_marginEnd="16dp"
+        android:elevation="12dp"
+        app:layout_constraintBottom_toTopOf="@id/fabMain"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <LinearLayout
+            android:id="@+id/fabTestRow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="14dp">
+            <TextView
+                android:id="@+id/fabTestLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Test"
+                android:textColor="#FFFFFF"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:background="@drawable/bg_fab_label"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/fabAnswerKeyRow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="14dp">
+            <TextView
+                android:id="@+id/fabAnswerKeyLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="New answer key"
+                android:textColor="#FFFFFF"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:background="@drawable/bg_fab_label"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/fabClassRow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="14dp">
+            <TextView
+                android:id="@+id/fabClassLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="New class"
+                android:textColor="#FFFFFF"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:background="@drawable/bg_fab_label"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabMain"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginBottom="16dp"
-        android:layout_marginStart="8dp"
-        android:text="Answer Key"
-        android:textAllCaps="false"
-        android:textColor="#FFFFFF"
-        android:textSize="15sp"
-        android:gravity="center"
-        app:icon="@drawable/ic_plus"
-        app:iconTint="#FFFFFF"
-        app:iconSize="18dp"
-        app:backgroundTint="#059669"
+        android:layout_marginEnd="16dp"
+        app:srcCompat="@drawable/ic_plus"
+        app:tint="#FFFFFF"
+        app:backgroundTint="#1E293B"
         app:elevation="8dp"
-        app:cornerRadius="16dp"
         app:layout_constraintBottom_toTopOf="@id/footer"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toEndOf="@+id/fab"
-        android:visibility="visible" />
-
-    <!-- ADD THIS after the fabAnswerKey closing /> -->
-    <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
-        android:id="@+id/fabTest"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="16dp"
-        android:layout_marginStart="8dp"
-        android:text="Test"
-        android:textAllCaps="false"
-        android:textColor="#FFFFFF"
-        android:textSize="15sp"
-        android:gravity="center"
-        app:icon="@drawable/ic_plus"
-        app:iconTint="#FFFFFF"
-        app:iconSize="18dp"
-        app:backgroundTint="#7C3AED"
-        app:elevation="8dp"
-        app:cornerRadius="16dp"
-        app:layout_constraintBottom_toTopOf="@id/footer"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toEndOf="@+id/fabAnswerKey"
-        android:visibility="visible" />
+        app:layout_constraintEnd_toEndOf="parent" />
 
     <TextView
         android:id="@+id/footer"

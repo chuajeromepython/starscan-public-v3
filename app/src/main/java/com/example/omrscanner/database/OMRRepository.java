@@ -244,6 +244,14 @@ public class OMRRepository {
     });
   }
 
+  public void insertUserAsActive(UserEntity user, Callback<Long> callback) {
+    executor.execute(() -> {
+      long id = db.userDao().insertAsOnlyActive(user);
+      if (callback != null)
+        callback.onResult(id);
+    });
+  }
+
   public void getAllUsers(Callback<List<UserEntity>> callback) {
     executor.execute(() -> {
       List<UserEntity> list = db.userDao().getAll();

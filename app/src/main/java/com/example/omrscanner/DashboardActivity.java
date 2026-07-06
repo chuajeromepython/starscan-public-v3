@@ -76,18 +76,18 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private static final String PREF_FIXED_MOUNT_MODE = "fixed_mount_mode";
 
     // ── Intent extras used by CameraActivity / PreviewActivity ──
-    public static final String EXTRA_SHEET_TYPE    = "sheet_type";
-    public static final String EXTRA_CLASS_ID      = "class_id";
-    public static final String EXTRA_ACTIVITY_ID   = "activity_id";
+    public static final String EXTRA_SHEET_TYPE = "sheet_type";
+    public static final String EXTRA_CLASS_ID = "class_id";
+    public static final String EXTRA_ACTIVITY_ID = "activity_id";
     public static final String EXTRA_ANSWER_KEY_ID = "answer_key_id";
 
     // ── Screen names ──
-    private static final String SCREEN_HOME     = "home";
-    private static final String SCREEN_CLASS    = "class";
+    private static final String SCREEN_HOME = "home";
+    private static final String SCREEN_CLASS = "class";
     private static final String SCREEN_ACTIVITY = "activity";
 
     // ── Sort constants (delegated to renderers, kept here for initialisation) ──
-    private static final String CLASS_SORT_NEWEST      = HomeScreenRenderer.CLASS_SORT_NEWEST;
+    private static final String CLASS_SORT_NEWEST = HomeScreenRenderer.CLASS_SORT_NEWEST;
     private static final String ASSESSMENT_SORT_NEWEST = ClassScreenRenderer.ASSESSMENT_SORT_NEWEST;
 
     // ═══════════════════════════════════════════════════════════════
@@ -99,23 +99,25 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
     private String currentScreen = SCREEN_HOME;
     private List<ClassFolder> classFolders = new ArrayList<>();
-    private ClassFolder  selectedClass    = null;
+    private ClassFolder selectedClass = null;
     private ActivityFolder selectedActivity = null;
-    private String selectedSheetType      = null;
-    private String selectedSheetFilter    = null;
-    private String globalTeacherName      = "";
-    /** Cached list of all answer keys — refreshed on load and after CRUD operations. */
+    private String selectedSheetType = null;
+    private String selectedSheetFilter = null;
+    private String globalTeacherName = "";
+    /**
+     * Cached list of all answer keys — refreshed on load and after CRUD operations.
+     */
     private List<AnswerKeyEntity> answerKeys = new ArrayList<>();
 
-    private String classSearchQuery       = "";
-    private String selectedClassGradeFilter      = null;
+    private String classSearchQuery = "";
+    private String selectedClassGradeFilter = null;
     private String selectedClassSchoolYearFilter = null;
-    private String selectedClassSort      = CLASS_SORT_NEWEST;
+    private String selectedClassSort = CLASS_SORT_NEWEST;
 
-    private String assessmentSearchQuery  = "";
+    private String assessmentSearchQuery = "";
     private String selectedAssessmentSort = ASSESSMENT_SORT_NEWEST;
 
-    private int homeQueryGeneration       = 0;
+    private int homeQueryGeneration = 0;
     private int assessmentQueryGeneration = 0;
 
     private final Handler searchDebounceHandler = new Handler(Looper.getMainLooper());
@@ -139,36 +141,38 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private TextView tvTeacherName;
     private LinearLayout teacherNameRow;
 
-    private View       screenHome;
+    private View screenHome;
     private ScrollView screenClass, screenActivity;
 
     private LinearLayout homeEmpty, homeClassList;
-    private EditText     homeClassSearchInput;
-    private TextView     homeClassSortPicker;
+    private EditText homeClassSearchInput;
+    private TextView homeClassSortPicker;
     private LinearLayout homeGradeFilterChips, homeSchoolYearFilterChips;
     private LinearLayout homeFilterPanel;
     private android.widget.ImageView homeFilterToggle;
     private boolean homeFilterPanelVisible = false;
 
-    private TextView  classTeacherLabel, classNameLabel, classActivityCount;
+    private TextView classTeacherLabel, classNameLabel, classActivityCount;
     private LinearLayout classEmpty, classActivityList, classSheetTabs;
-    private TextView  classAssessmentCount;
-    private EditText  classAssessmentSearchInput;
-    private TextView  classAssessmentSortPicker;
+    private TextView classAssessmentCount;
+    private EditText classAssessmentSearchInput;
+    private TextView classAssessmentSortPicker;
 
-    private CardView  scanCtaCard;
+    private CardView scanCtaCard;
     private LinearLayout scansHeader, activityScanList, activityScansEmpty;
-    private TextView  scansTotalCount, scanCtaSub;
+    private TextView scansTotalCount, scanCtaSub;
 
-    private ExtendedFloatingActionButton fab;
-    private ExtendedFloatingActionButton fabAnswerKey;
-
-    private ExtendedFloatingActionButton fabTest;
+    private com.google.android.material.floatingactionbutton.FloatingActionButton fabMain;
+    private View fabScrim;
+    private LinearLayout fabMenu;
+    private LinearLayout fabClassRow, fabAnswerKeyRow, fabTestRow;
+    private TextView fabClassLabel;
+    private boolean fabMenuOpen = false;
 
     private LinearLayout breadcrumbBar;
-    private View         breadcrumbDivider;
-    private TextView     breadcrumbRoot, breadcrumbSep1, breadcrumbClass,
-                         breadcrumbSep2, breadcrumbActivity;
+    private View breadcrumbDivider;
+    private TextView breadcrumbRoot, breadcrumbSep1, breadcrumbClass,
+            breadcrumbSep2, breadcrumbActivity;
 
 
     // ═══════════════════════════════════════════════════════════════
@@ -184,19 +188,20 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
         repo = new OMRRepository(this);
 
+        /*
         // --- DB TEST ---
         // Below handles storing data to users
         com.example.omrscanner.database.entities.UserEntity user =
                 new com.example.omrscanner.database.entities.UserEntity();
-        user.username   = "jdelacruz";
-        user.userId     = 12345;
-        user.passkey    = "password123";
-        user.serverIp   = "192.168.1.1";
-        user.firstName  = "Juan";
+        user.username = "jdelacruz";
+        user.userId = 12345;
+        user.passkey = "password123";
+        user.serverIp = "192.168.1.1";
+        user.firstName = "Juan";
         user.middleName = "Santos";
-        user.lastName   = "dela Cruz";
-        user.suffix     = "Jr.";
-        user.school     = "Rizal Elementary School";
+        user.lastName = "dela Cruz";
+        user.suffix = "Jr.";
+        user.school = "Rizal Elementary School";
 
         // Insert a user into user.db
         repo.insertUser(user, id -> {
@@ -219,15 +224,17 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 }
             });
         });
-// --- END DB TEST ---
+        // --- END DB TEST ---
+        */
+
 
         // Initialise helpers
-        ui              = new DashboardUiHelper(this);
-        homeRenderer    = new HomeScreenRenderer(this, ui);
-        classRenderer   = new ClassScreenRenderer(this, ui);
+        ui = new DashboardUiHelper(this);
+        homeRenderer = new HomeScreenRenderer(this, ui);
+        classRenderer = new ClassScreenRenderer(this, ui);
         activityRenderer = new ActivityScreenRenderer(this, ui);
-        dialogs         = new DashboardDialogs(this, ui, repo, this);
-        exporter        = new ClassExporter(this, ui);
+        dialogs = new DashboardDialogs(this, ui, repo, this);
+        exporter = new ClassExporter(this, ui);
 
         initViews();
         initBackHandler();
@@ -290,53 +297,57 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     // ═══════════════════════════════════════════════════════════════
 
     private void initViews() {
-        btnBack    = findViewById(R.id.btnBack);
-        btnUpload  = findViewById(R.id.btnUpload);
+        btnBack = findViewById(R.id.btnBack);
+        btnUpload = findViewById(R.id.btnUpload);
         topBarTitle = findViewById(R.id.topBarTitle);
         topBarBadge = findViewById(R.id.topBarBadge);
-        tvTeacherName  = findViewById(R.id.tvTeacherName);
+        tvTeacherName = findViewById(R.id.tvTeacherName);
         teacherNameRow = findViewById(R.id.teacherNameRow);
 
-        screenHome     = findViewById(R.id.screenHome);
-        screenClass    = findViewById(R.id.screenClass);
+        screenHome = findViewById(R.id.screenHome);
+        screenClass = findViewById(R.id.screenClass);
         screenActivity = findViewById(R.id.screenActivity);
 
-        homeEmpty            = findViewById(R.id.homeEmpty);
-        homeClassList        = findViewById(R.id.homeClassList);
+        homeEmpty = findViewById(R.id.homeEmpty);
+        homeClassList = findViewById(R.id.homeClassList);
         homeClassSearchInput = findViewById(R.id.homeClassSearchInput);
-        homeClassSortPicker  = findViewById(R.id.homeClassSortPicker);
-        homeGradeFilterChips      = findViewById(R.id.homeGradeFilterChips);
+        homeClassSortPicker = findViewById(R.id.homeClassSortPicker);
+        homeGradeFilterChips = findViewById(R.id.homeGradeFilterChips);
         homeSchoolYearFilterChips = findViewById(R.id.homeSchoolYearFilterChips);
-        homeFilterPanel  = findViewById(R.id.homeFilterPanel);
+        homeFilterPanel = findViewById(R.id.homeFilterPanel);
         homeFilterToggle = findViewById(R.id.homeFilterToggle);
 
-        classTeacherLabel        = findViewById(R.id.classTeacherLabel);
-        classNameLabel           = findViewById(R.id.classNameLabel);
-        classActivityCount       = findViewById(R.id.classActivityCount);
-        classEmpty               = findViewById(R.id.classEmpty);
-        classActivityList        = findViewById(R.id.classActivityList);
-        classSheetTabs           = findViewById(R.id.classSheetTabs);
-        classAssessmentCount     = findViewById(R.id.classAssessmentCount);
+        classTeacherLabel = findViewById(R.id.classTeacherLabel);
+        classNameLabel = findViewById(R.id.classNameLabel);
+        classActivityCount = findViewById(R.id.classActivityCount);
+        classEmpty = findViewById(R.id.classEmpty);
+        classActivityList = findViewById(R.id.classActivityList);
+        classSheetTabs = findViewById(R.id.classSheetTabs);
+        classAssessmentCount = findViewById(R.id.classAssessmentCount);
         classAssessmentSearchInput = findViewById(R.id.classAssessmentSearchInput);
-        classAssessmentSortPicker  = findViewById(R.id.classAssessmentSortPicker);
+        classAssessmentSortPicker = findViewById(R.id.classAssessmentSortPicker);
 
-        scanCtaCard        = findViewById(R.id.scanCtaCard);
-        scanCtaSub         = findViewById(R.id.scanCtaSub);
-        scansHeader        = findViewById(R.id.scansHeader);
-        scansTotalCount    = findViewById(R.id.scansTotalCount);
-        activityScanList   = findViewById(R.id.activityScanList);
+        scanCtaCard = findViewById(R.id.scanCtaCard);
+        scanCtaSub = findViewById(R.id.scanCtaSub);
+        scansHeader = findViewById(R.id.scansHeader);
+        scansTotalCount = findViewById(R.id.scansTotalCount);
+        activityScanList = findViewById(R.id.activityScanList);
         activityScansEmpty = findViewById(R.id.activityScansEmpty);
 
-        fab = findViewById(R.id.fab);
-        fabAnswerKey = findViewById(R.id.fabAnswerKey);
-        fabTest = findViewById(R.id.fabTest);
+        fabMain = findViewById(R.id.fabMain);
+        fabScrim = findViewById(R.id.fabScrim);
+        fabMenu = findViewById(R.id.fabMenu);
+        fabClassRow = findViewById(R.id.fabClassRow);
+        fabAnswerKeyRow = findViewById(R.id.fabAnswerKeyRow);
+        fabTestRow = findViewById(R.id.fabTestRow);
+        fabClassLabel = findViewById(R.id.fabClassLabel);
 
-        breadcrumbBar      = findViewById(R.id.breadcrumbBar);
-        breadcrumbDivider  = findViewById(R.id.breadcrumbDivider);
-        breadcrumbRoot     = findViewById(R.id.breadcrumbRoot);
-        breadcrumbSep1     = findViewById(R.id.breadcrumbSep1);
-        breadcrumbClass    = findViewById(R.id.breadcrumbClass);
-        breadcrumbSep2     = findViewById(R.id.breadcrumbSep2);
+        breadcrumbBar = findViewById(R.id.breadcrumbBar);
+        breadcrumbDivider = findViewById(R.id.breadcrumbDivider);
+        breadcrumbRoot = findViewById(R.id.breadcrumbRoot);
+        breadcrumbSep1 = findViewById(R.id.breadcrumbSep1);
+        breadcrumbClass = findViewById(R.id.breadcrumbClass);
+        breadcrumbSep2 = findViewById(R.id.breadcrumbSep2);
         breadcrumbActivity = findViewById(R.id.breadcrumbActivity);
 
         btnScanner = findViewById(R.id.btnScanner);
@@ -344,9 +355,21 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
         btnBack.setOnClickListener(v -> navigateBack());
         btnUpload.setOnClickListener(v -> dialogs.showGlobalUploadClassDialog());
-        fab.setOnClickListener(v -> onFabClicked());
-        fabAnswerKey.setOnClickListener(v -> showDisclaimerThen(() -> dialogs.showNewAnswerKeyDialog(null)));
-        fabTest.setOnClickListener(v -> {
+        fabMain.setOnClickListener(v -> toggleFabMenu());
+        fabScrim.setOnClickListener(v -> closeFabMenu());
+
+        fabClassRow.setOnClickListener(v -> {
+            closeFabMenu();
+            onFabClicked();
+        });
+
+        fabAnswerKeyRow.setOnClickListener(v -> {
+            closeFabMenu();
+            showDisclaimerThen(() -> dialogs.showNewAnswerKeyDialog(null));
+        });
+
+        fabTestRow.setOnClickListener(v -> {
+            closeFabMenu();
             new DataInspector(this).printAll();
             new DataExporter(this).exportAll();
         });
@@ -354,7 +377,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         teacherNameRow.setOnClickListener(v -> dialogs.showEditTeacherNameDialog());
 
         breadcrumbRoot.setOnClickListener(v -> {
-            selectedClass    = null;
+            selectedClass = null;
             selectedActivity = null;
             showScreen(SCREEN_HOME);
         });
@@ -371,17 +394,31 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         });
 
         homeClassSearchInput.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
-            @Override public void onTextChanged(CharSequence s, int st, int b, int c) {}
-            @Override public void afterTextChanged(Editable s) {
+            @Override
+            public void beforeTextChanged(CharSequence s, int st, int c, int a) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int st, int b, int c) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
                 classSearchQuery = s != null ? s.toString().trim() : "";
                 scheduleHomeSearchRefresh();
             }
         });
         classAssessmentSearchInput.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
-            @Override public void onTextChanged(CharSequence s, int st, int b, int c) {}
-            @Override public void afterTextChanged(Editable s) {
+            @Override
+            public void beforeTextChanged(CharSequence s, int st, int c, int a) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int st, int b, int c) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
                 assessmentSearchQuery = s != null ? s.toString().trim() : "";
                 scheduleAssessmentSearchRefresh();
             }
@@ -408,6 +445,49 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             homeRenderer.updateFilterToggleAppearance(homeFilterToggle, homeFilterPanelVisible,
                     selectedClassGradeFilter, selectedClassSchoolYearFilter, selectedClassSort);
         });
+    }
+
+    private void toggleFabMenu() {
+        if (fabMenuOpen) closeFabMenu();
+        else openFabMenu();
+    }
+
+    private void openFabMenu() {
+        fabMenuOpen = true;
+        updateFabMenuRowsForScreen();
+        fabScrim.setVisibility(View.VISIBLE);
+        fabMenu.setVisibility(View.VISIBLE);
+        fabMain.animate().rotation(45f).setDuration(150).start();
+    }
+
+    private void closeFabMenu() {
+        fabMenuOpen = false;
+        fabScrim.setVisibility(View.GONE);
+        fabMenu.setVisibility(View.GONE);
+        fabMain.animate().rotation(0f).setDuration(150).start();
+    }
+
+    /** Show only the rows relevant to the current screen, and relabel "Class" → "Assessment". */
+    private void updateFabMenuRowsForScreen() {
+        switch (currentScreen) {
+            case SCREEN_HOME:
+                fabClassLabel.setText("New class");
+                fabClassRow.setVisibility(View.VISIBLE);
+                fabAnswerKeyRow.setVisibility(View.VISIBLE);
+                fabTestRow.setVisibility(View.VISIBLE);
+                break;
+            case SCREEN_CLASS:
+                fabClassLabel.setText("New assessment");
+                fabClassRow.setVisibility(View.VISIBLE);
+                fabAnswerKeyRow.setVisibility(View.GONE);
+                fabTestRow.setVisibility(View.VISIBLE);
+                break;
+            case SCREEN_ACTIVITY:
+                fabClassRow.setVisibility(View.GONE);
+                fabAnswerKeyRow.setVisibility(View.GONE);
+                fabTestRow.setVisibility(View.VISIBLE);
+                break;
+        }
     }
 
     private void scheduleHomeSearchRefresh() {
@@ -482,8 +562,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
         android.widget.LinearLayout root = ui.buildSheet();
 
-        String[] titles = { "Open Your Camera", "Find a QR Code", "Get the Result" };
-        String[] descs  = {
+        String[] titles = {"Open Your Camera", "Find a QR Code", "Get the Result"};
+        String[] descs = {
                 "Point your phone camera at any QR code. Make sure you have good lighting for best results.",
                 "Align the QR code inside the frame. Hold your phone steady and keep the code fully visible.",
                 "Once scanned, the contents of the QR code will appear on screen automatically."
@@ -568,7 +648,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                         slide.addView(title);
                         slide.addView(desc);
 
-                        return new androidx.recyclerview.widget.RecyclerView.ViewHolder(slide) {};
+                        return new androidx.recyclerview.widget.RecyclerView.ViewHolder(slide) {
+                        };
                     }
 
                     @Override
@@ -589,7 +670,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     }
 
                     @Override
-                    public int getItemCount() { return 3; }
+                    public int getItemCount() {
+                        return 3;
+                    }
                 };
 
         viewPager.setAdapter(adapter);
@@ -646,6 +729,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     // ═══════════════════════════════════════════════════════════════
 
     private void showScreen(String screen) {
+        closeFabMenu();
         currentScreen = screen;
 
         screenHome.setVisibility(View.GONE);
@@ -673,16 +757,16 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     tvTeacherName.setTextColor(Color.parseColor("#BFDBFE"));
                     tvTeacherName.setTypeface(null, Typeface.NORMAL);
                 }
-                fab.setText("Class");
-                fab.setVisibility(View.VISIBLE);
-                fabAnswerKey.setVisibility(View.VISIBLE);
                 breadcrumbBar.setVisibility(View.GONE);
                 breadcrumbDivider.setVisibility(View.GONE);
                 renderHomeScreen();
                 break;
 
             case SCREEN_CLASS:
-                if (selectedClass == null) { showScreen(SCREEN_HOME); return; }
+                if (selectedClass == null) {
+                    showScreen(SCREEN_HOME);
+                    return;
+                }
                 screenClass.setVisibility(View.VISIBLE);
                 btnBack.setVisibility(View.VISIBLE);
                 topBarTitle.setText(selectedClass.getDisplayName());
@@ -693,9 +777,6 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     classAssessmentSearchInput.setSelection(classAssessmentSearchInput.getText().length());
                 }
                 updateSortPickers();
-                fab.setText("Assessment");
-                fab.setVisibility(View.VISIBLE);
-                fabAnswerKey.setVisibility(View.GONE);
                 breadcrumbBar.setVisibility(View.VISIBLE);
                 breadcrumbDivider.setVisibility(View.VISIBLE);
                 breadcrumbSep1.setVisibility(View.VISIBLE);
@@ -708,14 +789,15 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 break;
 
             case SCREEN_ACTIVITY:
-                if (selectedClass == null || selectedActivity == null) { showScreen(SCREEN_HOME); return; }
+                if (selectedClass == null || selectedActivity == null) {
+                    showScreen(SCREEN_HOME);
+                    return;
+                }
                 screenActivity.setVisibility(View.VISIBLE);
                 btnBack.setVisibility(View.VISIBLE);
                 topBarTitle.setText(selectedActivity.getName());
                 topBarBadge.setVisibility(View.VISIBLE);
                 topBarBadge.setText(selectedActivity.getSheetType());
-                fab.setVisibility(View.GONE);
-                fabAnswerKey.setVisibility(View.GONE);
                 breadcrumbBar.setVisibility(View.VISIBLE);
                 breadcrumbDivider.setVisibility(View.VISIBLE);
                 breadcrumbSep1.setVisibility(View.VISIBLE);
@@ -767,7 +849,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     root.addView(msg);
                     android.widget.LinearLayout actions = ui.buildActionsRow(ui.dp(20));
                     android.widget.TextView btnCancel = ui.createDialogButton("Cancel", false);
-                    android.widget.TextView btnSet    = ui.createDialogButton("Set Now", true);
+                    android.widget.TextView btnSet = ui.createDialogButton("Set Now", true);
                     actions.addView(btnCancel);
                     actions.addView(ui.spacer(ui.dp(10)));
                     actions.addView(btnSet);
@@ -797,9 +879,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private void renderHomeScreen() {
         homeClassList.removeAllViews();
 
-        TextView statClasses    = findViewById(R.id.statClasses);
+        TextView statClasses = findViewById(R.id.statClasses);
         TextView statActivities = findViewById(R.id.statActivities);
-        TextView statScans      = findViewById(R.id.statScans);
+        TextView statScans = findViewById(R.id.statScans);
         TextView homeClassCount = findViewById(R.id.homeClassCount);
 
         int totalActivities = 0, totalScans = 0;
@@ -810,9 +892,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     totalScans += act.getScanCount();
             }
         }
-        if (statClasses    != null) statClasses.setText(String.valueOf(classFolders.size()));
+        if (statClasses != null) statClasses.setText(String.valueOf(classFolders.size()));
         if (statActivities != null) statActivities.setText(String.valueOf(totalActivities));
-        if (statScans      != null) statScans.setText(String.valueOf(totalScans));
+        if (statScans != null) statScans.setText(String.valueOf(totalScans));
 
         homeRenderer.updateFilterToggleAppearance(homeFilterToggle, homeFilterPanelVisible,
                 selectedClassGradeFilter, selectedClassSchoolYearFilter, selectedClassSort);
@@ -820,17 +902,24 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         final int requestId = ++homeQueryGeneration;
         repo.queryClassList(classSearchQuery, selectedClassGradeFilter,
                 selectedClassSchoolYearFilter, selectedClassSort, rows -> runOnUiThread(() -> {
-                    if (requestId != homeQueryGeneration || !SCREEN_HOME.equals(currentScreen)) return;
+                    if (requestId != homeQueryGeneration || !SCREEN_HOME.equals(currentScreen))
+                        return;
 
                     List<String> grades = homeRenderer.getDistinctGrades(classFolders);
-                    List<String> years  = homeRenderer.getDistinctSchoolYears(classFolders);
+                    List<String> years = homeRenderer.getDistinctSchoolYears(classFolders);
 
                     boolean stale = homeRenderer.buildHomeFilterChips(
                             homeGradeFilterChips, homeSchoolYearFilterChips,
                             grades, years,
                             selectedClassGradeFilter, selectedClassSchoolYearFilter,
-                            v -> { selectedClassGradeFilter = v; if (SCREEN_HOME.equals(currentScreen)) renderHomeScreen(); },
-                            v -> { selectedClassSchoolYearFilter = v; if (SCREEN_HOME.equals(currentScreen)) renderHomeScreen(); },
+                            v -> {
+                                selectedClassGradeFilter = v;
+                                if (SCREEN_HOME.equals(currentScreen)) renderHomeScreen();
+                            },
+                            v -> {
+                                selectedClassSchoolYearFilter = v;
+                                if (SCREEN_HOME.equals(currentScreen)) renderHomeScreen();
+                            },
                             () -> SCREEN_HOME.equals(currentScreen));
                     if (stale) return;
 
@@ -847,9 +936,18 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     for (ClassListRow row : rows) {
                         homeClassList.addView(homeRenderer.createClassCard(
                                 row, globalTeacherName,
-                                () -> { ClassFolder c = findClassById(row.id); if (c != null) dialogs.showEditClassDialog(c); },
-                                () -> { ClassFolder c = findClassById(row.id); if (c != null) exporter.downloadClassData(c); },
-                                () -> { ClassFolder c = findClassById(row.id); if (c != null) dialogs.showDeleteClassConfirmation(c); },
+                                () -> {
+                                    ClassFolder c = findClassById(row.id);
+                                    if (c != null) dialogs.showEditClassDialog(c);
+                                },
+                                () -> {
+                                    ClassFolder c = findClassById(row.id);
+                                    if (c != null) exporter.downloadClassData(c);
+                                },
+                                () -> {
+                                    ClassFolder c = findClassById(row.id);
+                                    if (c != null) dialogs.showDeleteClassConfirmation(c);
+                                },
                                 () -> {
                                     selectedClass = findClassById(row.id);
                                     if (selectedClass == null) {
@@ -857,8 +955,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                                 "The selected class could not be loaded. Please try again.");
                                         return;
                                     }
-                                    selectedSheetFilter    = null;
-                                    assessmentSearchQuery  = "";
+                                    selectedSheetFilter = null;
+                                    assessmentSearchQuery = "";
                                     selectedAssessmentSort = ASSESSMENT_SORT_NEWEST;
                                     showScreen(SCREEN_CLASS);
                                 }));
@@ -876,7 +974,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 && !selectedClass.getTeacher().trim().isEmpty())
                 ? selectedClass.getTeacher()
                 : (globalTeacherName != null && !globalTeacherName.isEmpty()
-                        ? globalTeacherName : "Unknown Teacher");
+                ? globalTeacherName : "Unknown Teacher");
 
         classTeacherLabel.setText("Teacher: " + displayTeacher);
         classNameLabel.setText(selectedClass.getDisplayName());
@@ -892,10 +990,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         final int requestId = ++assessmentQueryGeneration;
         repo.queryAssessmentList(selectedClass.getId(), selectedSheetFilter,
                 assessmentSearchQuery, selectedAssessmentSort, rows -> runOnUiThread(() -> {
-                    if (requestId != assessmentQueryGeneration || !SCREEN_CLASS.equals(currentScreen)) return;
+                    if (requestId != assessmentQueryGeneration || !SCREEN_CLASS.equals(currentScreen))
+                        return;
 
                     int rowCount = (rows != null) ? rows.size() : 0;
-                    if (classAssessmentCount != null) classAssessmentCount.setText(rowCount + " total");
+                    if (classAssessmentCount != null)
+                        classAssessmentCount.setText(rowCount + " total");
 
                     if (rowCount == 0) {
                         classEmpty.setVisibility(View.VISIBLE);
@@ -907,9 +1007,18 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     for (AssessmentListRow row : rows) {
                         classActivityList.addView(classRenderer.createActivityCard(
                                 row,
-                                () -> { ActivityFolder a = findActivityById(selectedClass, row.id); if (a != null) dialogs.showEditActivityDialog(a); },
-                                () -> { ActivityFolder a = findActivityById(selectedClass, row.id); if (a != null) dialogs.showAnswerKeyFolderDialog(a); },
-                                () -> { ActivityFolder a = findActivityById(selectedClass, row.id); if (a != null) dialogs.showDeleteActivityConfirmation(a); },
+                                () -> {
+                                    ActivityFolder a = findActivityById(selectedClass, row.id);
+                                    if (a != null) dialogs.showEditActivityDialog(a);
+                                },
+                                () -> {
+                                    ActivityFolder a = findActivityById(selectedClass, row.id);
+                                    if (a != null) dialogs.showAnswerKeyFolderDialog(a);
+                                },
+                                () -> {
+                                    ActivityFolder a = findActivityById(selectedClass, row.id);
+                                    if (a != null) dialogs.showDeleteActivityConfirmation(a);
+                                },
                                 () -> {
                                     ActivityFolder a = findActivityById(selectedClass, row.id);
                                     if (a == null) {
@@ -989,7 +1098,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         Intent intent = new Intent(this, CameraActivity.class);
         intent.putExtra(CameraActivity.EXTRA_FIXED_MOUNT_MODE, fixedMountMode);
         if (selectedSheetType != null) intent.putExtra(EXTRA_SHEET_TYPE, selectedSheetType);
-        if (selectedClass    != null) intent.putExtra(EXTRA_CLASS_ID, selectedClass.getId());
+        if (selectedClass != null) intent.putExtra(EXTRA_CLASS_ID, selectedClass.getId());
         if (selectedActivity != null) intent.putExtra(EXTRA_ACTIVITY_ID, selectedActivity.getId());
         startActivity(intent);
     }
@@ -1001,24 +1110,24 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     @Override
     public void loadDataFromDb() {
         reloadAnswerKeys(); // keep the answer-key cache fresh
-        final String prevClassId    = (selectedClass    != null) ? selectedClass.getId()    : null;
+        final String prevClassId = (selectedClass != null) ? selectedClass.getId() : null;
         final String prevActivityId = (selectedActivity != null) ? selectedActivity.getId() : null;
-        final String prevScreen     = currentScreen;
+        final String prevScreen = currentScreen;
 
         repo.getFirstTeacher(teacher -> {
             if (teacher != null) {
-                globalTeacherName  = teacher.name != null ? teacher.name : "";
-                currentTeacherId   = teacher.id;
+                globalTeacherName = teacher.name != null ? teacher.name : "";
+                currentTeacherId = teacher.id;
                 loadClassesFromDb(prevClassId, prevActivityId, prevScreen);
                 return;
             }
             repo.upsertTeacher("", ensuredTeacher -> {
                 if (ensuredTeacher != null) {
                     globalTeacherName = ensuredTeacher.name != null ? ensuredTeacher.name : "";
-                    currentTeacherId  = ensuredTeacher.id;
+                    currentTeacherId = ensuredTeacher.id;
                 } else {
                     globalTeacherName = "";
-                    currentTeacherId  = -1;
+                    currentTeacherId = -1;
                 }
                 loadClassesFromDb(prevClassId, prevActivityId, prevScreen);
             });
@@ -1088,11 +1197,14 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     @Override
     public void ensureTeacherId(OMRRepository.Callback<Integer> callback) {
         if (callback == null) return;
-        if (currentTeacherId > 0) { callback.onResult(currentTeacherId); return; }
+        if (currentTeacherId > 0) {
+            callback.onResult(currentTeacherId);
+            return;
+        }
         String fallbackName = globalTeacherName != null ? globalTeacherName : "";
         repo.upsertTeacher(fallbackName, teacher -> {
             if (teacher != null) {
-                currentTeacherId  = teacher.id;
+                currentTeacherId = teacher.id;
                 globalTeacherName = teacher.name != null ? teacher.name : "";
                 callback.onResult(currentTeacherId);
             } else {
@@ -1102,7 +1214,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     }
 
     private void publishResult(List<ClassFolder> loaded,
-            String prevClassId, String prevActivityId, String prevScreen) {
+                               String prevClassId, String prevActivityId, String prevScreen) {
         runOnUiThread(() -> {
             classFolders = loaded;
             Log.d(TAG, "Loaded " + classFolders.size() + " classes from Room");
@@ -1122,14 +1234,14 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     // ═══════════════════════════════════════════════════════════════
 
     public static boolean isLrnExists(android.content.Context context,
-            String classId, String activityId, String lrn) {
+                                      String classId, String activityId, String lrn) {
         if (activityId == null || lrn == null) return false;
         OMRRepository r = new OMRRepository(context);
         return r.isLrnExistsSync(activityId, lrn);
     }
 
     public static void saveScanResult(android.content.Context context,
-            String classId, String activityId, ScanEntry scanEntry, boolean replace) {
+                                      String classId, String activityId, ScanEntry scanEntry, boolean replace) {
         if (activityId == null || scanEntry == null) return;
         OMRRepository r = new OMRRepository(context);
         ScanEntity existing = (replace && scanEntry.getLrn() != null)
@@ -1195,19 +1307,69 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     // DialogHost INTERFACE IMPL
     // ═══════════════════════════════════════════════════════════════
 
-    @Override public String getGlobalTeacherName()        { return globalTeacherName; }
-    @Override public void   setGlobalTeacherName(String n){ globalTeacherName = n; tvTeacherName.setText(n); tvTeacherName.setTextColor(Color.parseColor("#FFFFFF")); tvTeacherName.setTypeface(null, Typeface.BOLD); if (SCREEN_CLASS.equals(currentScreen) && selectedClass != null) classTeacherLabel.setText("Teacher: " + n); }
-    @Override public void   setCurrentTeacherId(int id)   { currentTeacherId  = id; }
-    @Override public int    getCurrentTeacherId()          { return currentTeacherId; }
-    @Override public List<ClassFolder>  getClassFolders() { return classFolders; }
-    @Override public ClassFolder        getSelectedClass() { return selectedClass; }
-    @Override public void   setSelectedClass(ClassFolder c){ selectedClass = c; }
-    @Override public ActivityFolder     getSelectedActivity(){ return selectedActivity; }
-    @Override public void   setSelectedActivity(ActivityFolder a){ selectedActivity = a; }
-    @Override public void   setSelectedSheetType(String t) { selectedSheetType = t; }
-    @Override public List<AnswerKeyEntity> getAnswerKeys()  { return answerKeys; }
-    @Override public void reloadAnswerKeys() {
+    @Override
+    public String getGlobalTeacherName() {
+        return globalTeacherName;
+    }
+
+    @Override
+    public void setGlobalTeacherName(String n) {
+        globalTeacherName = n;
+        tvTeacherName.setText(n);
+        tvTeacherName.setTextColor(Color.parseColor("#FFFFFF"));
+        tvTeacherName.setTypeface(null, Typeface.BOLD);
+        if (SCREEN_CLASS.equals(currentScreen) && selectedClass != null)
+            classTeacherLabel.setText("Teacher: " + n);
+    }
+
+    @Override
+    public void setCurrentTeacherId(int id) {
+        currentTeacherId = id;
+    }
+
+    @Override
+    public int getCurrentTeacherId() {
+        return currentTeacherId;
+    }
+
+    @Override
+    public List<ClassFolder> getClassFolders() {
+        return classFolders;
+    }
+
+    @Override
+    public ClassFolder getSelectedClass() {
+        return selectedClass;
+    }
+
+    @Override
+    public void setSelectedClass(ClassFolder c) {
+        selectedClass = c;
+    }
+
+    @Override
+    public ActivityFolder getSelectedActivity() {
+        return selectedActivity;
+    }
+
+    @Override
+    public void setSelectedActivity(ActivityFolder a) {
+        selectedActivity = a;
+    }
+
+    @Override
+    public void setSelectedSheetType(String t) {
+        selectedSheetType = t;
+    }
+
+    @Override
+    public List<AnswerKeyEntity> getAnswerKeys() {
+        return answerKeys;
+    }
+
+    @Override
+    public void reloadAnswerKeys() {
         repo.getAllAnswerKeys(keys -> runOnUiThread(() ->
-            answerKeys = (keys != null) ? keys : new ArrayList<>()));
+                answerKeys = (keys != null) ? keys : new ArrayList<>()));
     }
 }
