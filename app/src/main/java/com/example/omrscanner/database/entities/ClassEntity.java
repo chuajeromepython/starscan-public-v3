@@ -43,9 +43,31 @@ public class ClassEntity {
   @ColumnInfo(name = "updated_at")
   public long updatedAt;
 
+  @ColumnInfo(name = "classroom_id")
+  public Integer classroomId;
+
+  @ColumnInfo(name = "section_id")
+  public Integer sectionId;
+
+  @ColumnInfo(name = "advisor")
+  public String advisor;
+
+  @ColumnInfo(name = "subject")
+  public String subject;
+
+  @ColumnInfo(name = "classes")
+  public String classes;
+
+  @ColumnInfo(name = "is_advisory", defaultValue = "0")
+  public boolean isAdvisory;
+
+  @ColumnInfo(name = "teacher_class_id")
+  public Integer teacherClassId;
+
   public ClassEntity() {
   }
 
+  // USE THIS CONSTRUCTOR TO CREATE CLASS CARDS
   public ClassEntity(@NonNull String id, int teacherId, String grade,
       String section, String schoolYear) {
     this.id = id;

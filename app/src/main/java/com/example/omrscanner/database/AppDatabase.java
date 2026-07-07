@@ -51,7 +51,7 @@ import com.example.omrscanner.database.entities.UserEntity;
     AnswerKeyEntity.class,
         UserEntity.class,
         StudentLrnEntity.class
-}, version = 11, exportSchema = false)
+}, version = 12, exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase {
 
   private static final String DATABASE_NAME = "omrscanner.db";
@@ -191,6 +191,19 @@ public abstract class AppDatabase extends RoomDatabase {
     }
   };
 
+  private static final Migration MIGRATION_11_12 = new Migration(11, 12) {
+    @Override
+    public void migrate(@NonNull SupportSQLiteDatabase db) {
+      db.execSQL("ALTER TABLE classes ADD COLUMN classroom_id INTEGER");
+      db.execSQL("ALTER TABLE classes ADD COLUMN section_id INTEGER");
+      db.execSQL("ALTER TABLE classes ADD COLUMN advisor TEXT");
+      db.execSQL("ALTER TABLE classes ADD COLUMN subject TEXT");
+      db.execSQL("ALTER TABLE classes ADD COLUMN classes TEXT");
+      db.execSQL("ALTER TABLE classes ADD COLUMN is_advisory INTEGER NOT NULL DEFAULT 0");
+      db.execSQL("ALTER TABLE classes ADD COLUMN teacher_class_id INTEGER");
+    }
+  };
+
   // ── Abstract DAO accessors (Room generates the implementations) ──────────
   public abstract TeacherDao teacherDao();
 
@@ -217,7 +230,7 @@ public abstract class AppDatabase extends RoomDatabase {
               context.getApplicationContext(),
               AppDatabase.class,
               DATABASE_NAME)
-                  .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
+                  .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
               .build();
         }
       }

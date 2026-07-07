@@ -28,17 +28,17 @@ import com.example.omrscanner.R;
 import com.example.omrscanner.database.OMRRepository;
 import com.example.omrscanner.database.entities.UserEntity;
 import java.nio.charset.StandardCharsets;
-import java.security.spec.KeySpec;
-import java.util.Arrays;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import javax.crypto.Cipher;
-import javax.crypto.SecretKey;
-import javax.crypto.SecretKeyFactory;
-import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.PBEKeySpec;
+import javax.crypto.Mac;
+import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -51,10 +51,12 @@ public class QrScannerActivity extends AppCompatActivity {
 
     private static final int CAMERA_PERMISSION_REQUEST = 100;
 
-    // ── Global passkey this device expects a scanned QR to match ─────────
-    private static final String passkey = "stars";
+    // ── Must be the EXACT same value as USER_QR_ENCRYPTION_KEY in the
+    // Laravel app's .env (including the "base64:" prefix, if present). ─────
+    private static final String QR_ENCRYPTION_KEY = "1234";
 
-    private static final String SERVER_URL = "http://192.168.1.131";
+    //private static final String SERVER_URL = "http://192.168.1.131";
+    private static final String SERVER_URL = "http://192.168.1.130:8000";
 
     private PreviewView previewView;
     private TextView tvQrResult;
@@ -201,7 +203,7 @@ public class QrScannerActivity extends AppCompatActivity {
         user.passkey = payload.passKey;
         user.serverIp = payload.host;
         user.firstName = payload.firstName;
-        user.middleName = payload.middleName;
+        user.middleName = payload.middleName.isEmpty() ? "" : payload.middleName;
         user.lastName = payload.lastName;
         user.suffix = payload.suffix;
         user.school = payload.schoolName;
@@ -219,35 +221,84 @@ public class QrScannerActivity extends AppCompatActivity {
     /**
      * Decrypts the raw string scanned from the QR code into the plaintext JSON payload.
      *
-     * Matches the reference encryption tool: PBKDF2WithHmacSHA256 (100,000 iterations,
-     * 256-bit key) derives the AES key from {@link #passkey} and a salt, then
-     * AES/GCM/NoPadding decrypts using a 12-byte IV.
+     * Matches Laravel's built-in Illuminate\Encryption\Encrypter (AES-256-CBC), which is
+     * what QrAuthorizationPayloadService::encryptString() uses on the server side:
      *
-     * Byte layout of the base64-decoded QR payload: salt(16) + iv(12) + ciphertext(+tag).
+     *   1. The QR's raw text is base64 of a JSON object: {"iv","value","mac","tag"}.
+     *   2. "iv" and "value" are themselves base64-encoded (16-byte IV, ciphertext).
+     *   3. The AES key is SHA-256(rawKey) — NOT the rawKey itself, and NOT PBKDF2-derived.
+     *   4. The mac is HMAC-SHA256(iv_base64 + value_base64, key), used to verify the
+     *      payload hasn't been tampered with before decrypting it.
      */
     private String decryptPayload(String rawQrValue) throws Exception {
-        byte[] combined = Base64.decode(rawQrValue, Base64.DEFAULT);
+        String json = new String(Base64.decode(rawQrValue, Base64.DEFAULT), StandardCharsets.UTF_8);
 
-        final int SALT_LEN = 16;
-        final int IV_LEN = 12;
-        if (combined.length < SALT_LEN + IV_LEN) {
-            throw new IllegalArgumentException("QR payload too short to contain salt/IV");
+        // Log the QR contents BEFORE we do anything to it (decode/verify/decrypt),
+        // so we can see exactly what was scanned even if a later step fails.
+        android.util.Log.d("QR_SCANNER", "Raw QR (base64): " + rawQrValue);
+        android.util.Log.d("QR_SCANNER", "Decoded JSON envelope: " + json);
+
+        JsonObject obj = JsonParser.parseString(json).getAsJsonObject();
+
+        String ivB64 = obj.get("iv").getAsString();
+        String valueB64 = obj.get("value").getAsString();
+        String mac = obj.get("mac").getAsString();
+
+        android.util.Log.d("QR_SCANNER", "iv=" + ivB64 + " value=" + valueB64 + " mac=" + mac);
+
+        byte[] key = deriveKey();
+
+        if (!constantTimeEquals(hmacSha256Hex(ivB64 + valueB64, key), mac)) {
+            throw new SecurityException("MAC verification failed — payload may be corrupted or tampered with.");
         }
 
-        byte[] salt = Arrays.copyOfRange(combined, 0, SALT_LEN);
-        byte[] iv = Arrays.copyOfRange(combined, SALT_LEN, SALT_LEN + IV_LEN);
-        byte[] cipherBytes = Arrays.copyOfRange(combined, SALT_LEN + IV_LEN, combined.length);
+        byte[] iv = Base64.decode(ivB64, Base64.DEFAULT);
+        byte[] cipherBytes = Base64.decode(valueB64, Base64.DEFAULT);
 
-        SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-        KeySpec spec = new PBEKeySpec(passkey.toCharArray(), salt, 100_000, 256);
-        SecretKey derived = factory.generateSecret(spec);
-        SecretKeySpec keySpec = new SecretKeySpec(derived.getEncoded(), "AES");
-
-        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.DECRYPT_MODE, keySpec, new GCMParameterSpec(128, iv));
+        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), new IvParameterSpec(iv));
 
         byte[] plainBytes = cipher.doFinal(cipherBytes);
-        return new String(plainBytes, StandardCharsets.UTF_8);
+        String plaintext = new String(plainBytes, StandardCharsets.UTF_8);
+
+        android.util.Log.d("QR_SCANNER", "Decrypted plaintext: " + plaintext);
+
+        return plaintext;
+    }
+
+    /**
+     * Mirrors QrAuthorizationPayloadService::encrypter(): strips an optional "base64:"
+     * prefix from the configured key, then SHA-256-hashes the raw key bytes to get the
+     * 32-byte AES key.
+     */
+    private byte[] deriveKey() throws NoSuchAlgorithmException {
+        String rawKey = QR_ENCRYPTION_KEY;
+        byte[] keyBytes;
+        if (rawKey.startsWith("base64:")) {
+            keyBytes = Base64.decode(rawKey.substring("base64:".length()), Base64.DEFAULT);
+        } else {
+            keyBytes = rawKey.getBytes(StandardCharsets.UTF_8);
+        }
+        return MessageDigest.getInstance("SHA-256").digest(keyBytes);
+    }
+
+    private static String hmacSha256Hex(String data, byte[] key) throws Exception {
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(key, "HmacSHA256"));
+        byte[] result = mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
+        StringBuilder sb = new StringBuilder();
+        for (byte b : result) sb.append(String.format("%02x", b));
+        return sb.toString();
+    }
+
+    /** Constant-time string comparison to avoid timing attacks on the MAC check. */
+    private static boolean constantTimeEquals(String a, String b) {
+        if (a.length() != b.length()) return false;
+        int result = 0;
+        for (int i = 0; i < a.length(); i++) {
+            result |= a.charAt(i) ^ b.charAt(i);
+        }
+        return result == 0;
     }
 
 

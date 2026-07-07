@@ -36,6 +36,12 @@ import androidx.core.content.ContextCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
+import androidx.camera.core.AspectRatio;
+import androidx.camera.core.UseCaseGroup;
+import androidx.camera.core.ViewPort;
+import androidx.camera.core.FocusMeteringAction;
+import androidx.camera.core.MeteringPoint;
+import androidx.camera.core.MeteringPointFactory;
 
 import com.example.omrscanner.DashboardActivity;
 import com.example.omrscanner.R;
@@ -51,18 +57,23 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 public class CameraActivity extends AppCompatActivity {
 
     private static final int CAMERA_PERMISSION_REQUEST = 1001;
     private static final String TAG = "CameraActivity";
     public static final String EXTRA_FIXED_MOUNT_MODE = "fixed_mount_mode";
-    private static final Size ANALYSIS_TARGET_RESOLUTION = new Size(1280, 720);
+    //private static final Size ANALYSIS_TARGET_RESOLUTION = new Size(1280, 720);
     private static final long FIXED_MOUNT_ZOOM_COOLDOWN_MS = 250L;
     private static final int FIXED_MOUNT_MISS_THRESHOLD = 6;
     private static final float[] FIXED_MOUNT_ZOOM_STEPS = {1.0f, 1.25f, 1.5f, 1.75f};
     private static final int HANDHELD_RECOVERY_MISS_THRESHOLD = 3;
     private static final int HANDHELD_RECOVERY_FRAME_INTERVAL = 2;
+
+    // ~150-200ms of stable detection before capturing
+    private static final int REQUIRED_CONSECUTIVE_DETECTIONS = 5;
+    //private static final int REQUIRED_CONSECUTIVE_DETECTIONS = 8;
 
     // How long each hint stays visible before cycling (milliseconds)
     private static final long HINT_DISPLAY_DURATION_MS = 5000;
@@ -262,17 +273,24 @@ public class CameraActivity extends AppCompatActivity {
     private void bindCameraUseCases() {
         if (cameraProvider == null) return;
 
-        Preview preview = new Preview.Builder().build();
+        if (previewView.getWidth() == 0 || previewView.getHeight() == 0) {
+            previewView.post(this::bindCameraUseCases);
+            return;
+        }
+
+        Preview preview = new Preview.Builder()
+                .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+                .build();
         preview.setSurfaceProvider(previewView.getSurfaceProvider());
 
         imageCapture = new ImageCapture.Builder()
-                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)   // was MINIMIZE_LATENCY
+                .setTargetAspectRatio(AspectRatio.RATIO_4_3)
                 .build();
 
-        // ── ImageAnalysis for real-time anchor detection ──────────
         imageAnalysis = new ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .setTargetResolution(ANALYSIS_TARGET_RESOLUTION)
+                .setTargetAspectRatio(AspectRatio.RATIO_4_3)
                 .build();
 
         imageAnalysis.setAnalyzer(cameraExecutor, this::analyzeFrame);
@@ -282,8 +300,23 @@ public class CameraActivity extends AppCompatActivity {
                 .build();
 
         cameraProvider.unbindAll();
-        camera = cameraProvider.bindToLifecycle(
-                this, cameraSelector, preview, imageCapture, imageAnalysis);
+
+        ViewPort viewPort = previewView.getViewPort();
+
+        if (viewPort != null) {
+            UseCaseGroup useCaseGroup = new UseCaseGroup.Builder()
+                    .setViewPort(viewPort)
+                    .addUseCase(preview)
+                    .addUseCase(imageCapture)
+                    .addUseCase(imageAnalysis)
+                    .build();
+
+            camera = cameraProvider.bindToLifecycle(this, cameraSelector, useCaseGroup);
+        } else {
+            Log.w(TAG, "PreviewView ViewPort was null — binding without shared crop rect");
+            camera = cameraProvider.bindToLifecycle(
+                    this, cameraSelector, preview, imageCapture, imageAnalysis);
+        }
 
         cameraControl = camera.getCameraControl();
         cameraInfo    = camera.getCameraInfo();
@@ -329,13 +362,19 @@ public class CameraActivity extends AppCompatActivity {
             if (anchors != null && anchors.length == 4) {
                 onDetectionSuccess();
                 PointF[] viewPoints = scaleAnchorsToView(
-                        anchors,
-                        imageProxy.getWidth(),
-                        imageProxy.getHeight(),
+                        anchors, imageProxy.getWidth(), imageProxy.getHeight(),
                         imageProxy.getImageInfo().getRotationDegrees()
                 );
-                boolean captureStarted = triggerAutoCapture();
-                onAnchorsDetected(viewPoints, captureStarted);
+
+                onAnchorsDetected(viewPoints, false);
+
+                boolean captureStarted = false;
+                if (consecutiveDetections >= REQUIRED_CONSECUTIVE_DETECTIONS) {
+                    captureStarted = triggerAutoCapture();
+                    if (captureStarted) {
+                        updateStatusTextForCaptureStarted();
+                    }
+                }
             } else {
                 onDetectionMiss();
                 onAnchorsNotDetected();
@@ -348,6 +387,14 @@ public class CameraActivity extends AppCompatActivity {
         } finally {
             imageProxy.close();
         }
+    }
+
+    private void updateStatusTextForCaptureStarted() {
+        mainHandler.post(() -> {
+            if (anchorStatusText != null) {
+                anchorStatusText.setText("✓ Anchors detected! Capturing…");
+            }
+        });
     }
 
     private void initializeFixedMountZoomRatios() {
@@ -540,7 +587,7 @@ public class CameraActivity extends AppCompatActivity {
         }
 
         autoCaptureTriggered = true;
-        Log.d(TAG, "Auto-capture triggered on first valid anchor detection");
+        Log.d(TAG, "Auto-capture triggered after " + consecutiveDetections + " stable detections");
         takePhoto();
         return true;
     }
