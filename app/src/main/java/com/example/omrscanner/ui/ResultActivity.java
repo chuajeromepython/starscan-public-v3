@@ -606,6 +606,94 @@ public class ResultActivity extends AppCompatActivity {
             return;
         }
 
+        if (scanResult.lnr == null || scanResult.lnr.trim().isEmpty()) {
+            Toast.makeText(this, "Missing LRN — cannot save", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        checkStudentLrnThenExport();
+    }
+
+    /**
+     * Looks up scanResult.lnr in the student_lrn table.
+     *  - if it IS found  -> recognized/enrolled student -> continue on to
+     *    the existing per-assessment duplicate-scan check and then the
+     *    actual export/save
+     *  - if it is NOT found -> unrecognized/unenrolled student -> block the
+     *    save and notify the teacher
+     */
+    private void checkStudentLrnThenExport() {
+        showLoading(true);
+
+        new Thread(() -> {
+            com.example.omrscanner.database.OMRRepository repo =
+                    new com.example.omrscanner.database.OMRRepository(ResultActivity.this);
+            boolean lrnFoundInStudentLrn = repo.isLrnInStudentLrnTableSync(scanResult.lnr);
+
+            runOnUiThread(() -> {
+                showLoading(false);
+
+                if (!lrnFoundInStudentLrn) {
+                    showLrnNotRecognizedError();
+                    return;
+                }
+
+                proceedToDuplicateCheckAndExport();
+            });
+        }).start();
+    }
+
+    /**
+     * Resets the LRN card to a red, editable error state when the scanned
+     * LRN is not found in student_lrn. Undoes any "✓ Detected" / "✓
+     * Verified" / "CONFIRMED ✓" state left over from showLrnVerification()
+     * or confirmLrn(), and keeps Save disabled until the teacher fixes the
+     * LRN and taps CONFIRM again.
+     */
+    private void showLrnNotRecognizedError() {
+        isLrnConfirmed = false;
+
+        // Re-enable all digit boxes so the teacher can correct the LRN,
+        // and mark every box as an error so it's visually obvious.
+        for (int i = 0; i < 12; i++) {
+            digitBoxes[i].setEnabled(true);
+            digitBoxes[i].setBackgroundResource(R.drawable.bg_lrn_digit_error);
+        }
+
+        lrnCard.setVisibility(View.VISIBLE);
+        lrnInputContainer.setVisibility(View.VISIBLE);
+
+        tvLrnCardTitle.setText("⚠ LRN NOT RECOGNIZED");
+        tvLrnCardTitle.setTextColor(0xFFDC2626);
+
+        tvLrnStatus.setText("✗ Not in student list");
+        tvLrnStatus.setTextColor(0xFFDC2626);
+
+        tvLrnHelper.setTextSize(11);
+        tvLrnHelper.setText("This LRN was not found in the student LRN list, so it "
+                + "was not saved. Please check the digits and correct the LRN "
+                + "below, then tap CONFIRM to try again.");
+        tvLrnHelper.setTextColor(0xFFDC2626);
+
+        btnConfirmLrn.setText("CONFIRM");
+        btnConfirmLrn.setVisibility(View.VISIBLE);
+
+        btnExport.setEnabled(false);
+
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("LRN Not Recognized")
+                .setMessage("LRN " + scanResult.lnr
+                        + " was not found in the student LRN list. "
+                        + "This scan was not saved.")
+                .setPositiveButton("OK", null)
+                .show();
+    }
+
+    /**
+     * Existing per-assessment duplicate-scan check (unchanged), run only
+     * after the student_lrn check above has passed.
+     */
+    private void proceedToDuplicateCheckAndExport() {
         if (classId != null && activityId != null && scanResult.lnr != null) {
             new Thread(() -> {
                 boolean exists = DashboardActivity.isLrnExists(this, classId, activityId, scanResult.lnr);

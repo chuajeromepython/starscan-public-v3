@@ -57,7 +57,7 @@ public class QrScannerActivity extends AppCompatActivity {
 
     //private static final String SERVER_URL = "http://192.168.1.131";
     //private static final String SERVER_URL = "http://192.168.1.130:8000";
-    private static final String SERVER_URL = "http://192.168.1.130:8000";
+    //private static final String SERVER_URL = "http://172.17.211.2:8000";
 
     private PreviewView previewView;
     private TextView tvQrResult;
@@ -198,6 +198,11 @@ public class QrScannerActivity extends AppCompatActivity {
             return;
         }
 
+        if (payload.host == null || payload.host.trim().isEmpty()) {
+            showMessageDialog("Error", "QR data is missing the server host.");
+            return;
+        }
+
         UserEntity user = new UserEntity();
         user.username = payload.username;
         user.userId = payload.userId;
@@ -209,7 +214,7 @@ public class QrScannerActivity extends AppCompatActivity {
         user.suffix = payload.suffix;
         user.school = payload.schoolName;
 
-        pingServer((success, message) -> {
+        pingServer(payload.host, (success, message) -> {
             if (!success) {
                 showMessageDialog("Failed", "Could not save — server unreachable.\n" + message);
                 return;
@@ -314,14 +319,14 @@ public class QrScannerActivity extends AppCompatActivity {
                 .setCancelable(false)
                 .show();
     }
-    private void pingServer(PingCallback callback) {
+    private void pingServer(String serverUrl, PingCallback callback) {
         cameraExecutor.execute(() -> {
             HttpURLConnection conn = null;
             boolean success;
             String message;
             try {
-                URL url = new URL(SERVER_URL);
-                android.util.Log.d("PING_TEST", "Connecting to: " + SERVER_URL);
+                URL url = new URL(serverUrl);
+                android.util.Log.d("PING_TEST", "Connecting to: " + serverUrl);
                 conn = (HttpURLConnection) url.openConnection();
                 conn.setConnectTimeout(3000);
                 conn.setReadTimeout(3000);

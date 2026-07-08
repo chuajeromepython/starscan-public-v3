@@ -42,6 +42,22 @@ public class OMRRepository {
     this.executor = Executors.newSingleThreadExecutor();
   }
 
+  // ═════════════════════════════════════════════════════════════════════════
+  // STUDENT LRN
+  // ═════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Synchronous check for whether a given LRN has a matching entry in the
+   * student_lrn table (the synced roster of enrolled students) — safe to
+   * call from a background thread.
+   *
+   * Used by ResultActivity: a scan may only be saved if its LRN is found
+   * here (i.e. it belongs to a recognized/enrolled student).
+   */
+  public boolean isLrnInStudentLrnTableSync(String lrn) {
+    return db.studentLrnDao().findByLrn(lrn) != null;
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Callback interface — returns result to main thread
   // ─────────────────────────────────────────────────────────────────────────

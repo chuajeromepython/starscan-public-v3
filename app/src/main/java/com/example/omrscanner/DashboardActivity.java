@@ -176,10 +176,17 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private TextView breadcrumbRoot, breadcrumbSep1, breadcrumbClass,
             breadcrumbSep2, breadcrumbActivity;
 
+    /*private final java.util.concurrent.ExecutorService syncExecutor =
+            java.util.concurrent.Executors.newSingleThreadExecutor();
+    private static final String SYNC_URL = "http://172.17.211.2:8000/api/classrooms/sync"; // route to the STARS system (classes)
+    private static final String ASSESSMENT_SYNC_URL = "http://172.17.211.2:8000/api/students/sync"; // (student_lrn)*/
     private final java.util.concurrent.ExecutorService syncExecutor =
             java.util.concurrent.Executors.newSingleThreadExecutor();
-    private static final String SYNC_URL = "http://192.168.1.130:8000/api/classrooms/sync"; // route to the STARS system (classes)
-    private static final String ASSESSMENT_SYNC_URL = "http://192.168.1.130:8000/api/students/sync"; // (student_lrn)
+    private static final String SYNC_PATH = "/api/classrooms/sync"; // route to the STARS system (classes)
+    private static final String ASSESSMENT_SYNC_PATH = "/api/students/sync"; // (student_lrn)
+
+
+    // user ip from users is_active
 
     // ═══════════════════════════════════════════════════════════════
     // LIFECYCLE
@@ -474,15 +481,23 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             ui.showErrorDialog("Missing classroom ID", "This class wasn't synced from the server, so it has no classroom ID to sync students for.");
             return;
         }
-        android.widget.Toast.makeText(this, "Syncing students…", android.widget.Toast.LENGTH_SHORT).show();
-        performAssessmentSync(selectedClass.getClassroomId());
+        repo.getActiveUser(user -> {
+            if (user == null || user.serverIp == null || user.serverIp.trim().isEmpty()) {
+                runOnUiThread(() -> ui.showErrorDialog("Scan required",
+                        "Please scan your QR code from the website system before syncing."));
+                return;
+            }
+            runOnUiThread(() ->
+                    android.widget.Toast.makeText(this, "Syncing students…", android.widget.Toast.LENGTH_SHORT).show());
+            performAssessmentSync(selectedClass.getClassroomId(), user.serverIp);
+        });
     }
 
-    private void performAssessmentSync(int classroomId) {
+    private void performAssessmentSync(int classroomId, String serverIp) {
         syncExecutor.execute(() -> {
             java.net.HttpURLConnection conn = null;
             try {
-                java.net.URL url = new java.net.URL(ASSESSMENT_SYNC_URL);
+                java.net.URL url = new java.net.URL(serverIp + ASSESSMENT_SYNC_PATH);
                 conn = (java.net.HttpURLConnection) url.openConnection();
                 conn.setConnectTimeout(5000);
                 conn.setReadTimeout(5000);
@@ -550,6 +565,11 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
      * request/response shape) isn't finalized yet, so this just acknowledges
      * the tap for now — no network call wired up.
      */
+    /**
+     * Placeholder for the sync action. The actual server contract (routes,
+     * request/response shape) isn't finalized yet, so this just acknowledges
+     * the tap for now — no network call wired up.
+     */
     private void onSyncClicked() {
         if (activeUserFirstName == null || activeUserFirstName.isEmpty()) {
             ui.showErrorDialog("Scan required",
@@ -558,7 +578,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         }
 
         repo.getActiveUser(user -> {
-            if (user == null || user.userId == null) {
+            if (user == null || user.userId == null
+                    || user.serverIp == null || user.serverIp.trim().isEmpty()) {
                 runOnUiThread(() -> ui.showErrorDialog("Scan required",
                         "Please scan your QR code from the website system before syncing."));
                 return;
@@ -567,7 +588,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 if (teacherId <= 0) return;
                 runOnUiThread(() ->
                         android.widget.Toast.makeText(this, "Syncing…", android.widget.Toast.LENGTH_SHORT).show());
-                performClassroomSync(user.userId, teacherId);
+                performClassroomSync(user.userId, teacherId, user.serverIp);
             });
         });
     }
@@ -859,11 +880,11 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     }
 
     // Method to communicate with the system
-    private void performClassroomSync(int userId, int teacherId) {
+    private void performClassroomSync(int userId, int teacherId, String serverIp) {
         syncExecutor.execute(() -> {
             java.net.HttpURLConnection conn = null;
             try {
-                java.net.URL url = new java.net.URL(SYNC_URL);
+                java.net.URL url = new java.net.URL(serverIp + SYNC_PATH);
                 conn = (java.net.HttpURLConnection) url.openConnection();
                 conn.setConnectTimeout(5000);
                 conn.setReadTimeout(5000);
