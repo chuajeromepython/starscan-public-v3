@@ -14,6 +14,8 @@ public class ClassFolder {
     private String grade;
     private String section;
     private String schoolYear;
+
+    private Integer classroomId;
     private List<ActivityFolder> activities;
     private long createdAt;
 
@@ -98,6 +100,14 @@ public class ClassFolder {
 
     public int getActivityCount() {
         return activities != null ? activities.size() : 0;
+    }
+
+    public Integer getClassroomId() {
+        return classroomId;
+    }
+
+    public void setClassroomId(Integer classroomId) {
+        this.classroomId = classroomId;
     }
 
     public int getTotalScans() {

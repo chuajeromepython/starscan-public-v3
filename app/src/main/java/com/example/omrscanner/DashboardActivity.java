@@ -133,7 +133,6 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private ClassScreenRenderer classRenderer;
     private ActivityScreenRenderer activityRenderer;
     private DashboardDialogs dialogs;
-    private ClassExporter exporter;
 
     // ═══════════════════════════════════════════════════════════════
     // VIEWS
@@ -168,7 +167,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private com.google.android.material.floatingactionbutton.FloatingActionButton fabMain;
     private View fabScrim;
     private LinearLayout fabMenu;
-    private LinearLayout fabClassRow, fabAnswerKeyRow, fabTestRow, fabSyncRow;
+    private LinearLayout fabClassRow, fabAnswerKeyRow, fabTestRow, fabSyncRow, fabAssessmentSyncRow;
     private TextView fabClassLabel;
     private boolean fabMenuOpen = false;
 
@@ -179,7 +178,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
     private final java.util.concurrent.ExecutorService syncExecutor =
             java.util.concurrent.Executors.newSingleThreadExecutor();
-    private static final String SYNC_URL = "http://192.168.1.130:8000/api/classrooms/sync"; // route to the STARS system
+    private static final String SYNC_URL = "http://192.168.1.130:8000/api/classrooms/sync"; // route to the STARS system (classes)
+    private static final String ASSESSMENT_SYNC_URL = "http://192.168.1.130:8000/api/students/sync"; // (student_lrn)
 
     // ═══════════════════════════════════════════════════════════════
     // LIFECYCLE
@@ -240,7 +240,6 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         classRenderer = new ClassScreenRenderer(this, ui);
         activityRenderer = new ActivityScreenRenderer(this, ui);
         dialogs = new DashboardDialogs(this, ui, repo, this);
-        exporter = new ClassExporter(this, ui);
 
         initViews();
         initBackHandler();
@@ -349,6 +348,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         fabTestRow = findViewById(R.id.fabTestRow);
         fabClassLabel = findViewById(R.id.fabClassLabel);
         fabSyncRow = findViewById(R.id.fabSyncRow);
+        fabAssessmentSyncRow = findViewById(R.id.fabAssessmentSyncRow);
 
         breadcrumbBar = findViewById(R.id.breadcrumbBar);
         breadcrumbDivider = findViewById(R.id.breadcrumbDivider);
@@ -385,6 +385,11 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         fabSyncRow.setOnClickListener(v -> {
             closeFabMenu();
             onSyncClicked();
+        });
+
+        fabAssessmentSyncRow.setOnClickListener(v -> {
+            closeFabMenu();
+            onAssessmentSyncClicked();
         });
 
         teacherNameRow.setOnClickListener(v -> dialogs.showEditTeacherNameDialog());
@@ -460,6 +465,86 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         });
     }
 
+    private void onAssessmentSyncClicked() {
+        if (selectedClass == null) {
+            ui.showErrorDialog("No class selected", "Open a class before syncing its students.");
+            return;
+        }
+        if (selectedClass.getClassroomId() == null) {
+            ui.showErrorDialog("Missing classroom ID", "This class wasn't synced from the server, so it has no classroom ID to sync students for.");
+            return;
+        }
+        android.widget.Toast.makeText(this, "Syncing students…", android.widget.Toast.LENGTH_SHORT).show();
+        performAssessmentSync(selectedClass.getClassroomId());
+    }
+
+    private void performAssessmentSync(int classroomId) {
+        syncExecutor.execute(() -> {
+            java.net.HttpURLConnection conn = null;
+            try {
+                java.net.URL url = new java.net.URL(ASSESSMENT_SYNC_URL);
+                conn = (java.net.HttpURLConnection) url.openConnection();
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/json");
+                conn.setRequestProperty("Accept", "application/json");
+                conn.setDoOutput(true);
+
+                org.json.JSONObject body = new org.json.JSONObject();
+                body.put("classroom_id", classroomId);
+
+                try (java.io.OutputStream os = conn.getOutputStream()) {
+                    os.write(body.toString().getBytes("UTF-8"));
+                }
+
+                int code = conn.getResponseCode();
+                java.io.InputStream is = (code >= 200 && code < 300)
+                        ? conn.getInputStream() : conn.getErrorStream();
+
+                StringBuilder sb = new StringBuilder();
+                try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(is, "UTF-8"))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) sb.append(line);
+                }
+
+                String responseBody = sb.toString();
+                android.util.Log.d("OMR_STUDENT_SYNC", "HTTP " + code + " — classroom_id=" + classroomId + " — raw response: " + responseBody);
+
+                org.json.JSONObject root = new org.json.JSONObject(responseBody);
+                org.json.JSONArray data = root.optJSONArray("data");
+
+                if (data == null || data.length() == 0) {
+                    runOnUiThread(() -> android.widget.Toast.makeText(this,
+                            "No students found for this class.", android.widget.Toast.LENGTH_SHORT).show());
+                } else {
+                    String classId = (selectedClass != null) ? selectedClass.getId() : null;
+                    int count = data.length();
+                    for (int i = 0; i < count; i++) {
+                        org.json.JSONObject s = data.getJSONObject(i);
+                        String lrn = s.optString("lrn", null);
+                        int sectionId = s.optInt("sectionId");
+                        int gradeLevelId = s.optInt("gradeLevelId");
+                        int studentClassroomId = s.optInt("classroomId");
+                        if (lrn != null) {
+                            repo.insertStudentLrnFromSync(lrn, classId, sectionId, gradeLevelId, studentClassroomId, null);
+                        }
+                    }
+                    final int savedCount = count;
+                    runOnUiThread(() -> android.widget.Toast.makeText(this,
+                            "Synced " + savedCount + " student" + (savedCount != 1 ? "s" : ""), android.widget.Toast.LENGTH_SHORT).show());
+                }
+            } catch (Exception e) {
+                android.util.Log.e("OMR_STUDENT_SYNC", "Sync failed: " + e.getClass().getSimpleName() + ": " + e.getMessage(), e);
+                runOnUiThread(() -> ui.showErrorDialog("Sync failed",
+                        "Could not sync students: " + e.getMessage()));
+            } finally {
+                if (conn != null) conn.disconnect();
+            }
+        });
+    }
+
     /**
      * Placeholder for the sync action. The actual server contract (routes,
      * request/response shape) isn't finalized yet, so this just acknowledges
@@ -510,7 +595,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     /** Show only the rows relevant to the current screen, and relabel "Class" → "Assessment". */
     private void updateFabMenuRowsForScreen() {
         // Sync is available from every screen.
-        fabSyncRow.setVisibility(View.VISIBLE);
+        //fabSyncRow.setVisibility(View.VISIBLE);
 
         switch (currentScreen) {
             case SCREEN_HOME:
@@ -518,17 +603,23 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 fabClassRow.setVisibility(View.GONE);
                 fabAnswerKeyRow.setVisibility(View.VISIBLE);
                 fabTestRow.setVisibility(View.GONE);
+                fabSyncRow.setVisibility(View.VISIBLE);
+                fabAssessmentSyncRow.setVisibility(View.GONE);
                 break;
             case SCREEN_CLASS:
                 fabClassLabel.setText("New assessment");
                 fabClassRow.setVisibility(View.VISIBLE);
                 fabAnswerKeyRow.setVisibility(View.GONE);
                 fabTestRow.setVisibility(View.GONE);
+                fabSyncRow.setVisibility(View.GONE);
+                fabAssessmentSyncRow.setVisibility(View.VISIBLE);
                 break;
             case SCREEN_ACTIVITY:
                 fabClassRow.setVisibility(View.GONE);
                 fabAnswerKeyRow.setVisibility(View.GONE);
                 fabTestRow.setVisibility(View.GONE);
+                fabSyncRow.setVisibility(View.GONE);
+                fabAssessmentSyncRow.setVisibility(View.GONE);
                 break;
         }
     }
@@ -1080,10 +1171,6 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                 },
                                 () -> {
                                     ClassFolder c = findClassById(row.id);
-                                    if (c != null) exporter.downloadClassData(c);
-                                },
-                                () -> {
-                                    ClassFolder c = findClassById(row.id);
                                     if (c != null) dialogs.showDeleteClassConfirmation(c);
                                 },
                                 () -> {
@@ -1442,11 +1529,15 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             entity.id = existing.id;
             r.updateScan(entity, null);
             r.deleteAnswersByScan(existing.id,
-                    done -> r.insertAnswersFromMap(existing.id, scanEntry.getAnswers(), null));
+                    done -> {
+                        r.insertAnswersFromMap(existing.id, scanEntry.getAnswers(), null);
+                        ClassExporter.autoSaveClassData(context, classId, activityId);
+                    });
         } else {
             r.insertScan(entity, newId -> {
                 if (newId != null && newId > 0)
                     r.insertAnswersFromMap(newId.intValue(), scanEntry.getAnswers(), null);
+                ClassExporter.autoSaveClassData(context, classId, activityId);
             });
         }
 

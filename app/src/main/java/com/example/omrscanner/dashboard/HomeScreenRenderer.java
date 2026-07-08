@@ -192,8 +192,7 @@ public class HomeScreenRenderer {
      */
     public View createClassCard(ClassListRow row,
             String globalTeacherName,
-            Runnable onEdit, Runnable onDownload,
-            Runnable onDelete, Runnable onOpen) {
+            Runnable onEdit, Runnable onDelete, Runnable onOpen) {
 
         LinearLayout card = new LinearLayout(activity);
         card.setOrientation(LinearLayout.HORIZONTAL);
@@ -300,7 +299,7 @@ public class HomeScreenRenderer {
         actionsRow.setOrientation(LinearLayout.HORIZONTAL);
         actionsRow.setLayoutParams(new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        actionsRow.setWeightSum(3f);
+        actionsRow.setWeightSum(2f);
 
         android.util.TypedValue outValue = new android.util.TypedValue();
         activity.getTheme().resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, outValue, true);
@@ -308,14 +307,14 @@ public class HomeScreenRenderer {
         TextView btnEdit = makeActionBtn("✏️ Edit", "#64748B", outValue.resourceId);
         btnEdit.setOnClickListener(v -> onEdit.run());
 
-        TextView btnDownload = makeActionBtn("⬇️ Download", "#64748B", outValue.resourceId);
-        btnDownload.setOnClickListener(v -> onDownload.run());
+        //TextView btnDownload = makeActionBtn("⬇️ Download", "#64748B", outValue.resourceId);
+        //btnDownload.setOnClickListener(v -> onDownload.run());
 
         TextView btnDelete = makeActionBtn("🗑️ Delete", "#EF4444", outValue.resourceId);
         btnDelete.setOnClickListener(v -> onDelete.run());
 
         actionsRow.addView(btnEdit);
-        actionsRow.addView(btnDownload);
+        //actionsRow.addView(btnDownload);
         actionsRow.addView(btnDelete);
         content.addView(actionsRow);
 

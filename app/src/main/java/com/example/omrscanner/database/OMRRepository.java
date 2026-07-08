@@ -573,6 +573,18 @@ public class OMRRepository {
     return db.assessmentDao().getById(id);
   }
 
+  public ClassEntity getClassByIdSync(String id) {
+    return db.classDao().getById(id);
+  }
+
+  public List<ScanEntity> getScansByAssessmentSync(String assessmentId) {
+    return db.scanDao().getByAssessment(assessmentId);
+  }
+
+  public List<AnswerEntity> getAnswersByScanSync(int scanId) {
+    return db.answerDao().getByScan(scanId);
+  }
+
   /**
    * Synchronous answer-key fetch — safe to call from any background thread
    * (used by the static saveScanResult helper in DashboardActivity).
@@ -595,6 +607,25 @@ public class OMRRepository {
     executor.execute(() -> {
       int graded = gradeAllScansSync(assessmentId, key);
       if (callback != null) callback.onResult(graded);
+    });
+  }
+
+  public void insertStudentLrnFromSync(String lrn, String classId,
+                                       Integer sectionId, Integer gradeLevelId, Integer classroomId, Callback<Void> callback) {
+    executor.execute(() -> {
+      try {
+        StudentLrnEntity student = new StudentLrnEntity();
+        student.lrn = lrn;
+        student.className = classId;
+        student.sectionId = sectionId;
+        student.gradeLevelId = gradeLevelId;
+        student.classroomId = classroomId;
+        db.studentLrnDao().insert(student);
+        if (callback != null) callback.onResult(null);
+      } catch (Exception e) {
+        Log.e("StudentLRN", "Failed to insert synced student: " + lrn, e);
+        if (callback != null) callback.onResult(null);
+      }
     });
   }
 
