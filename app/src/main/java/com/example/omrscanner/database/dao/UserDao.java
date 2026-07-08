@@ -28,6 +28,9 @@ public interface UserDao {
     @Query("SELECT * FROM users WHERE id = :id")
     UserEntity getById(int id);
 
+    @Query("SELECT * FROM users WHERE is_active = 1 LIMIT 1")
+    UserEntity getActiveUser();
+
     // This prevents two or more users getting 1s
     @Query("UPDATE users SET is_active = 0")
     void deactivateAll();

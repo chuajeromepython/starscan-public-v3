@@ -244,6 +244,38 @@ public class OMRRepository {
     });
   }
 
+  public void getActiveUser(Callback<UserEntity> callback) {
+    executor.execute(() -> {
+      UserEntity user = db.userDao().getActiveUser();
+      if (callback != null)
+        callback.onResult(user);
+    });
+  }
+
+  /**
+   * Insert or update a class row that came from server sync, keyed by
+   * classroom_id (the server's identity for the classroom) rather than our
+   * local UUID. Reuses the existing row's id/created_at if one already
+   * exists for this classroom_id, so re-syncing updates in place instead
+   * of creating duplicate class cards.
+   */
+  public void upsertClassFromSync(ClassEntity incoming, Callback<Void> callback) {
+    executor.execute(() -> {
+      ClassEntity existing = (incoming.classroomId != null)
+              ? db.classDao().getByClassroomId(incoming.classroomId) : null;
+      if (existing != null) {
+        incoming.id = existing.id;
+        incoming.createdAt = existing.createdAt;
+      } else {
+        incoming.id = java.util.UUID.randomUUID().toString().substring(0, 7);
+        incoming.createdAt = System.currentTimeMillis();
+      }
+      incoming.updatedAt = System.currentTimeMillis();
+      db.classDao().insert(incoming); // REPLACE strategy on primary key id
+      if (callback != null) callback.onResult(null);
+    });
+  }
+
   public void insertUserAsActive(UserEntity user, Callback<Long> callback) {
     executor.execute(() -> {
       long id = db.userDao().insertAsOnlyActive(user);

@@ -104,6 +104,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private String selectedSheetType = null;
     private String selectedSheetFilter = null;
     private String globalTeacherName = "";
+
+    private String activeUserFirstName = "";
+    private String activeUserLastName = ""; // TEMP: see loadClassesFromDb() comment re: advisor vs. syncing teacher
     /**
      * Cached list of all answer keys — refreshed on load and after CRUD operations.
      */
@@ -165,7 +168,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private com.google.android.material.floatingactionbutton.FloatingActionButton fabMain;
     private View fabScrim;
     private LinearLayout fabMenu;
-    private LinearLayout fabClassRow, fabAnswerKeyRow, fabTestRow;
+    private LinearLayout fabClassRow, fabAnswerKeyRow, fabTestRow, fabSyncRow;
     private TextView fabClassLabel;
     private boolean fabMenuOpen = false;
 
@@ -174,6 +177,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private TextView breadcrumbRoot, breadcrumbSep1, breadcrumbClass,
             breadcrumbSep2, breadcrumbActivity;
 
+    private final java.util.concurrent.ExecutorService syncExecutor =
+            java.util.concurrent.Executors.newSingleThreadExecutor();
+    private static final String SYNC_URL = "http://192.168.1.130:8000/api/classrooms/sync"; // route to the STARS system
 
     // ═══════════════════════════════════════════════════════════════
     // LIFECYCLE
@@ -255,6 +261,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             searchDebounceHandler.removeCallbacks(pendingHomeSearchRunnable);
         if (pendingAssessmentSearchRunnable != null)
             searchDebounceHandler.removeCallbacks(pendingAssessmentSearchRunnable);
+        syncExecutor.shutdown();
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -341,6 +348,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         fabAnswerKeyRow = findViewById(R.id.fabAnswerKeyRow);
         fabTestRow = findViewById(R.id.fabTestRow);
         fabClassLabel = findViewById(R.id.fabClassLabel);
+        fabSyncRow = findViewById(R.id.fabSyncRow);
 
         breadcrumbBar = findViewById(R.id.breadcrumbBar);
         breadcrumbDivider = findViewById(R.id.breadcrumbDivider);
@@ -372,6 +380,11 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             closeFabMenu();
             new DataInspector(this).printAll();
             new DataExporter(this).exportAll();
+        });
+
+        fabSyncRow.setOnClickListener(v -> {
+            closeFabMenu();
+            onSyncClicked();
         });
 
         teacherNameRow.setOnClickListener(v -> dialogs.showEditTeacherNameDialog());
@@ -447,6 +460,33 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         });
     }
 
+    /**
+     * Placeholder for the sync action. The actual server contract (routes,
+     * request/response shape) isn't finalized yet, so this just acknowledges
+     * the tap for now — no network call wired up.
+     */
+    private void onSyncClicked() {
+        if (activeUserFirstName == null || activeUserFirstName.isEmpty()) {
+            ui.showErrorDialog("Scan required",
+                    "Please scan your QR code from the website system before syncing.");
+            return;
+        }
+
+        repo.getActiveUser(user -> {
+            if (user == null || user.userId == null) {
+                runOnUiThread(() -> ui.showErrorDialog("Scan required",
+                        "Please scan your QR code from the website system before syncing."));
+                return;
+            }
+            ensureTeacherId(teacherId -> {
+                if (teacherId <= 0) return;
+                runOnUiThread(() ->
+                        android.widget.Toast.makeText(this, "Syncing…", android.widget.Toast.LENGTH_SHORT).show());
+                performClassroomSync(user.userId, teacherId);
+            });
+        });
+    }
+
     private void toggleFabMenu() {
         if (fabMenuOpen) closeFabMenu();
         else openFabMenu();
@@ -469,23 +509,26 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
     /** Show only the rows relevant to the current screen, and relabel "Class" → "Assessment". */
     private void updateFabMenuRowsForScreen() {
+        // Sync is available from every screen.
+        fabSyncRow.setVisibility(View.VISIBLE);
+
         switch (currentScreen) {
             case SCREEN_HOME:
                 fabClassLabel.setText("New class");
-                fabClassRow.setVisibility(View.VISIBLE);
+                fabClassRow.setVisibility(View.GONE);
                 fabAnswerKeyRow.setVisibility(View.VISIBLE);
-                fabTestRow.setVisibility(View.VISIBLE);
+                fabTestRow.setVisibility(View.GONE);
                 break;
             case SCREEN_CLASS:
                 fabClassLabel.setText("New assessment");
                 fabClassRow.setVisibility(View.VISIBLE);
                 fabAnswerKeyRow.setVisibility(View.GONE);
-                fabTestRow.setVisibility(View.VISIBLE);
+                fabTestRow.setVisibility(View.GONE);
                 break;
             case SCREEN_ACTIVITY:
                 fabClassRow.setVisibility(View.GONE);
                 fabAnswerKeyRow.setVisibility(View.GONE);
-                fabTestRow.setVisibility(View.VISIBLE);
+                fabTestRow.setVisibility(View.GONE);
                 break;
         }
     }
@@ -724,6 +767,107 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         }
     }
 
+    // Method to communicate with the system
+    private void performClassroomSync(int userId, int teacherId) {
+        syncExecutor.execute(() -> {
+            java.net.HttpURLConnection conn = null;
+            try {
+                java.net.URL url = new java.net.URL(SYNC_URL);
+                conn = (java.net.HttpURLConnection) url.openConnection();
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/json");
+                conn.setRequestProperty("Accept", "application/json");
+                conn.setDoOutput(true);
+
+                org.json.JSONObject body = new org.json.JSONObject();
+                body.put("userId", userId);
+
+                try (java.io.OutputStream os = conn.getOutputStream()) {
+                    os.write(body.toString().getBytes("UTF-8"));
+                }
+
+                int code = conn.getResponseCode();
+                java.io.InputStream is = (code >= 200 && code < 300)
+                        ? conn.getInputStream() : conn.getErrorStream();
+
+                StringBuilder sb = new StringBuilder();
+                try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(is, "UTF-8"))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) sb.append(line);
+                }
+
+                String responseBody = sb.toString();
+                android.util.Log.d("OMR_CLASSROOM_SYNC", "HTTP " + code + " — raw response: " + responseBody);
+
+                org.json.JSONObject root = new org.json.JSONObject(responseBody);
+                boolean success = root.optBoolean("success", false);
+                String message = root.optString("message", "");
+                android.util.Log.d("OMR_CLASSROOM_SYNC", "success=" + success + " message=" + message);
+
+                org.json.JSONObject data = root.optJSONObject("data");
+                int written = 0;
+                if (data != null) {
+                    java.util.Iterator<String> gradeKeys = data.keys();
+                    while (gradeKeys.hasNext()) {
+                        String gradeLevel = gradeKeys.next();
+                        org.json.JSONArray classrooms = data.optJSONArray(gradeLevel);
+                        if (classrooms == null) continue;
+                        for (int i = 0; i < classrooms.length(); i++) {
+                            org.json.JSONObject c = classrooms.getJSONObject(i);
+
+                            android.util.Log.d("OMR_CLASSROOM_SYNC",
+                                    gradeLevel
+                                            + " | classroom_id=" + c.optInt("classroom_id")
+                                            + " section=" + c.optString("section")
+                                            + " section_id=" + c.optInt("section_id")
+                                            + " advisor=" + c.optString("advisor")
+                                            + " subject=" + c.optString("subject")
+                                            + " classes=" + c.optInt("classes")
+                                            + " is_advisory=" + c.optInt("is_advisory")
+                                            + " grade_level=" + c.optString("grade_level")
+                                            + " school_year=" + c.optString("school_year")
+                                            + " teacher_class_id=" + c.optInt("teacher_class_id"));
+
+                            com.example.omrscanner.database.entities.ClassEntity entity =
+                                    new com.example.omrscanner.database.entities.ClassEntity();
+                            entity.teacherId = teacherId;
+                            entity.grade = c.optString("grade_level", gradeLevel);
+                            entity.section = c.optString("section");
+                            entity.schoolYear = c.optString("school_year");
+                            entity.classroomId = c.optInt("classroom_id");
+                            entity.sectionId = c.optInt("section_id");
+                            entity.advisor = c.optString("advisor");
+                            entity.subject = c.optString("subject");
+                            entity.classes = String.valueOf(c.optInt("classes"));
+                            entity.isAdvisory = c.optInt("is_advisory") == 1;
+                            entity.teacherClassId = c.optInt("teacher_class_id");
+
+                            repo.upsertClassFromSync(entity, null);
+                            written++;
+                        }
+                    }
+                }
+
+                final int totalWritten = written;
+                runOnUiThread(() -> {
+                    android.widget.Toast.makeText(this,
+                            "Synced " + totalWritten + " class" + (totalWritten == 1 ? "" : "es"),
+                            android.widget.Toast.LENGTH_SHORT).show();
+                    loadDataFromDb(); // refresh class cards with the new/updated rows
+                });
+            } catch (Exception e) {
+                android.util.Log.e("OMR_CLASSROOM_SYNC", "Sync failed: " + e.getClass().getSimpleName() + ": " + e.getMessage(), e);
+                runOnUiThread(() -> ui.showErrorDialog("Sync failed",
+                        "Could not sync classrooms: " + e.getMessage()));
+            } finally {
+                if (conn != null) conn.disconnect();
+            }
+        });
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // NAVIGATION
     // ═══════════════════════════════════════════════════════════════
@@ -740,6 +884,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             case SCREEN_HOME:
                 screenHome.setVisibility(View.VISIBLE);
                 btnBack.setVisibility(View.GONE);
+                fabMain.setVisibility(View.VISIBLE);
                 topBarTitle.setText("SagotSuri");
                 topBarBadge.setVisibility(View.GONE);
                 if (!classSearchQuery.equals(homeClassSearchInput.getText().toString())) {
@@ -747,16 +892,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     homeClassSearchInput.setSelection(homeClassSearchInput.getText().length());
                 }
                 updateSortPickers();
-                if (globalTeacherName != null && !globalTeacherName.isEmpty()) {
-                    // Automatically set name upon scan
-                    tvTeacherName.setText(globalTeacherName);
-                    tvTeacherName.setTextColor(Color.parseColor("#FFFFFF"));
-                    tvTeacherName.setTypeface(null, Typeface.BOLD);
-                } else {
-                    tvTeacherName.setText("Tap to set teacher name \n(automatic)"); //  put here the teacher data from the system
-                    tvTeacherName.setTextColor(Color.parseColor("#BFDBFE"));
-                    tvTeacherName.setTypeface(null, Typeface.NORMAL);
-                }
+                refreshTeacherNameHeader();
                 breadcrumbBar.setVisibility(View.GONE);
                 breadcrumbDivider.setVisibility(View.GONE);
                 renderHomeScreen();
@@ -769,6 +905,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 }
                 screenClass.setVisibility(View.VISIBLE);
                 btnBack.setVisibility(View.VISIBLE);
+                fabMain.setVisibility(View.VISIBLE);
                 topBarTitle.setText(selectedClass.getDisplayName());
                 topBarBadge.setVisibility(View.VISIBLE);
                 topBarBadge.setText("📁 " + selectedClass.getActivityCount());
@@ -795,6 +932,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 }
                 screenActivity.setVisibility(View.VISIBLE);
                 btnBack.setVisibility(View.VISIBLE);
+                fabMain.setVisibility(View.GONE);
                 topBarTitle.setText(selectedActivity.getName());
                 topBarBadge.setVisibility(View.VISIBLE);
                 topBarBadge.setText(selectedActivity.getSheetType());
@@ -1114,6 +1252,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         final String prevActivityId = (selectedActivity != null) ? selectedActivity.getId() : null;
         final String prevScreen = currentScreen;
 
+        // Always check for a scanned-in active user, regardless of local teacher state.
+        repo.getActiveUser(user -> {
+            activeUserFirstName = (user != null && user.firstName != null) ? user.firstName : "";
+            activeUserLastName = (user != null && user.lastName != null) ? user.lastName : ""; // TEMP
+            runOnUiThread(this::refreshTeacherNameHeader);
+        });
+
         repo.getFirstTeacher(teacher -> {
             if (teacher != null) {
                 globalTeacherName = teacher.name != null ? teacher.name : "";
@@ -1143,7 +1288,16 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             }
             AtomicInteger classCountdown = new AtomicInteger(classEntities.size());
             for (ClassEntity ce : classEntities) {
-                ClassFolder cf = DataMapper.toClassFolder(ce, globalTeacherName);
+                //ClassFolder cf = DataMapper.toClassFolder(ce, globalTeacherName);
+                // TEMP: showing the scanned-in user's full name (from UserEntity) on class cards.
+// Revisit if it turns out "advisor" (the per-classroom homeroom teacher from
+// sync data) is actually what should be shown instead — advisor can differ
+// from the syncing teacher when they're a subject teacher, not the adviser,
+// for that section. Ask OJT trainor to confirm before removing this fallback.
+                String displayTeacherName = (activeUserFirstName != null && !activeUserFirstName.isEmpty())
+                        ? (activeUserFirstName + (activeUserLastName != null && !activeUserLastName.isEmpty() ? " " + activeUserLastName : ""))
+                        : globalTeacherName;
+                ClassFolder cf = DataMapper.toClassFolder(ce, displayTeacherName);
                 repo.getAssessmentsByClass(ce.id, assessmentEntities -> {
                     List<ActivityFolder> activities = new ArrayList<>();
                     if (assessmentEntities == null || assessmentEntities.isEmpty()) {
@@ -1211,6 +1365,21 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 callback.onResult(-1);
             }
         });
+    }
+
+    private void refreshTeacherNameHeader() {
+        String displayName = (activeUserFirstName != null && !activeUserFirstName.isEmpty())
+                ? activeUserFirstName
+                : globalTeacherName;
+        if (displayName != null && !displayName.isEmpty()) {
+            tvTeacherName.setText(displayName);
+            tvTeacherName.setTextColor(Color.parseColor("#FFFFFF"));
+            tvTeacherName.setTypeface(null, Typeface.BOLD);
+        } else {
+            tvTeacherName.setText("Tap to set teacher name \n(automatic)");
+            tvTeacherName.setTextColor(Color.parseColor("#BFDBFE"));
+            tvTeacherName.setTypeface(null, Typeface.NORMAL);
+        }
     }
 
     private void publishResult(List<ClassFolder> loaded,

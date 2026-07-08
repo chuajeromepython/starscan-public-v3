@@ -56,6 +56,7 @@ public class QrScannerActivity extends AppCompatActivity {
     private static final String QR_ENCRYPTION_KEY = "1234";
 
     //private static final String SERVER_URL = "http://192.168.1.131";
+    //private static final String SERVER_URL = "http://192.168.1.130:8000";
     private static final String SERVER_URL = "http://192.168.1.130:8000";
 
     private PreviewView previewView;

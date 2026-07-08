@@ -30,6 +30,9 @@ public interface ClassDao {
   @Query("SELECT * FROM classes WHERE id = :id")
   ClassEntity getById(String id);
 
+  @Query("SELECT * FROM classes WHERE classroom_id = :classroomId LIMIT 1")
+  ClassEntity getByClassroomId(int classroomId);
+
   @Query("SELECT * FROM classes WHERE teacher_id = :teacherId ORDER BY created_at DESC")
   List<ClassEntity> getByTeacher(int teacherId);
 
