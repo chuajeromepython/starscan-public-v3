@@ -30,6 +30,11 @@ public class AssessmentListRow {
   @ColumnInfo(name = "scanCount")
   public int scanCount;
 
+  // NEW: how many students were synced from the backend for this assessment's class
+  @ColumnInfo(name = "syncedStudentCount")
+  public int syncedStudentCount;
+
+
   /** Nullable: the ID of the assigned answer key, or null if none. */
   @ColumnInfo(name = "answerKeyId")
   public String answerKeyId;

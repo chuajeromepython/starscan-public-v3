@@ -3,6 +3,7 @@ package com.example.omrscanner.database.dao;
 import androidx.room.Dao;
 import androidx.room.Delete;
 import androidx.room.Insert;
+import androidx.room.OnConflictStrategy;
 import androidx.room.Query;
 import androidx.room.Update;
 
@@ -13,7 +14,7 @@ import java.util.List;
 @Dao
 public interface StudentLrnDao {
 
-    @Insert
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     long insert(StudentLrnEntity student);
 
     @Update
@@ -33,4 +34,7 @@ public interface StudentLrnDao {
 
     @Query("SELECT * FROM student_lrn WHERE className = :className")
     List<StudentLrnEntity> findByClass(String className);
+
+    @Query("SELECT COUNT(DISTINCT lrn) FROM student_lrn WHERE className = :className")
+    int countByClass(String className);
 }

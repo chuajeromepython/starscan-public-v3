@@ -37,6 +37,7 @@ import com.example.omrscanner.database.entities.UserEntity;
  *   2 → 3: Added answer_keys table + assessments.answer_key_id column.
  *   4 → 5: Added users table
  *   5 → 6: Added assessment_type
+ *   13 → 14: Deduped student_lrn and added unique (lrn, className) index
  *
  * Usage:
  * AppDatabase db = AppDatabase.getInstance(context);
@@ -51,7 +52,7 @@ import com.example.omrscanner.database.entities.UserEntity;
     AnswerKeyEntity.class,
         UserEntity.class,
         StudentLrnEntity.class
-}, version = 13, exportSchema = false)
+}, version = 14, exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase {
 
   private static final String DATABASE_NAME = "omrscanner.db";
@@ -213,6 +214,21 @@ public abstract class AppDatabase extends RoomDatabase {
     }
   };
 
+  private static final Migration MIGRATION_13_14 = new Migration(13, 14) {
+    @Override
+    public void migrate(@NonNull SupportSQLiteDatabase db) {
+      // Collapse any duplicates that accumulated from repeated syncs before
+      // this migration, keeping the earliest row per (lrn, className) pair.
+      db.execSQL(
+              "DELETE FROM student_lrn WHERE id NOT IN ("
+                      + "SELECT MIN(id) FROM student_lrn GROUP BY lrn, className)");
+
+      db.execSQL(
+              "CREATE UNIQUE INDEX IF NOT EXISTS index_student_lrn_lrn_className "
+                      + "ON student_lrn(lrn, className)");
+    }
+  };
+
   // ── Abstract DAO accessors (Room generates the implementations) ──────────
   public abstract TeacherDao teacherDao();
 
@@ -239,7 +255,7 @@ public abstract class AppDatabase extends RoomDatabase {
               context.getApplicationContext(),
               AppDatabase.class,
               DATABASE_NAME)
-                  .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
+                  .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
               .build();
         }
       }

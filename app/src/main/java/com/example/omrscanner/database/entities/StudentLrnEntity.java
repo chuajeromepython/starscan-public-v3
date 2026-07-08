@@ -2,9 +2,13 @@ package com.example.omrscanner.database.entities;
 
 import androidx.room.ColumnInfo;
 import androidx.room.Entity;
+import androidx.room.Index;
 import androidx.room.PrimaryKey;
 
-@Entity(tableName = "student_lrn")
+@Entity(
+        tableName = "student_lrn",
+        indices = { @Index(value = {"lrn", "className"}, unique = true) }
+)
 public class StudentLrnEntity {
 
     @PrimaryKey(autoGenerate = true)

@@ -218,9 +218,9 @@ public class ClassScreenRenderer {
         String dateToShow = (row.examDate != null && !row.examDate.isEmpty())
                 ? row.examDate
                 : new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
-                        .format(new java.util.Date(row.createdAt));
-        meta.setText("\uD83D\uDC65 " + row.scanCount + " student"
-                + (row.scanCount != 1 ? "s" : "") + " · " + dateToShow);
+                .format(new java.util.Date(row.createdAt));
+        meta.setText("\uD83D\uDC65 " + row.scanCount + " of " + row.syncedStudentCount + " student"
+                + (row.syncedStudentCount != 1 ? "s" : "") + " scanned · " + dateToShow);
         meta.setTextColor(Color.parseColor("#94A3B8"));
         meta.setTextSize(11);
         LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(
