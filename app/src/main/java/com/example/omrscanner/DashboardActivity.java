@@ -399,7 +399,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             onAssessmentSyncClicked();
         });
 
-        teacherNameRow.setOnClickListener(v -> dialogs.showEditTeacherNameDialog());
+        //teacherNameRow.setOnClickListener(v -> dialogs.showEditTeacherNameDialog());
 
         breadcrumbRoot.setOnClickListener(v -> {
             selectedClass = null;
@@ -1364,22 +1364,38 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         repo.getActiveUser(user -> {
             activeUserFirstName = (user != null && user.firstName != null) ? user.firstName : "";
             activeUserLastName = (user != null && user.lastName != null) ? user.lastName : ""; // TEMP
+
+            if (!activeUserFirstName.isEmpty()) {
+                globalTeacherName = activeUserFirstName
+                        + (!activeUserLastName.isEmpty() ? " " + activeUserLastName : "");
+            }
+
             runOnUiThread(this::refreshTeacherNameHeader);
         });
 
         repo.getFirstTeacher(teacher -> {
+            // Don't let the "teachers" table (name is always "" now that manual editing is
+            // gone) clobber the name we just set from the scanned-in active user above.
+            boolean hasScannedName = activeUserFirstName != null && !activeUserFirstName.isEmpty();
+
             if (teacher != null) {
-                globalTeacherName = teacher.name != null ? teacher.name : "";
+                if (!hasScannedName) {
+                    globalTeacherName = teacher.name != null ? teacher.name : "";
+                }
                 currentTeacherId = teacher.id;
                 loadClassesFromDb(prevClassId, prevActivityId, prevScreen);
                 return;
             }
             repo.upsertTeacher("", ensuredTeacher -> {
                 if (ensuredTeacher != null) {
-                    globalTeacherName = ensuredTeacher.name != null ? ensuredTeacher.name : "";
+                    if (!hasScannedName) {
+                        globalTeacherName = ensuredTeacher.name != null ? ensuredTeacher.name : "";
+                    }
                     currentTeacherId = ensuredTeacher.id;
                 } else {
-                    globalTeacherName = "";
+                    if (!hasScannedName) {
+                        globalTeacherName = "";
+                    }
                     currentTeacherId = -1;
                 }
                 loadClassesFromDb(prevClassId, prevActivityId, prevScreen);
@@ -1484,7 +1500,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             tvTeacherName.setTextColor(Color.parseColor("#FFFFFF"));
             tvTeacherName.setTypeface(null, Typeface.BOLD);
         } else {
-            tvTeacherName.setText("Tap to set teacher name \n(automatic)");
+            tvTeacherName.setText("Scan your QR code\nto set your name");
             tvTeacherName.setTextColor(Color.parseColor("#BFDBFE"));
             tvTeacherName.setTypeface(null, Typeface.NORMAL);
         }

@@ -203,18 +203,24 @@ public class QrScannerActivity extends AppCompatActivity {
             return;
         }
 
+// The Laravel backend embeds a bare "host:port" (e.g. "172.17.211.2:8000") in the
+// QR payload, but java.net.URL and the sync calls in DashboardActivity both require
+// a full URL with a scheme. Normalize it once here so every downstream consumer
+// (ping + classroom/assessment sync) gets a consistent, parseable URL.
+        String normalizedHost = normalizeServerUrl(payload.host);
+
         UserEntity user = new UserEntity();
         user.username = payload.username;
         user.userId = payload.userId;
         user.passkey = payload.passKey;
-        user.serverIp = payload.host;
+        user.serverIp = normalizedHost;
         user.firstName = payload.firstName;
         user.middleName = payload.middleName.isEmpty() ? "" : payload.middleName;
         user.lastName = payload.lastName;
         user.suffix = payload.suffix;
         user.school = payload.schoolName;
 
-        pingServer(payload.host, (success, message) -> {
+        pingServer(normalizedHost, (success, message) -> {
             if (!success) {
                 showMessageDialog("Failed", "Could not save — server unreachable.\n" + message);
                 return;
@@ -354,6 +360,25 @@ public class QrScannerActivity extends AppCompatActivity {
             String finalMessage = message;
             runOnUiThread(() -> callback.onResult(finalSuccess, finalMessage));
         });
+    }
+
+    /**
+     * Ensures a server address has a URL scheme. The Laravel backend currently sends a bare
+     * "host:port" (or "host") in the QR payload — e.g. "172.17.211.2:8000" — which is not a
+     * valid argument for java.net.URL ("no protocol"). If a scheme is already present it is
+     * left untouched, so this is safe to call even if the backend is later fixed to include one.
+     */
+    private static String normalizeServerUrl(String host) {
+        String trimmed = host.trim();
+        // Strip a trailing slash (e.g. Laravel's APP_URL is sometimes configured with one) so
+        // that DashboardActivity's "serverIp + path" concatenation never produces "//api/...".
+        while (trimmed.endsWith("/")) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
+        if (trimmed.matches("(?i)^[a-z][a-z0-9+.-]*://.*")) {
+            return trimmed;
+        }
+        return "http://" + trimmed;
     }
 
     @Override

@@ -86,10 +86,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
                     android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:clickable="true"
-                    android:focusable="true">
+                    android:gravity="center_vertical">
 
                     <TextView
                         android:id="@+id/tvTeacherName"
@@ -99,21 +96,10 @@
                         android:includeFontPadding="false"
                         android:maxLines="2"
                         android:fontFamily="@font/poppins_medium"
-                        android:text="Tap to set teacher name"
+                        android:text="Scan your QR code to set your name"
                         android:textColor="#FFFFFF"
                         android:textSize="14sp"
                         android:textStyle="bold" />
-
-                    <ImageView
-                        android:id="@+id/btnEditTeacherName"
-                        android:layout_width="14dp"
-                        android:layout_height="14dp"
-                        android:src="@drawable/ic_edit_pencil"
-                        android:layout_marginStart="6dp"
-                        android:layout_marginTop="3dp"
-                        android:alpha="0.9"
-                        app:tint="#E2E8F0"
-                        android:contentDescription="Edit teacher name" />
 
                 </LinearLayout>
 
