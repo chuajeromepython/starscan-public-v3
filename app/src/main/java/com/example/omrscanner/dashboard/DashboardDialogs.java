@@ -54,6 +54,8 @@ public class DashboardDialogs {
         List<AnswerKeyEntity> getAnswerKeys();
         /** Triggers a background reload of all answer keys from the DB. */
         void reloadAnswerKeys();
+        /** Uploads a completed assessment's CSV to the STARS backend. */
+        void uploadAssessment(ActivityFolder act, ClassFolder cls, int assessmentId);
     }
 
     private final AppCompatActivity activity;
@@ -696,6 +698,66 @@ public class DashboardDialogs {
                 ui.showToast("Assessment updated ✓");
                 host.loadDataFromDb();
             }));
+        });
+
+        dialog.setContentView(root);
+        ui.configureBottomDialog(dialog);
+        dialog.show();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Upload assessment (send CSV to STARS backend)
+    // ─────────────────────────────────────────────────────────────
+
+    public void showUploadAssessmentDialog(ActivityFolder act, ClassFolder cls) {
+        Dialog dialog = new Dialog(activity);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setCancelable(true);
+
+        LinearLayout root = ui.buildSheet();
+        root.addView(ui.createDialogHandle());
+        root.addView(ui.buildSheetTitle("⬆️ Upload Assessment", "#059669", Gravity.START, 16));
+
+        TextView note = new TextView(activity);
+        note.setText("Sends \"" + act.getName() + "\" results to the STARS system.");
+        note.setTextColor(Color.parseColor("#64748B"));
+        note.setTextSize(13);
+        LinearLayout.LayoutParams noteLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        noteLp.bottomMargin = ui.dp(16);
+        note.setLayoutParams(noteLp);
+        root.addView(note);
+
+        root.addView(ui.createFieldLabel("ASSESSMENT ID *"));
+        EditText idInput = ui.createLightInput("e.g. 42");
+        idInput.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        root.addView(idInput);
+
+        LinearLayout actions = ui.buildActionsRow(ui.dp(20));
+        TextView btnCancel = ui.createDialogButton("Cancel", false);
+        TextView btnUpload = ui.createDialogButton("Upload", true);
+        actions.addView(btnCancel);
+        actions.addView(ui.spacer(ui.dp(10)));
+        actions.addView(btnUpload);
+        root.addView(actions);
+
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+        btnUpload.setOnClickListener(v -> {
+            String raw = idInput.getText().toString().trim();
+            if (raw.isEmpty()) {
+                ui.showErrorDialog("Assessment ID Required", "Please enter the assessment ID.");
+                return;
+            }
+            int assessmentId;
+            try {
+                assessmentId = Integer.parseInt(raw);
+            } catch (NumberFormatException e) {
+                ui.showErrorDialog("Invalid Assessment ID", "Assessment ID must be a whole number.");
+                return;
+            }
+
+            dialog.dismiss();
+            host.uploadAssessment(act, cls, assessmentId);
         });
 
         dialog.setContentView(root);

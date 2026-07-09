@@ -53,7 +53,7 @@ public class QrScannerActivity extends AppCompatActivity {
 
     // ── Must be the EXACT same value as USER_QR_ENCRYPTION_KEY in the
     // Laravel app's .env (including the "base64:" prefix, if present). ─────
-    private static final String QR_ENCRYPTION_KEY = "1234";
+    private static final String QR_ENCRYPTION_KEY = "12345";
 
     //private static final String SERVER_URL = "http://192.168.1.131";
     //private static final String SERVER_URL = "http://192.168.1.130:8000";

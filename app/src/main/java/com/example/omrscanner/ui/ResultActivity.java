@@ -629,12 +629,14 @@ public class ResultActivity extends AppCompatActivity {
             com.example.omrscanner.database.OMRRepository repo =
                     new com.example.omrscanner.database.OMRRepository(ResultActivity.this);
             boolean lrnFoundInStudentLrn = repo.isLrnInStudentLrnTableSync(scanResult.lnr);
+            boolean recentlySynced = !lrnFoundInStudentLrn
+                    && DashboardActivity.hasSyncedStudentsRecently(ResultActivity.this, classId);
 
             runOnUiThread(() -> {
                 showLoading(false);
 
                 if (!lrnFoundInStudentLrn) {
-                    showLrnNotRecognizedError();
+                    showLrnNotRecognizedError(recentlySynced);
                     return;
                 }
 
@@ -650,7 +652,7 @@ public class ResultActivity extends AppCompatActivity {
      * or confirmLrn(), and keeps Save disabled until the teacher fixes the
      * LRN and taps CONFIRM again.
      */
-    private void showLrnNotRecognizedError() {
+    private void showLrnNotRecognizedError(boolean recentlySynced) {
         isLrnConfirmed = false;
 
         // Re-enable all digit boxes so the teacher can correct the LRN,
@@ -680,13 +682,68 @@ public class ResultActivity extends AppCompatActivity {
 
         btnExport.setEnabled(false);
 
-        new android.app.AlertDialog.Builder(this)
+        android.app.AlertDialog.Builder builder =
+                new android.app.AlertDialog.Builder(this)
                 .setTitle("LRN Not Recognized")
                 .setMessage("LRN " + scanResult.lnr
                         + " was not found in the student LRN list. "
-                        + "This scan was not saved.")
-                .setPositiveButton("OK", null)
-                .show();
+                        + "This scan was not saved.");
+
+        if (recentlySynced) {
+            // Roster was synced recently — a missing LRN likely means the LRN itself is incorrect.
+            builder.setPositiveButton("OK", null);
+        } else {
+            // Roster may be stale — offer to sync students.
+            builder.setPositiveButton("Sync Students",
+                    (dialog, which) -> triggerStudentSync());
+        }
+
+        builder.show();
+    }
+
+    /**
+     * Same validation as DashboardActivity.onAssessmentSyncClicked(), then
+     * delegates to the shared sync logic so this button behaves identically
+     * to the Dashboard's "Sync Students" button.
+     */
+    private void triggerStudentSync() {
+        if (classId == null) {
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("No class selected")
+                    .setMessage("Open a class before syncing its students.")
+                    .setPositiveButton("OK", null)
+                    .show();
+            return;
+        }
+
+        new Thread(() -> {
+            com.example.omrscanner.database.OMRRepository repo =
+                    new com.example.omrscanner.database.OMRRepository(ResultActivity.this);
+
+            com.example.omrscanner.database.entities.ClassEntity classEntity = repo.getClassByIdSync(classId);
+
+            if (classEntity == null || classEntity.classroomId == null) {
+                runOnUiThread(() -> new android.app.AlertDialog.Builder(this)
+                        .setTitle("Missing classroom ID")
+                        .setMessage("This class wasn't synced from the server, so it has no classroom ID to sync students for.")
+                        .setPositiveButton("OK", null)
+                        .show());
+                return;
+            }
+
+            repo.getActiveUser(user -> {
+                if (user == null || user.serverIp == null || user.serverIp.trim().isEmpty()) {
+                    runOnUiThread(() -> new android.app.AlertDialog.Builder(this)
+                            .setTitle("Scan required")
+                            .setMessage("Please scan your QR code from the website system before syncing.")
+                            .setPositiveButton("OK", null)
+                            .show());
+                    return;
+                }
+                DashboardActivity.syncStudentsForClass(
+                        ResultActivity.this, classId, classEntity.classroomId, user.serverIp);
+            });
+        }).start();
     }
 
     /**

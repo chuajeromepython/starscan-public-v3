@@ -184,6 +184,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             java.util.concurrent.Executors.newSingleThreadExecutor();
     private static final String SYNC_PATH = "/api/classrooms/sync"; // route to the STARS system (classes)
     private static final String ASSESSMENT_SYNC_PATH = "/api/students/sync"; // (student_lrn)
+    private static final String UPLOAD_ASSESSMENT_PATH = "/api/upload/assessment"; // multipart CSV upload
+    private static final String SYNC_PREFS = "omr_sync_prefs";
+    private static final String SYNC_PREFS_KEY_PREFIX = "last_sync_millis_";
+    private static final long STUDENT_SYNC_STALE_MS = 24L * 60 * 60 * 1000; // 24 hours
 
 
     // user ip from users is_active
@@ -494,23 +498,80 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     }
 
     private void performAssessmentSync(int classroomId, String serverIp) {
+        String localClassId = (selectedClass != null) ? selectedClass.getId() : null;
+        syncStudentsForClass(this, localClassId, classroomId, serverIp);
+    }
+
+    @Override
+    public void uploadAssessment(ActivityFolder act, ClassFolder cls, int assessmentId) {
+        if (cls.getClassroomId() == null) {
+            ui.showErrorDialog("Missing classroom ID",
+                    "This class wasn't synced from the server, so it has no classroom ID to upload against.");
+            return;
+        }
+
+        java.io.File csvFile = ClassExporter.getAssessmentCsvFile(cls, act);
+        if (!csvFile.exists()) {
+            ui.showErrorDialog("No scans to upload",
+                    "No CSV was found for this assessment yet — scan at least one sheet first.");
+            return;
+        }
+
+        repo.getActiveUser(user -> {
+            if (user == null || user.serverIp == null || user.serverIp.trim().isEmpty()) {
+                runOnUiThread(() -> ui.showErrorDialog("Scan required",
+                        "Please scan your QR code from the website system before uploading."));
+                return;
+            }
+            runOnUiThread(() -> Toast.makeText(this, "Uploading…", Toast.LENGTH_SHORT).show());
+            performAssessmentUpload(assessmentId, cls.getClassroomId(), csvFile, user.serverIp);
+        });
+    }
+
+    private void performAssessmentUpload(int assessmentId, int classroomId, java.io.File csvFile, String serverIp) {
         syncExecutor.execute(() -> {
             java.net.HttpURLConnection conn = null;
             try {
-                java.net.URL url = new java.net.URL(serverIp + ASSESSMENT_SYNC_PATH);
+                android.util.Log.d("OMR_ASSESSMENT_UPLOAD",
+                        "Sending → assessment_id=" + assessmentId
+                                + " class_id=" + classroomId
+                                + " file=" + csvFile.getAbsolutePath()
+                                + " (" + csvFile.length() + " bytes)"
+                                + " url=" + serverIp + UPLOAD_ASSESSMENT_PATH);
+                String boundary = "----OMRBoundary" + System.currentTimeMillis();
+                try {
+                    String csvContents = new String(
+                            java.nio.file.Files.readAllBytes(csvFile.toPath()), "UTF-8");
+                    android.util.Log.d("OMR_ASSESSMENT_UPLOAD", "CSV contents:\n" + csvContents);
+                } catch (Exception logEx) {
+                    android.util.Log.w("OMR_ASSESSMENT_UPLOAD", "Could not read CSV for logging", logEx);
+                }
+                java.net.URL url = new java.net.URL(serverIp + UPLOAD_ASSESSMENT_PATH);
                 conn = (java.net.HttpURLConnection) url.openConnection();
-                conn.setConnectTimeout(5000);
-                conn.setReadTimeout(5000);
+                conn.setConnectTimeout(10000);
+                conn.setReadTimeout(30000);
                 conn.setRequestMethod("POST");
-                conn.setRequestProperty("Content-Type", "application/json");
-                conn.setRequestProperty("Accept", "application/json");
                 conn.setDoOutput(true);
-
-                org.json.JSONObject body = new org.json.JSONObject();
-                body.put("classroom_id", classroomId);
+                conn.setRequestProperty("Accept", "application/json");
+                conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
 
                 try (java.io.OutputStream os = conn.getOutputStream()) {
-                    os.write(body.toString().getBytes("UTF-8"));
+                    writeMultipartField(os, boundary, "assessment_id", String.valueOf(assessmentId));
+                    writeMultipartField(os, boundary, "class_id", String.valueOf(classroomId));
+
+                    os.write(("--" + boundary + "\r\n").getBytes("UTF-8"));
+                    os.write(("Content-Disposition: form-data; name=\"file_assessment\"; filename=\""
+                            + csvFile.getName() + "\"\r\n").getBytes("UTF-8"));
+                    os.write("Content-Type: text/csv\r\n\r\n".getBytes("UTF-8"));
+
+                    try (java.io.FileInputStream fis = new java.io.FileInputStream(csvFile)) {
+                        byte[] buffer = new byte[8192];
+                        int n;
+                        while ((n = fis.read(buffer)) != -1) os.write(buffer, 0, n);
+                    }
+
+                    os.write(("\r\n--" + boundary + "--\r\n").getBytes("UTF-8"));
+                    os.flush();
                 }
 
                 int code = conn.getResponseCode();
@@ -525,39 +586,36 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 }
 
                 String responseBody = sb.toString();
-                android.util.Log.d("OMR_STUDENT_SYNC", "HTTP " + code + " — classroom_id=" + classroomId + " — raw response: " + responseBody);
+                android.util.Log.d("OMR_ASSESSMENT_UPLOAD",
+                        "HTTP " + code + " — assessment_id=" + assessmentId + " — raw response: " + responseBody);
 
                 org.json.JSONObject root = new org.json.JSONObject(responseBody);
-                org.json.JSONArray data = root.optJSONArray("data");
+                boolean success = root.optBoolean("success", false);
+                String message = root.optString("message", success ? "Uploaded." : "Upload failed.");
 
-                if (data == null || data.length() == 0) {
-                    runOnUiThread(() -> android.widget.Toast.makeText(this,
-                            "No students found for this class.", android.widget.Toast.LENGTH_SHORT).show());
-                } else {
-                    String classId = (selectedClass != null) ? selectedClass.getId() : null;
-                    int count = data.length();
-                    for (int i = 0; i < count; i++) {
-                        org.json.JSONObject s = data.getJSONObject(i);
-                        String lrn = s.optString("lrn", null);
-                        int sectionId = s.optInt("sectionId");
-                        int gradeLevelId = s.optInt("gradeLevelId");
-                        int studentClassroomId = s.optInt("classroomId");
-                        if (lrn != null) {
-                            repo.insertStudentLrnFromSync(lrn, classId, sectionId, gradeLevelId, studentClassroomId, null);
-                        }
+                runOnUiThread(() -> {
+                    if (success) {
+                        Toast.makeText(this, "✓ " + message, Toast.LENGTH_LONG).show();
+                    } else {
+                        ui.showErrorDialog("Upload failed", message);
                     }
-                    final int savedCount = count;
-                    runOnUiThread(() -> android.widget.Toast.makeText(this,
-                            "Synced " + savedCount + " student" + (savedCount != 1 ? "s" : ""), android.widget.Toast.LENGTH_SHORT).show());
-                }
+                });
             } catch (Exception e) {
-                android.util.Log.e("OMR_STUDENT_SYNC", "Sync failed: " + e.getClass().getSimpleName() + ": " + e.getMessage(), e);
-                runOnUiThread(() -> ui.showErrorDialog("Sync failed",
-                        "Could not sync students: " + e.getMessage()));
+                android.util.Log.e("OMR_ASSESSMENT_UPLOAD",
+                        "Upload failed: " + e.getClass().getSimpleName() + ": " + e.getMessage(), e);
+                runOnUiThread(() -> ui.showErrorDialog("Upload failed",
+                        "Could not upload assessment: " + e.getMessage()));
             } finally {
                 if (conn != null) conn.disconnect();
             }
         });
+    }
+
+    private void writeMultipartField(java.io.OutputStream os, String boundary, String name, String value)
+            throws java.io.IOException {
+        os.write(("--" + boundary + "\r\n").getBytes("UTF-8"));
+        os.write(("Content-Disposition: form-data; name=\"" + name + "\"\r\n\r\n").getBytes("UTF-8"));
+        os.write((value + "\r\n").getBytes("UTF-8"));
     }
 
     /**
@@ -1267,6 +1325,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                 },
                                 () -> {
                                     ActivityFolder a = findActivityById(selectedClass, row.id);
+                                    if (a != null) dialogs.showUploadAssessmentDialog(a, selectedClass);
+                                },
+                                () -> {
+                                    ActivityFolder a = findActivityById(selectedClass, row.id);
                                     if (a == null) {
                                         ui.showErrorDialog("Assessment unavailable",
                                                 "The selected assessment could not be loaded. Please try again.");
@@ -1598,6 +1660,109 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         for (ActivityFolder act : cls.getActivities())
             if (act.getId().equals(activityId)) return act;
         return null;
+    }
+
+    /** Records "students were successfully synced for this class right now." */
+    public static void markStudentsSynced(android.content.Context context, String localClassId) {
+        if (localClassId == null) return;
+        context.getSharedPreferences(SYNC_PREFS, android.content.Context.MODE_PRIVATE)
+                .edit()
+                .putLong(SYNC_PREFS_KEY_PREFIX + localClassId, System.currentTimeMillis())
+                .apply();
+    }
+
+    /** True if this class's roster was synced within the last STUDENT_SYNC_STALE_MS. */
+    public static boolean hasSyncedStudentsRecently(android.content.Context context, String localClassId) {
+        if (localClassId == null) return false;
+        long last = context.getSharedPreferences(SYNC_PREFS, android.content.Context.MODE_PRIVATE)
+                .getLong(SYNC_PREFS_KEY_PREFIX + localClassId, 0L);
+        if (last == 0L) return false;
+        return (System.currentTimeMillis() - last) < STUDENT_SYNC_STALE_MS;
+    }
+    /**
+     * Reusable version of the students-sync network call, so other screens
+     * (e.g. the "LRN Not Recognized" dialog in ResultActivity) can trigger a
+     * sync without needing a DashboardActivity instance. Identical
+     * request/response handling to performAssessmentSync — keep them in sync
+     * if this logic ever changes.
+     */
+    public static void syncStudentsForClass(android.content.Context context, String localClassId, int classroomId, String serverIp) {
+        android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+        mainHandler.post(() -> android.widget.Toast.makeText(context, "Syncing students…", android.widget.Toast.LENGTH_SHORT).show());
+
+        new Thread(() -> {
+            java.net.HttpURLConnection conn = null;
+            try {
+                java.net.URL url = new java.net.URL(serverIp + ASSESSMENT_SYNC_PATH);
+                conn = (java.net.HttpURLConnection) url.openConnection();
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/json");
+                conn.setRequestProperty("Accept", "application/json");
+                conn.setDoOutput(true);
+
+                org.json.JSONObject body = new org.json.JSONObject();
+                body.put("classroom_id", classroomId);
+
+                try (java.io.OutputStream os = conn.getOutputStream()) {
+                    os.write(body.toString().getBytes("UTF-8"));
+                }
+
+                int code = conn.getResponseCode();
+                java.io.InputStream is = (code >= 200 && code < 300)
+                        ? conn.getInputStream() : conn.getErrorStream();
+
+                StringBuilder sb = new StringBuilder();
+                try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(is, "UTF-8"))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) sb.append(line);
+                }
+
+                String responseBody = sb.toString();
+                android.util.Log.d("OMR_STUDENT_SYNC", "HTTP " + code + " — classroom_id=" + classroomId + " — raw response: " + responseBody);
+
+                org.json.JSONObject root = new org.json.JSONObject(responseBody);
+                org.json.JSONArray data = root.optJSONArray("data");
+
+                // A successful response — even with 0 students — means the
+                // roster is confirmed up to date as of right now.
+                markStudentsSynced(context, localClassId);
+
+                com.example.omrscanner.database.OMRRepository repo =
+                        new com.example.omrscanner.database.OMRRepository(context);
+
+                if (data == null || data.length() == 0) {
+                    mainHandler.post(() -> android.widget.Toast.makeText(context,
+                            "No students found for this class.", android.widget.Toast.LENGTH_SHORT).show());
+                } else {
+                    int count = data.length();
+                    for (int i = 0; i < count; i++) {
+                        org.json.JSONObject s = data.getJSONObject(i);
+                        String lrn = s.optString("lrn", null);
+                        int sectionId = s.optInt("sectionId");
+                        int gradeLevelId = s.optInt("gradeLevelId");
+                        int studentClassroomId = s.optInt("classroomId");
+                        if (lrn != null) {
+                            repo.insertStudentLrnFromSync(lrn, localClassId, sectionId, gradeLevelId, studentClassroomId, null);
+                        }
+                    }
+                    final int savedCount = count;
+                    mainHandler.post(() -> android.widget.Toast.makeText(context,
+                            "Synced " + savedCount + " student" + (savedCount != 1 ? "s" : ""), android.widget.Toast.LENGTH_SHORT).show());
+                }
+            } catch (Exception e) {
+                android.util.Log.e("OMR_STUDENT_SYNC", "Sync failed: " + e.getClass().getSimpleName() + ": " + e.getMessage(), e);
+                mainHandler.post(() -> new android.app.AlertDialog.Builder(context)
+                        .setTitle("Sync failed")
+                        .setMessage("Could not sync students: " + e.getMessage())
+                        .setPositiveButton("OK", null)
+                        .show());
+            } finally {
+                if (conn != null) conn.disconnect();
+            }
+        }).start();
     }
 
     // ═══════════════════════════════════════════════════════════════

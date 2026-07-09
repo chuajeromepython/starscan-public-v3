@@ -143,6 +143,27 @@ public class ClassExporter {
         }
     }
 
+    /**
+     * Returns the path to the per-assessment CSV that autoSaveClassData writes
+     * on every scan (semicolon-delimited: LRN split into 12 single-digit
+     * columns, then one column per item's answer) — this is the exact file
+     * format the STARS /api/upload/assessment endpoint expects.
+     * Does NOT write/refresh the file — call autoSaveClassData for that.
+     */
+    public static File getAssessmentCsvFile(ClassFolder cls, ActivityFolder act) {
+        File downloadsDir = android.os.Environment
+                .getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS);
+        File omrDir = new File(downloadsDir, "OMRScanner");
+        String folderName = buildClassFolderName(cls);
+        File classDir = new File(omrDir, folderName);
+
+        String sectionStr = cls.getSection() != null ? cls.getSection().replaceAll("\\s+", "") : "Section";
+        String actDirName = sanitizeFilePart(sectionStr + "_" + act.getName());
+        File actDir = new File(classDir, actDirName);
+
+        return new File(actDir, folderName + "_" + sanitizeFilePart(act.getName()) + ".csv");
+    }
+
     // ─────────────────────────────────────────────────────────────
     // File / image utilities
     // ─────────────────────────────────────────────────────────────
