@@ -122,10 +122,16 @@ public class CameraActivity extends AppCompatActivity {
     private ImageView anchorStatusIcon;
     private TextView floatingHintText;
 
+    private FrameLayout btnRotationLock;
+    private ImageView iconRotationLock;
+
+    private View tiltWarningOverlay;
+
     // ── Camera state ──────────────────────────────────────────────
     private int cameraFacing = CameraSelector.LENS_FACING_BACK;
     private boolean isTorchOn = false;
     private boolean fixedMountMode = false;
+    private boolean isRotationLocked = false;
 
     // ── Auto-capture state ────────────────────────────────────────
     private int consecutiveDetections = 0;
@@ -206,21 +212,52 @@ public class CameraActivity extends AppCompatActivity {
     private boolean openCVReady = false;
 
     // ── Icon-rotation state ───────────────────────────────────────
-    // The screen itself is locked to portrait (see manifest), so the
-    // camera preview and guide squares never move. Instead we track the
-    // phone's physical tilt and rotate just the icons/status text to stay
-    // upright for the user, the way most camera apps handle landscape.
+// The screen itself is locked to portrait (see manifest), so the
+// camera preview and guide squares never move. Instead we track the
+// phone's physical tilt and rotate just the icons/status text to stay
+// upright for the user, the way most camera apps handle landscape.
     private OrientationEventListener orientationEventListener;
     private int currentIconRotation = 0;
 
-    // The truthful identity-per-physical-slot mapping at this moment,
-    // expressed as clockwise 90° steps (0-3). This is what the labels are
-    // derived from, and it's also what gets passed downstream at capture
-    // time — the display must never show something the data doesn't back.
-    private int currentLabelRotationSteps = 0;
+    // ── Fixed scanning orientation ──────────────────────────────────
+    // This app is only designed to be scanned with the phone tilted to
+    // the right — that's the one physical orientation the anchor/corner
+    // math below assumes. We no longer try to auto-detect arbitrary tilt
+    // and re-map corner identities on the fly (that guesswork was the
+    // source of the "upside-down capture" bug when someone tilted the
+    // other way). Instead: labels are fixed, and any other orientation
+    // is treated as unsupported and blocks capture (see updateTiltGate).
+    //
+    // NOT YET VERIFIED ON A PHYSICAL DEVICE: Android's orientation-sensor
+    // convention for "which bucket is tilted right" has already tripped
+    // this codebase up once (see the old -90/90 swap this replaced). If
+    // the warning overlay shows while the phone IS correctly tilted
+    // right, flip this constant to 90.
+    private static final int REQUIRED_TILT_ROTATION = 90;
+
+    // Fixed corner-label rotation steps (0-3, clockwise) matching the
+    // phone always being held tilted right. A full 180° swap (steps=2)
+    // is the only value that's mathematically a valid rotation of all
+    // four corners at once (TL<->BR AND TR<->BL) — VERIFY this against
+    // a real printed-sheet test before trusting graded results; if the
+    // trainer's test showed only TL/BR swapping and TR/BL staying put,
+    // that isn't achievable through this steps-based mapping and needs
+    // a different fix (see identityForSlotAtRotation).
+    private static final int FIXED_LABEL_ROTATION_STEPS = 1;
+
+    // This is what gets passed downstream via EXTRA_GUIDE_CORNER_ROTATION_STEPS
+    // at capture time, so the aligner rotates the image the same way the
+    // on-screen labels claim. Fixed at FIXED_LABEL_ROTATION_STEPS — no
+    // longer recomputed per-frame from sensor tilt.
+    private int currentLabelRotationSteps = FIXED_LABEL_ROTATION_STEPS;
+
+    // Whether the phone is currently in the one supported tilt bucket.
+    // Starts true (optimistic) so the warning overlay doesn't flash on
+    // launch before the first sensor reading arrives.
+    private boolean isTiltCorrect = true;
 
     // Corner-label rotation. Slot order below matches guideSquaresViewSpace's
-    // [TL, TR, BL, BR] slot order. CLOCKWISE_SLOT_INDEX gives each slot's
+    // [TL, TR, BL, B   R] slot order. CLOCKWISE_SLOT_INDEX gives each slot's
     // position going clockwise around the rectangle starting at TL
     // (TL=0, TR=1, BR=2, BL=3) — used to shift labels around the fixed
     // boxes as the phone tilts.
@@ -274,6 +311,7 @@ public class CameraActivity extends AppCompatActivity {
 
             initializeViews();
             setupListeners();
+            applyFixedCornerLabels();
 
             cameraExecutor = Executors.newSingleThreadExecutor();
 
@@ -305,6 +343,9 @@ public class CameraActivity extends AppCompatActivity {
         anchorStatusText = findViewById(R.id.anchorStatusText);
         anchorStatusIcon = findViewById(R.id.anchorStatusIcon);
         floatingHintText = findViewById(R.id.floatingHintText);
+        btnRotationLock  = findViewById(R.id.btnRotationLock);
+        iconRotationLock = findViewById(R.id.iconRotationLock);
+        tiltWarningOverlay = findViewById(R.id.tiltWarningOverlay);
 
         if (previewView   == null) Log.e(TAG, "previewView is null!");
         if (btnCapture    == null) Log.e(TAG, "btnCapture is null!");
@@ -315,6 +356,7 @@ public class CameraActivity extends AppCompatActivity {
         if (btnCapture != null) btnCapture.setOnClickListener(v -> takePhoto());
         if (btnCameraBack != null) btnCameraBack.setOnClickListener(v -> finish());
         if (btnFlash != null) btnFlash.setOnClickListener(v -> toggleFlash());
+        if (btnRotationLock != null) btnRotationLock.setOnClickListener(v -> toggleRotationLock());
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -1105,14 +1147,16 @@ public class CameraActivity extends AppCompatActivity {
     }
 
     // ─────────────────────────────────────────────────────────────
-    //  ICON ROTATION (screen stays portrait-locked; only icons turn)
-    // ─────────────────────────────────────────────────────────────
+//  ICON ROTATION (screen stays portrait-locked; only icons turn)
+//  + TILT GATE (this app only supports scanning tilted right)
+// ─────────────────────────────────────────────────────────────
 
     private void setupOrientationListener() {
         orientationEventListener = new OrientationEventListener(this) {
             @Override
             public void onOrientationChanged(int orientation) {
                 if (orientation == ORIENTATION_UNKNOWN) return;
+                if (isRotationLocked) return; // frozen — ignore tilt entirely until unlocked
 
                 int rotation;
                 if (orientation >= 315 || orientation < 45) {
@@ -1125,10 +1169,11 @@ public class CameraActivity extends AppCompatActivity {
                     rotation = 90;    // rotated so the left edge is "up"
                 }
 
+                updateTiltGate(rotation);
+
                 if (rotation != currentIconRotation) {
                     currentIconRotation = rotation;
                     applyIconRotation(rotation);
-                    updateCornerLabelsForRotation(rotation);
                 }
             }
         };
@@ -1144,7 +1189,7 @@ public class CameraActivity extends AppCompatActivity {
      */
     private void applyIconRotation(int rotationDegrees) {
         View[] rotatableViews = {
-                btnCameraBack, iconFlash, anchorStatusIcon, floatingHintText
+                btnCameraBack, iconFlash, iconRotationLock, anchorStatusIcon, floatingHintText
         };
         for (View v : rotatableViews) {
             if (v != null) {
@@ -1153,12 +1198,6 @@ public class CameraActivity extends AppCompatActivity {
         }
     }
 
-    /**
-     * Recomputes which text label ("TL"/"TR"/"BL"/"BR") should show on
-     * each fixed guide square, given the phone's current tilt. The boxes
-     * never move — only which label they display changes, so the user
-     * can tell which sheet corner a given box currently represents.
-     */
     /**
      * Given a rotation-steps value (as passed via
      * EXTRA_GUIDE_CORNER_ROTATION_STEPS) and a physical guide-square slot
@@ -1175,32 +1214,87 @@ public class CameraActivity extends AppCompatActivity {
         return CLOCKWISE_LABELS[sourceIndex];
     }
 
-    private void updateCornerLabelsForRotation(int rotationDegrees) {
-        int steps = clockwiseStepsForIconRotation(rotationDegrees);
-        currentLabelRotationSteps = steps;
-        String[] newLabels = new String[4];
+    /**
+     * Sets the guide-square corner labels ONCE, to the fixed mapping for
+     * the one supported scanning orientation (tilted right). Unlike the
+     * old per-tilt system, this never changes at runtime — there's
+     * nothing to recompute since only one orientation is supported.
+     */
+    private void applyFixedCornerLabels() {
+        if (anchorOverlay == null) return;
+        String[] labels = new String[4];
         for (int i = 0; i < 4; i++) {
-            newLabels[i] = identityForSlotAtRotation(i, steps);
+            labels[i] = identityForSlotAtRotation(i, FIXED_LABEL_ROTATION_STEPS);
         }
+        anchorOverlay.setCornerLabels(labels);
+    }
 
-        if (anchorOverlay != null) {
-            anchorOverlay.setCornerLabels(newLabels);
+    /**
+     * Shows/hides the full-screen "tilt the phone to the right" warning
+     * and enables/disables capture accordingly. This replaces the old
+     * approach of trying to auto-correct for every possible tilt — since
+     * only one orientation is actually supported, any other orientation
+     * now blocks capture with a clear message instead of silently
+     * producing a bad (e.g. upside-down) scan.
+     */
+    private void updateTiltGate(int rotationBucket) {
+        boolean correct = (rotationBucket == REQUIRED_TILT_ROTATION);
+        if (correct == isTiltCorrect) return;
+        isTiltCorrect = correct;
+
+        if (tiltWarningOverlay != null) {
+            tiltWarningOverlay.setVisibility(correct ? View.GONE : View.VISIBLE);
+        }
+        if (btnCapture != null) {
+            btnCapture.setEnabled(correct);
+            btnCapture.setAlpha(correct ? 1.0f : 0.4f);
+        }
+        if (!correct) {
+            // Don't let a stale in-flight auto-capture fire the instant
+            // the phone swings back into the correct orientation.
+            autoCaptureTriggered = false;
         }
     }
 
     /**
-     * Maps the discrete icon-rotation buckets used for icon compensation
-     * to a number of 90° clockwise label-shift steps. This was derived
-     * from one confirmed physical test (tilting into the "-90" bucket
-     * shifts labels one step clockwise). If the swap comes out mirrored
-     * on your device for the opposite tilt direction, flip the sign here.
+     * Toggles whether the icon-rotation-compensation feature is active.
+     * When locked, the icons/status text simply stop tracking phone tilt
+     * and stay however they were last drawn — the camera preview, guide
+     * squares, and overall layout were already portrait-locked and are
+     * unaffected either way.
      */
-    private int clockwiseStepsForIconRotation(int rotationDegrees) {
-        switch (rotationDegrees) {
-            case -90: return 3;  // was 1 — right-edge-up bucket
-            case 180: return 2;
-            case 90:  return 1;  // was 3 — left-edge-up bucket
-            default:  return 0;
+    private void toggleRotationLock() {
+        isRotationLocked = !isRotationLocked;
+        updateRotationLockButton();
+
+        if (isRotationLocked) {
+            // Trust the manual lock — suspend the tilt gate immediately so
+            // a warning that happened to be showing at lock-time doesn't
+            // stay stuck, and capture isn't second-guessed while locked.
+            isTiltCorrect = true;
+            if (tiltWarningOverlay != null) tiltWarningOverlay.setVisibility(View.GONE);
+            if (btnCapture != null) {
+                btnCapture.setEnabled(true);
+                btnCapture.setAlpha(1.0f);
+            }
+        }
+        // On unlock, nothing to do here — the next onOrientationChanged
+        // callback naturally resumes evaluating and restores the warning
+        // if the phone is genuinely mistilted.
+    }
+
+    private void updateRotationLockButton() {
+        if (iconRotationLock == null) return;
+        if (isRotationLocked) {
+            iconRotationLock.setImageResource(R.drawable.ic_lock);
+            iconRotationLock.setAlpha(1.0f);
+            iconRotationLock.setColorFilter(
+                    ContextCompat.getColor(this, R.color.primary_blue),
+                    android.graphics.PorterDuff.Mode.SRC_IN);
+        } else {
+            iconRotationLock.setImageResource(R.drawable.ic_lock_open);
+            iconRotationLock.setAlpha(0.7f);
+            iconRotationLock.clearColorFilter();
         }
     }
 
@@ -1231,6 +1325,11 @@ public class CameraActivity extends AppCompatActivity {
     // ─────────────────────────────────────────────────────────────
     private void takePhoto() {
         Log.d(TAG, "takePhoto called");
+        if (!isTiltCorrect) {
+            Log.d(TAG, "takePhoto blocked: phone is not tilted to the required orientation");
+            autoCaptureTriggered = false;
+            return;
+        }
         if (imageCapture == null) {
             Log.e(TAG, "imageCapture is null");
             return;

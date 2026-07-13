@@ -87,4 +87,7 @@
     <string name="beta_expired_body">Thank you for being part of our early rollout!\nThe official STARS app is now available on Google Play. Please install the Play Store version to continue using the app.</string>
     <string name="beta_open_play_store">Get it on Google Play</string>
 
+    <string name="rotation_lock_desc">Lock icon rotation</string>
+    <string name="tilt_warning_text">Tilt the phone to the left to scan</string>
+
 </resources>
