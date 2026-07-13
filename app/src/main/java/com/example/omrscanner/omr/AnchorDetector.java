@@ -165,6 +165,160 @@ public class AnchorDetector {
             false
     );
 
+    // Region-relative thresholds for guide-square mode. These are intentionally
+    // stricter/different from the whole-frame profiles because the region is
+    // already known to be roughly anchor-sized (it's a fixed guide square),
+    // so we don't need the wide area-ratio tolerance used when searching a
+    // whole live-camera frame for candidates of unknown scale.
+    private static final double REGION_MIN_ANCHOR_AREA_RATIO = 0.03;
+    private static final double REGION_MAX_ANCHOR_AREA_RATIO = 0.60;
+    private static final double REGION_MIN_FILL_RATIO = 0.65;
+
+    /**
+     * Converts a live-camera frame to a grayscale Mat. Exposed publicly so
+     * callers (e.g. guide-square mode) can build the Mat once per frame and
+     * reuse it across multiple detectAnchorInRegion calls instead of
+     * re-decoding the ImageProxy planes 4 times per frame.
+     * Caller is responsible for releasing the returned Mat.
+     */
+    public static Mat toGrayMat(@NonNull ImageProxy imageProxy) {
+        return imageProxyToGrayMat(imageProxy);
+    }
+
+    /**
+     * Checks whether a valid anchor-like square exists inside a specific
+     * region of the frame, instead of searching the whole frame.
+     *
+     * This is the guide-square detection path: the caller defines fixed
+     * regions (mapped from the on-screen guide squares) and only pixels
+     * inside that region are ever inspected. Anything elsewhere in the frame
+     * — handwriting, LRN bubbles, stray marks — cannot influence the result,
+     * because it's never part of the search space in the first place.
+     *
+     * @param gray   full-frame grayscale Mat, in the same coordinate space as `region`
+     * @param region the region to search, in that same coordinate space
+     * @param mode   which profile's shape/solidity/darkness thresholds to reuse
+     * @return true if a valid anchor-like square was found inside the region
+     */
+    public static boolean detectAnchorInRegion(
+            @NonNull Mat gray,
+            @NonNull Rect region,
+            @NonNull LiveDetectionMode mode
+    ) {
+        DetectionProfile profile = (mode == LiveDetectionMode.FIXED_MOUNT)
+                ? LIVE_FIXED_BASE_PROFILE
+                : LIVE_HANDHELD_PROFILE;
+
+        Rect safeRegion = clampRectToImage(region, gray.cols(), gray.rows());
+        if (safeRegion.width <= 0 || safeRegion.height <= 0) {
+            return false;
+        }
+
+        Mat roiGray = gray.submat(safeRegion);
+        Mat blurred = new Mat();
+        Mat thresh = new Mat();
+        Mat closed = new Mat();
+        Mat hierarchy = new Mat();
+        Mat kernel = Imgproc.getStructuringElement(
+                Imgproc.MORPH_RECT,
+                new Size(profile.morphKernel, profile.morphKernel)
+        );
+        List<MatOfPoint> contours = new ArrayList<>();
+        boolean found = false;
+
+        try {
+            double regionArea = (double) safeRegion.width * safeRegion.height;
+
+            Imgproc.GaussianBlur(roiGray, blurred, new Size(profile.blurKernel, profile.blurKernel), 0);
+            Imgproc.adaptiveThreshold(
+                    blurred, thresh, 255.0,
+                    Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C, Imgproc.THRESH_BINARY_INV,
+                    profile.adaptiveBlockSize, profile.adaptiveC
+            );
+            Imgproc.morphologyEx(thresh, closed, Imgproc.MORPH_CLOSE, kernel);
+            Imgproc.findContours(
+                    closed, contours, hierarchy,
+                    Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE
+            );
+
+            for (MatOfPoint contour : contours) {
+                if (isValidRegionAnchor(contour, roiGray, closed, regionArea, profile)) {
+                    found = true;
+                    break;
+                }
+            }
+            return found;
+        } finally {
+            for (MatOfPoint c : contours) {
+                c.release();
+            }
+            roiGray.release();
+            blurred.release();
+            thresh.release();
+            closed.release();
+            hierarchy.release();
+            kernel.release();
+        }
+    }
+
+    private static boolean isValidRegionAnchor(
+            MatOfPoint contour,
+            Mat roiGray,
+            Mat binary,
+            double regionArea,
+            DetectionProfile profile
+    ) {
+        double area = Imgproc.contourArea(contour);
+        double areaRatio = area / regionArea;
+        if (areaRatio < REGION_MIN_ANCHOR_AREA_RATIO || areaRatio > REGION_MAX_ANCHOR_AREA_RATIO) {
+            return false;
+        }
+
+        Rect bbox = Imgproc.boundingRect(contour);
+        if (bbox.width <= 0 || bbox.height <= 0) {
+            return false;
+        }
+
+        double aspect = (double) bbox.width / bbox.height;
+        if (aspect < profile.minSquareAspect || aspect > profile.maxSquareAspect) {
+            return false;
+        }
+
+        double solidity = area / bbox.area();
+        if (solidity < profile.minSolidity) {
+            return false;
+        }
+
+        Rect safeBbox = clampRectToImage(bbox, roiGray.cols(), roiGray.rows());
+        if (safeBbox.width <= 0 || safeBbox.height <= 0) {
+            return false;
+        }
+
+        Mat grayBboxRoi = roiGray.submat(safeBbox);
+        double darkness = Core.mean(grayBboxRoi).val[0];
+        grayBboxRoi.release();
+        if (darkness > profile.maxDarknessMean) {
+            return false;
+        }
+
+        Mat binBboxRoi = binary.submat(safeBbox);
+        double fillRatio = Core.countNonZero(binBboxRoi) / safeBbox.area();
+        binBboxRoi.release();
+        if (fillRatio < REGION_MIN_FILL_RATIO) {
+            return false;
+        }
+
+        MatOfPoint2f contour2f = new MatOfPoint2f(contour.toArray());
+        double perimeter = Imgproc.arcLength(contour2f, true);
+        MatOfPoint2f approx = new MatOfPoint2f();
+        Imgproc.approxPolyDP(contour2f, approx, 0.02 * perimeter, true);
+        long vertices = approx.total();
+        contour2f.release();
+        approx.release();
+
+        return vertices >= 4 && vertices <= 6;
+    }
+
     /**
      * Detect anchors from a still bitmap. This path stays verbose and tolerant
      * because it is off the hot live-analysis path.

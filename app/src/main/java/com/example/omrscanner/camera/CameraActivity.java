@@ -1,16 +1,20 @@
 package com.example.omrscanner.camera;
 
+import android.util.DisplayMetrics;
+
 import android.Manifest;
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.PointF;
+import android.graphics.RectF;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import android.util.Size;
+import android.view.OrientationEventListener;
 import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -18,6 +22,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.camera.core.Camera;
 import androidx.camera.core.CameraControl;
@@ -50,7 +55,9 @@ import com.example.omrscanner.ui.PreviewActivity;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import org.opencv.android.OpenCVLoader;
+import org.opencv.core.Mat;
 import org.opencv.core.Point;
+import org.opencv.core.Rect;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -60,10 +67,15 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 public class CameraActivity extends AppCompatActivity {
-
     private static final int CAMERA_PERMISSION_REQUEST = 1001;
     private static final String TAG = "CameraActivity";
     public static final String EXTRA_FIXED_MOUNT_MODE = "fixed_mount_mode";
+    // Steps (0-3, clockwise) that the guide-square identities were rotated
+    // by at the moment of capture. Downstream processing needs this to
+    // know which physical guide box was truthfully "TL"/"TR"/"BL"/"BR" —
+    // the on-screen label reflects this same value, so this is what makes
+    // the label swap more than cosmetic.
+    public static final String EXTRA_GUIDE_CORNER_ROTATION_STEPS = "guide_corner_rotation_steps";
     //private static final Size ANALYSIS_TARGET_RESOLUTION = new Size(1280, 720);
     private static final long FIXED_MOUNT_ZOOM_COOLDOWN_MS = 250L;
     private static final int FIXED_MOUNT_MISS_THRESHOLD = 6;
@@ -121,7 +133,8 @@ public class CameraActivity extends AppCompatActivity {
     private long lastHintChangeTime = 0;
     private boolean autoCaptureTriggered = false;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
-    
+
+    // ── Anchor Smoothing State ────────────────────────────────────
     // ── Anchor Smoothing State ────────────────────────────────────
     private PointF[] smoothedAnchors = null;
     private int missingFramesCount = 0;
@@ -134,6 +147,53 @@ public class CameraActivity extends AppCompatActivity {
     private int handheldRecoveryFrameCounter = 0;
     private final List<Float> fixedMountZoomRatios = new ArrayList<>();
 
+    // ── Guide-Square Mode State ──────────────────────────────────
+    // When true, live detection is restricted to 4 fixed on-screen guide
+    // squares instead of searching the whole frame. Teachers align the
+    // sheet's real anchors inside these squares. This is a deliberate
+    // trade-off: it removes the false-positive risk from handwriting or
+    // other dark marks elsewhere on the sheet, at the cost of requiring
+    // the teacher to align the sheet to fixed positions rather than just
+    // "somewhere in frame."
+    private static final boolean GUIDE_SQUARE_MODE_ENABLED = true;
+
+    // Fraction of the shorter overlay dimension used as each guide square's
+    // side length. Placeholder default — recalibrate visually against a
+    // real printed sheet at normal handheld scanning distance.
+    private static final float GUIDE_SQUARE_SIZE_FRACTION = 0.10f;
+
+    // Guide square centers, as fractions of overlay [width, height].
+    // Order matches [TL, TR, BL, BR]. Placeholder defaults — recalibrate
+    // visually; these should roughly track where the anchor squares land
+    // on a supported sheet at normal handheld scanning distance/framing.
+    // Portrait layout — the original tuning.
+    private static final float[] GUIDE_CENTER_X_FRACTION_PORTRAIT = {0.30f, 0.70f, 0.30f, 0.70f};
+    private static final float[] GUIDE_CENTER_Y_FRACTION_PORTRAIT = {0.07f, 0.07f, 0.93f, 0.93f};
+
+    // Landscape layout — a portrait-tuned layout stretched across a wide,
+    // short overlay puts the squares in the wrong place relative to the
+    // sheet, so landscape gets its own set. Placeholder — recalibrate
+    // visually against a real sheet held in landscape.
+    private static final float[] GUIDE_CENTER_X_FRACTION_LANDSCAPE = {0.12f, 0.88f, 0.12f, 0.88f};
+    private static final float[] GUIDE_CENTER_Y_FRACTION_LANDSCAPE = {0.20f, 0.20f, 0.80f, 0.80f};
+
+    // How many consecutive successful in-region detections make up a full
+    // "lap" of the progress ring for that corner. Higher = slower/steadier
+    // requirement, lower = faster but more prone to false locks on a
+    // shaky hand. Tune alongside analysis frame rate.
+    private static final int GUIDE_REQUIRED_CONSECUTIVE_HITS = 8;
+
+    // How long (ms) a locked corner is allowed to go undetected before its
+    // lock is dropped. Short misses (motion blur, a stray shadow) shouldn't
+    // break the lock — only a sustained absence, like the sheet actually
+    // being pulled out of the guide box, should.
+    private static final long GUIDE_LOCK_GRACE_PERIOD_MS = 1000L;
+
+    private RectF[] guideSquaresViewSpace = null; // computed once overlay is laid out
+    private boolean guideLandscapeMode = false;
+    private final int[] guideConsecutiveHits = new int[4];
+    private final long[] guideLastSeenTimestamp = new long[4];
+
     // ── Intent extras ─────────────────────────────────────────────
     private String selectedSheetType = null;
     private String classId = null;
@@ -145,6 +205,28 @@ public class CameraActivity extends AppCompatActivity {
     // ── OpenCV init flag ──────────────────────────────────────────
     private boolean openCVReady = false;
 
+    // ── Icon-rotation state ───────────────────────────────────────
+    // The screen itself is locked to portrait (see manifest), so the
+    // camera preview and guide squares never move. Instead we track the
+    // phone's physical tilt and rotate just the icons/status text to stay
+    // upright for the user, the way most camera apps handle landscape.
+    private OrientationEventListener orientationEventListener;
+    private int currentIconRotation = 0;
+
+    // The truthful identity-per-physical-slot mapping at this moment,
+    // expressed as clockwise 90° steps (0-3). This is what the labels are
+    // derived from, and it's also what gets passed downstream at capture
+    // time — the display must never show something the data doesn't back.
+    private int currentLabelRotationSteps = 0;
+
+    // Corner-label rotation. Slot order below matches guideSquaresViewSpace's
+    // [TL, TR, BL, BR] slot order. CLOCKWISE_SLOT_INDEX gives each slot's
+    // position going clockwise around the rectangle starting at TL
+    // (TL=0, TR=1, BR=2, BL=3) — used to shift labels around the fixed
+    // boxes as the phone tilts.
+    private static final int[] CLOCKWISE_SLOT_INDEX = {0, 1, 3, 2};
+    private static final String[] CLOCKWISE_LABELS = {"TL", "TR", "BR", "BL"};
+
     // ─────────────────────────────────────────────────────────────
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -153,6 +235,21 @@ public class CameraActivity extends AppCompatActivity {
 
         try {
             setContentView(R.layout.activity_camera);
+            setContentView(R.layout.activity_camera);
+            Log.d(TAG, "Layout inflated successfully");
+
+// Device/screen diagnostics — remove once the anchor-detection
+// issue on other devices is root-caused.
+            DisplayMetrics dm = getResources().getDisplayMetrics();
+            Log.d(TAG, String.format(
+                    "DEVICE INFO: model=%s manufacturer=%s sdk=%d | "
+                            + "screenPx=%dx%d density=%.2f densityDpi=%d scaledDensity=%.2f",
+                    android.os.Build.MODEL,
+                    android.os.Build.MANUFACTURER,
+                    android.os.Build.VERSION.SDK_INT,
+                    dm.widthPixels, dm.heightPixels,
+                    dm.density, dm.densityDpi, dm.scaledDensity
+            ));
             Log.d(TAG, "Layout inflated successfully");
 
             selectedSheetType = getIntent().getStringExtra(DashboardActivity.EXTRA_SHEET_TYPE);
@@ -333,6 +430,8 @@ public class CameraActivity extends AppCompatActivity {
     //  REAL-TIME ANCHOR DETECTION
     // ─────────────────────────────────────────────────────────────
 
+    private boolean loggedFrameDimensions = false;
+
     private void analyzeFrame(@NonNull ImageProxy imageProxy) {
         // Skip if OpenCV not ready or already auto-captured
         if (!openCVReady || autoCaptureTriggered) {
@@ -340,52 +439,263 @@ public class CameraActivity extends AppCompatActivity {
             return;
         }
 
+        // One-time log of the actual analysis frame size CameraX bound us to.
+        // This is what AnchorDetector's thresholds are evaluated against —
+        // not the screen size — so this is the number to compare across devices.
+        if (!loggedFrameDimensions) {
+            loggedFrameDimensions = true;
+            Log.d(TAG, String.format(
+                    "ANALYSIS FRAME INFO: %dx%d rotationDegrees=%d aspect=%.3f",
+                    imageProxy.getWidth(),
+                    imageProxy.getHeight(),
+                    imageProxy.getImageInfo().getRotationDegrees(),
+                    (double) imageProxy.getWidth() / imageProxy.getHeight()
+            ));
+        }
+
         try {
-            Point[] anchors;
-            if (fixedMountMode) {
-                anchors = AnchorDetector.detectAnchors(
-                        imageProxy,
-                        AnchorDetector.LiveDetectionMode.FIXED_MOUNT
-                );
+            if (GUIDE_SQUARE_MODE_ENABLED) {
+                analyzeFrameGuideSquareMode(imageProxy);
             } else {
-                boolean useRecoveryPass = shouldRunHandheldRecoveryPass();
-                anchors = AnchorDetector.detectAnchors(
-                        imageProxy,
-                        AnchorDetector.LiveDetectionMode.HANDHELD,
-                        useRecoveryPass
-                );
-                if (useRecoveryPass) {
-                    Log.d(TAG, "Running handheld recovery pass after repeated anchor misses");
-                }
+                analyzeFrameWholeFrameLegacy(imageProxy);
             }
-
-            if (anchors != null && anchors.length == 4) {
-                onDetectionSuccess();
-                PointF[] viewPoints = scaleAnchorsToView(
-                        anchors, imageProxy.getWidth(), imageProxy.getHeight(),
-                        imageProxy.getImageInfo().getRotationDegrees()
-                );
-
-                onAnchorsDetected(viewPoints, false);
-
-                boolean captureStarted = false;
-                if (consecutiveDetections >= REQUIRED_CONSECUTIVE_DETECTIONS) {
-                    captureStarted = triggerAutoCapture();
-                    if (captureStarted) {
-                        updateStatusTextForCaptureStarted();
-                    }
-                }
-            } else {
-                onDetectionMiss();
-                onAnchorsNotDetected();
-            }
-
         } catch (Exception e) {
             Log.e(TAG, "Error in frame analysis", e);
             onDetectionMiss();
             onAnchorsNotDetected();
         } finally {
             imageProxy.close();
+        }
+    }
+
+    /**
+     * Guide-square detection path. Only pixels inside the 4 fixed guide
+     * squares are ever inspected — nothing else in the frame can trigger
+     * a false positive, because nothing else is searched.
+     */
+    private void analyzeFrameGuideSquareMode(@NonNull ImageProxy imageProxy) {
+        if (guideSquaresViewSpace == null) {
+            guideSquaresViewSpace = computeGuideSquaresViewSpace();
+            if (guideSquaresViewSpace != null) {
+                RectF[] squaresForUi = guideSquaresViewSpace;
+                mainHandler.post(() -> {
+                    if (anchorOverlay != null) {
+                        anchorOverlay.setGuideSquares(squaresForUi);
+                    }
+                });
+            } else {
+                // Overlay not laid out yet — nothing to do this frame.
+                return;
+            }
+        }
+
+        int rotation = imageProxy.getImageInfo().getRotationDegrees();
+        int imageWidth = imageProxy.getWidth();
+        int imageHeight = imageProxy.getHeight();
+
+        Mat gray = AnchorDetector.toGrayMat(imageProxy);
+        if (gray == null) {
+            return;
+        }
+
+        AnchorDetector.LiveDetectionMode mode = fixedMountMode
+                ? AnchorDetector.LiveDetectionMode.FIXED_MOUNT
+                : AnchorDetector.LiveDetectionMode.HANDHELD;
+
+        boolean allLocked = true;
+        try {
+            long now = System.currentTimeMillis();
+            for (int i = 0; i < 4; i++) {
+                boolean wasLocked = guideConsecutiveHits[i] >= GUIDE_REQUIRED_CONSECUTIVE_HITS;
+
+                // Unlike the old sticky-forever lock, we keep detecting on
+                // locked corners too — otherwise we'd never notice the
+                // anchor being pulled back out of the box.
+                Rect imageRoi = viewRectToImageRect(
+                        guideSquaresViewSpace[i], imageWidth, imageHeight, rotation);
+                boolean found = AnchorDetector.detectAnchorInRegion(gray, imageRoi, mode);
+
+                if (found) {
+                    guideConsecutiveHits[i] = Math.min(
+                            GUIDE_REQUIRED_CONSECUTIVE_HITS, guideConsecutiveHits[i] + 1);
+                    guideLastSeenTimestamp[i] = now;
+                } else if (wasLocked) {
+                    // Grace period for an already-locked corner: a single
+                    // missed frame (motion blur, brief occlusion) shouldn't
+                    // break the lock. Only drop it once the anchor has been
+                    // genuinely absent from the box for a sustained stretch
+                    // of real time.
+                    if (now - guideLastSeenTimestamp[i] >= GUIDE_LOCK_GRACE_PERIOD_MS) {
+                        guideConsecutiveHits[i] = 0;
+                    }
+                } else {
+                    // Not yet locked — same decay behavior as before.
+                    // Moderate decay: strong enough that sparse, occasional
+                    // false-positive hits (background clutter, shadows,
+                    // texture) can't quietly accumulate into a false lock
+                    // over time, but gentle enough that a real anchor with
+                    // normal hand shake doesn't get punished too hard for
+                    // the occasional dropped frame.
+                    guideConsecutiveHits[i] = Math.max(0, guideConsecutiveHits[i] - 3);
+                }
+
+                if (guideConsecutiveHits[i] < GUIDE_REQUIRED_CONSECUTIVE_HITS) {
+                    allLocked = false;
+                }
+            }
+        } finally {
+            gray.release();
+        }
+
+        final float[] progress = new float[4];
+        final boolean[] locked = new boolean[4];
+        for (int i = 0; i < 4; i++) {
+            progress[i] = guideConsecutiveHits[i] / (float) GUIDE_REQUIRED_CONSECUTIVE_HITS;
+            locked[i] = guideConsecutiveHits[i] >= GUIDE_REQUIRED_CONSECUTIVE_HITS;
+        }
+
+        mainHandler.post(() -> {
+            if (anchorOverlay != null) {
+                anchorOverlay.setCornerProgress(progress, locked);
+            }
+            if (anchorStatusText != null) {
+                int lockedCount = 0;
+                for (boolean l : locked) if (l) lockedCount++;
+                anchorStatusText.setText(lockedCount == 4
+                        ? "✓ Anchors detected! Capturing…"
+                        : String.format("Aligning… %d/4", lockedCount));
+            }
+        });
+
+        if (allLocked && !autoCaptureTriggered) {
+            autoCaptureTriggered = true;
+            mainHandler.post(this::takePhoto);
+        }
+    }
+
+    /**
+     * Computes the 4 static guide squares in the overlay view's own
+     * coordinate space. Returns null if the overlay hasn't been laid out
+     * yet (width/height still 0).
+     */
+    @Nullable
+    private RectF[] computeGuideSquaresViewSpace() {
+        if (anchorOverlay == null) return null;
+        int viewW = anchorOverlay.getWidth();
+        int viewH = anchorOverlay.getHeight();
+        if (viewW == 0 || viewH == 0) return null;
+
+        boolean isLandscape = viewW > viewH;
+        guideLandscapeMode = isLandscape;
+        float[] centerXFractions = isLandscape ? GUIDE_CENTER_X_FRACTION_LANDSCAPE : GUIDE_CENTER_X_FRACTION_PORTRAIT;
+        float[] centerYFractions = isLandscape ? GUIDE_CENTER_Y_FRACTION_LANDSCAPE : GUIDE_CENTER_Y_FRACTION_PORTRAIT;
+
+        float size = GUIDE_SQUARE_SIZE_FRACTION * Math.min(viewW, viewH);
+        RectF[] squares = new RectF[4];
+        for (int i = 0; i < 4; i++) {
+            float cx = centerXFractions[i] * viewW;
+            float cy = centerYFractions[i] * viewH;
+            squares[i] = new RectF(cx - size / 2f, cy - size / 2f, cx + size / 2f, cy + size / 2f);
+        }
+        return squares;
+    }
+
+    /**
+     * Maps a guide square defined in overlay view-space into a Rect in the
+     * analysis frame's image-space, by inverse-transforming its 4 corners
+     * through the same rotation/scale used to go the other direction in
+     * scaleAnchorsToView, then taking the bounding box.
+     */
+    private Rect viewRectToImageRect(RectF viewRect, int imageWidth, int imageHeight, int rotationDegrees) {
+        PointF p1 = viewPointToImagePoint(viewRect.left, viewRect.top, imageWidth, imageHeight, rotationDegrees);
+        PointF p2 = viewPointToImagePoint(viewRect.right, viewRect.top, imageWidth, imageHeight, rotationDegrees);
+        PointF p3 = viewPointToImagePoint(viewRect.left, viewRect.bottom, imageWidth, imageHeight, rotationDegrees);
+        PointF p4 = viewPointToImagePoint(viewRect.right, viewRect.bottom, imageWidth, imageHeight, rotationDegrees);
+
+        float minX = Math.min(Math.min(p1.x, p2.x), Math.min(p3.x, p4.x));
+        float maxX = Math.max(Math.max(p1.x, p2.x), Math.max(p3.x, p4.x));
+        float minY = Math.min(Math.min(p1.y, p2.y), Math.min(p3.y, p4.y));
+        float maxY = Math.max(Math.max(p1.y, p2.y), Math.max(p3.y, p4.y));
+
+        return new Rect(
+                (int) minX,
+                (int) minY,
+                Math.max(1, (int) Math.ceil(maxX - minX)),
+                Math.max(1, (int) Math.ceil(maxY - minY))
+        );
+    }
+
+    /** Inverse of rotatePointToDisplay + view scaling — view-space to image-space. */
+    private PointF viewPointToImagePoint(
+            float viewX, float viewY, int imageWidth, int imageHeight, int rotationDegrees
+    ) {
+        int viewWidth = anchorOverlay != null ? anchorOverlay.getWidth() : previewView.getWidth();
+        int viewHeight = anchorOverlay != null ? anchorOverlay.getHeight() : previewView.getHeight();
+
+        boolean swapDimensions = rotationDegrees == 90 || rotationDegrees == 270;
+        int rotatedWidth = swapDimensions ? imageHeight : imageWidth;
+        int rotatedHeight = swapDimensions ? imageWidth : imageHeight;
+
+        float scaleX = (float) viewWidth / rotatedWidth;
+        float scaleY = (float) viewHeight / rotatedHeight;
+
+        float rx = viewX / scaleX;
+        float ry = viewY / scaleY;
+
+        switch (rotationDegrees) {
+            case 90:
+                return new PointF(ry, imageHeight - rx);
+            case 180:
+                return new PointF(imageWidth - rx, imageHeight - ry);
+            case 270:
+                return new PointF(imageWidth - ry, rx);
+            default:
+                return new PointF(rx, ry);
+        }
+    }
+
+    /**
+     * Legacy whole-frame detection path, kept for quick rollback. Set
+     * GUIDE_SQUARE_MODE_ENABLED = false to use this instead.
+     */
+    private void analyzeFrameWholeFrameLegacy(@NonNull ImageProxy imageProxy) {
+        Point[] anchors;
+        if (fixedMountMode) {
+            anchors = AnchorDetector.detectAnchors(
+                    imageProxy,
+                    AnchorDetector.LiveDetectionMode.FIXED_MOUNT
+            );
+        } else {
+            boolean useRecoveryPass = shouldRunHandheldRecoveryPass();
+            anchors = AnchorDetector.detectAnchors(
+                    imageProxy,
+                    AnchorDetector.LiveDetectionMode.HANDHELD,
+                    useRecoveryPass
+            );
+            if (useRecoveryPass) {
+                Log.d(TAG, "Running handheld recovery pass after repeated anchor misses");
+            }
+        }
+
+        if (anchors != null && anchors.length == 4) {
+            onDetectionSuccess();
+            PointF[] viewPoints = scaleAnchorsToView(
+                    anchors, imageProxy.getWidth(), imageProxy.getHeight(),
+                    imageProxy.getImageInfo().getRotationDegrees()
+            );
+
+            onAnchorsDetected(viewPoints, false);
+
+            boolean captureStarted = false;
+            if (consecutiveDetections >= REQUIRED_CONSECUTIVE_DETECTIONS) {
+                captureStarted = triggerAutoCapture();
+                if (captureStarted) {
+                    updateStatusTextForCaptureStarted();
+                }
+            }
+        } else {
+            onDetectionMiss();
+            onAnchorsNotDetected();
         }
     }
 
@@ -795,6 +1105,106 @@ public class CameraActivity extends AppCompatActivity {
     }
 
     // ─────────────────────────────────────────────────────────────
+    //  ICON ROTATION (screen stays portrait-locked; only icons turn)
+    // ─────────────────────────────────────────────────────────────
+
+    private void setupOrientationListener() {
+        orientationEventListener = new OrientationEventListener(this) {
+            @Override
+            public void onOrientationChanged(int orientation) {
+                if (orientation == ORIENTATION_UNKNOWN) return;
+
+                int rotation;
+                if (orientation >= 315 || orientation < 45) {
+                    rotation = 0;     // held upright, natural portrait
+                } else if (orientation >= 45 && orientation < 135) {
+                    rotation = -90;   // rotated so the right edge is "up"
+                } else if (orientation >= 135 && orientation < 225) {
+                    rotation = 180;   // upside-down portrait
+                } else {
+                    rotation = 90;    // rotated so the left edge is "up"
+                }
+
+                if (rotation != currentIconRotation) {
+                    currentIconRotation = rotation;
+                    applyIconRotation(rotation);
+                    updateCornerLabelsForRotation(rotation);
+                }
+            }
+        };
+        if (orientationEventListener.canDetectOrientation()) {
+            orientationEventListener.enable();
+        }
+    }
+
+    /**
+     * Smoothly rotates the interactive icons/status text to stay upright
+     * relative to the user's hand, without touching the camera preview,
+     * guide squares, or overall layout — those stay portrait-locked.
+     */
+    private void applyIconRotation(int rotationDegrees) {
+        View[] rotatableViews = {
+                btnCameraBack, iconFlash, anchorStatusIcon, floatingHintText
+        };
+        for (View v : rotatableViews) {
+            if (v != null) {
+                v.animate().rotation(rotationDegrees).setDuration(200).start();
+            }
+        }
+    }
+
+    /**
+     * Recomputes which text label ("TL"/"TR"/"BL"/"BR") should show on
+     * each fixed guide square, given the phone's current tilt. The boxes
+     * never move — only which label they display changes, so the user
+     * can tell which sheet corner a given box currently represents.
+     */
+    /**
+     * Given a rotation-steps value (as passed via
+     * EXTRA_GUIDE_CORNER_ROTATION_STEPS) and a physical guide-square slot
+     * index (0=TL-pos, 1=TR-pos, 2=BL-pos, 3=BR-pos — the same order as
+     * guideSquaresViewSpace/GUIDE_CENTER_X_FRACTION_*), returns the true
+     * corner identity ("TL"/"TR"/"BL"/"BR") that slot represented at
+     * capture time. Public + static so downstream consumers (e.g.
+     * ResultActivity) use the exact same mapping as the on-screen label,
+     * rather than re-deriving it and risking the two drifting apart.
+     */
+    public static String identityForSlotAtRotation(int physicalSlotIndex, int rotationSteps) {
+        int clockwisePos = CLOCKWISE_SLOT_INDEX[physicalSlotIndex];
+        int sourceIndex = ((clockwisePos - rotationSteps) % 4 + 4) % 4;
+        return CLOCKWISE_LABELS[sourceIndex];
+    }
+
+    private void updateCornerLabelsForRotation(int rotationDegrees) {
+        int steps = clockwiseStepsForIconRotation(rotationDegrees);
+        currentLabelRotationSteps = steps;
+        String[] newLabels = new String[4];
+        for (int i = 0; i < 4; i++) {
+            newLabels[i] = identityForSlotAtRotation(i, steps);
+        }
+
+        if (anchorOverlay != null) {
+            anchorOverlay.setCornerLabels(newLabels);
+        }
+    }
+
+    /**
+     * Maps the discrete icon-rotation buckets used for icon compensation
+     * to a number of 90° clockwise label-shift steps. This was derived
+     * from one confirmed physical test (tilting into the "-90" bucket
+     * shifts labels one step clockwise). If the swap comes out mirrored
+     * on your device for the opposite tilt direction, flip the sign here.
+     */
+    private int clockwiseStepsForIconRotation(int rotationDegrees) {
+        switch (rotationDegrees) {
+            case -90: return 3;  // was 1 — right-edge-up bucket
+            case 180: return 2;
+            case 90:  return 1;  // was 3 — left-edge-up bucket
+            default:  return 0;
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
     private void toggleFlash() {
         isTorchOn = !isTorchOn;
         if (cameraControl != null) {
@@ -840,6 +1250,7 @@ public class CameraActivity extends AppCompatActivity {
                             intent.putExtra(PreviewActivity.IMAGE_PATH, photoFile.getAbsolutePath());
                             intent.putExtra(PreviewActivity.IMAGE_SOURCE, PreviewActivity.SOURCE_CAMERA);
                             intent.putExtra(EXTRA_FIXED_MOUNT_MODE, fixedMountMode);
+                            intent.putExtra(EXTRA_GUIDE_CORNER_ROTATION_STEPS, currentLabelRotationSteps);
                             if (selectedSheetType != null)
                                 intent.putExtra(DashboardActivity.EXTRA_SHEET_TYPE, selectedSheetType);
                             if (classId != null)
@@ -847,6 +1258,7 @@ public class CameraActivity extends AppCompatActivity {
                             if (activityId != null)
                                 intent.putExtra(DashboardActivity.EXTRA_ACTIVITY_ID, activityId);
                             startActivity(intent);
+                            finish();
                         });
                     }
 
@@ -869,7 +1281,7 @@ public class CameraActivity extends AppCompatActivity {
     }
 
     // ─────────────────────────────────────────────────────────────
-    // ─────────────────────────────────────────────────────────────
+    // ───────────────────────────────────────────────────────────
     @Override
     protected void onResume() {
         super.onResume();
@@ -886,6 +1298,22 @@ public class CameraActivity extends AppCompatActivity {
         handheldMissCounter = 0;
         handheldRecoveryFrameCounter = 0;
         applyFixedMountZoom(true);
+
+        // Reset guide-square lock state too — otherwise a previously
+        // locked-in scan attempt stays "locked" if this same CameraActivity
+        // instance becomes visible again (e.g. back navigation, or a
+        // paused instance left in the back stack after capture).
+        java.util.Arrays.fill(guideConsecutiveHits, 0);
+        java.util.Arrays.fill(guideLastSeenTimestamp, 0L);
+        if (anchorOverlay != null) {
+            anchorOverlay.resetProgress();
+        }
+
+        if (orientationEventListener == null) {
+            setupOrientationListener();
+        } else {
+            orientationEventListener.enable();
+        }
     }
 
     @Override
@@ -896,6 +1324,9 @@ public class CameraActivity extends AppCompatActivity {
             isTorchOn = false;
             cameraControl.enableTorch(false);
             updateFlashButton();
+        }
+        if (orientationEventListener != null) {
+            orientationEventListener.disable();
         }
     }
 

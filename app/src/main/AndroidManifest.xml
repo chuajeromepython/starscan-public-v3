@@ -25,7 +25,8 @@
         <activity android:name=".ui.LrnErrorActivity"
             android:label="LRN Error"
             android:theme="@style/Theme.OMRScanner" />
-        <activity android:name=".camera.CameraActivity"/>
+        <activity android:name=".camera.CameraActivity"
+            android:screenOrientation="portrait"/>
         <activity android:name=".DashboardActivity"/>
 
         <!-- QR Scanner -->

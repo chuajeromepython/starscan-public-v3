@@ -373,9 +373,19 @@ public class TemplateManager {
         int[][] rotations;
         if (isPortrait) {
             // Portrait input from PerspectiveAligner is the normal scan path.
-            // Force 90° CCW for deterministic output that matches capture flow.
+            // Sheet content is landscape per the template coordinate system,
+            // so the warped output needs a quarter-turn — but WHICH quarter
+            // turn depends on which way the phone was physically tilted at
+            // capture time (AnchorDetector's still-image corner classification
+            // is purely geometric, so the warp's "handedness" follows capture
+            // tilt direction). Blindly forcing a single fixed direction here
+            // only produces a correct result for one tilt direction and
+            // flips the result upside-down/mirrored for the other — try
+            // both and let the alignment score (with the tie-break bias
+            // below) pick the one that actually matches the grid.
             rotations = new int[][] {
-                    { PREFERRED_90_ROTATION }
+                    { Core.ROTATE_90_CLOCKWISE },
+                    { Core.ROTATE_90_COUNTERCLOCKWISE }
             };
         } else {
             // Already landscape → try as-is first, but also try 180 rotation
@@ -520,8 +530,13 @@ public class TemplateManager {
 
         int[][] rotations;
         if (isPortrait) {
+            // See the matching comment in detectAndOrient() above: try both
+            // quarter-turns rather than forcing one fixed direction, since
+            // the correct direction depends on which way the phone was
+            // tilted at capture time.
             rotations = new int[][] {
-                    { PREFERRED_90_ROTATION }
+                    { Core.ROTATE_90_CLOCKWISE },
+                    { Core.ROTATE_90_COUNTERCLOCKWISE }
             };
         } else {
             rotations = new int[][] {

@@ -63,41 +63,6 @@
 
         </FrameLayout>
 
-        <LinearLayout
-            android:id="@+id/anchorStatusBar"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_gravity="bottom"
-            android:orientation="horizontal"
-            android:gravity="center"
-            android:background="#B3000000"
-            android:paddingTop="10dp"
-            android:paddingBottom="10dp"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp">
-
-            <ImageView
-                android:id="@+id/anchorStatusIcon"
-                android:layout_width="18dp"
-                android:layout_height="18dp"
-                android:layout_gravity="center_vertical"
-                android:layout_marginEnd="8dp"
-                android:src="@drawable/ic_focus"
-                app:tint="#FFC107" />
-
-            <TextView
-                android:id="@+id/anchorStatusText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Scanning for anchors…"
-                android:textColor="#FFFFFF"
-                android:textSize="12sp"
-                android:textStyle="bold"
-                android:fontFamily="@font/poppins_medium"
-                android:gravity="center" />
-
-        </LinearLayout>
-
         <TextView
             android:id="@+id/floatingHintText"
             android:layout_width="wrap_content"
@@ -114,6 +79,42 @@
             android:elevation="4dp" />
 
     </FrameLayout>
+
+    <LinearLayout
+        android:id="@+id/anchorStatusBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_marginBottom="150dp"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:background="#B3000000"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp">
+
+        <ImageView
+            android:id="@+id/anchorStatusIcon"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_gravity="center_vertical"
+            android:layout_marginEnd="8dp"
+            android:src="@drawable/ic_focus"
+            app:tint="#FFC107" />
+
+        <TextView
+            android:id="@+id/anchorStatusText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Scanning for anchors…"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:fontFamily="@font/poppins_medium"
+            android:gravity="center" />
+
+    </LinearLayout>
 
     <LinearLayout
         android:id="@+id/cameraHeader"

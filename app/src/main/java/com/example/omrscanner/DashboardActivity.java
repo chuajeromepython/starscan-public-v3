@@ -1693,6 +1693,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         new Thread(() -> {
             java.net.HttpURLConnection conn = null;
             try {
+
                 java.net.URL url = new java.net.URL(serverIp + ASSESSMENT_SYNC_PATH);
                 conn = (java.net.HttpURLConnection) url.openConnection();
                 conn.setConnectTimeout(5000);
