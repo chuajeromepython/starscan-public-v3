@@ -185,6 +185,24 @@ public class GridAligner {
      * @param scaleY     bitmapHeight / template.height
      * @return robust average match score for all blocks (0.0 – 1.0)
      */
+    /**
+     * Convenience method: returns the average confidence score of aligning the
+     * first ROW of every block against the warped image. Used by
+     * {@link TemplateManager} for robust sheet-type and orientation detection.
+     *
+     * <p>Unlike a single generic bubble outline (which matches almost equally
+     * well against ANY nearby bubble on a repetitive OMR grid, correct
+     * orientation or not), this matches a multi-bubble pattern at the block's
+     * real spacing. A wrong rotation may still have circles nearby, but not at
+     * that exact spacing/direction, so the score drops meaningfully instead of
+     * coincidentally matching.</p>
+     *
+     * @param graySource the full warped grayscale image
+     * @param template   the candidate template
+     * @param scaleX     bitmapWidth / template.width
+     * @param scaleY     bitmapHeight / template.height
+     * @return robust average match score for all blocks (0.0 – 1.0)
+     */
     public double getAlignmentScore(Mat graySource,
                                     OmrTemplate template,
                                     double scaleX,
@@ -195,12 +213,88 @@ public class GridAligner {
         }
 
         double totalScore = 0.0;
+        int counted = 0;
         for (OmrBlock block : template.blocks) {
-            AlignmentResult ar = getBlockAlignment(graySource, block, scaleX, scaleY);
-            totalScore += ar.score;
+            totalScore += getRowPatternScore(graySource, block, scaleX, scaleY);
+            counted++;
         }
 
-        return totalScore / template.blocks.size();
+        return counted == 0 ? 0.0 : totalScore / counted;
+    }
+
+    /**
+     * Matches a synthetic reference pattern representing the block's first
+     * ROW (all `cols` bubbles at their real relative spacing) against the
+     * region where that row is expected. Far more discriminating than a
+     * single-bubble match for orientation purposes, since the correct spacing
+     * and direction must both line up for a strong score.
+     */
+    private double getRowPatternScore(Mat graySource, OmrBlock block, double scaleX, double scaleY) {
+        int scaledRadius = Math.max(1, (int) Math.round(block.radius * scaleX));
+        int scaledDx = Math.max(1, (int) Math.round(Math.abs(block.dx) * scaleX));
+
+        Mat rowTpl = buildRowTemplate(block.cols, scaledRadius, scaledDx);
+        int tplW = rowTpl.cols();
+        int tplH = rowTpl.rows();
+
+        int expectedX = (int) Math.round(block.startX * scaleX);
+        int expectedY = (int) Math.round(block.startY * scaleY);
+
+        // The row template's first circle is anchored at (pad, pad) inside the
+        // template, so offset the ROI back by that same padding.
+        int pad = scaledRadius + 2;
+        int roiX = Math.max(0, expectedX - SEARCH_MARGIN - pad);
+        int roiY = Math.max(0, expectedY - SEARCH_MARGIN - pad);
+        int roiW = tplW + 2 * SEARCH_MARGIN;
+        int roiH = tplH + 2 * SEARCH_MARGIN;
+
+        if (roiX + roiW > graySource.cols()) roiW = graySource.cols() - roiX;
+        if (roiY + roiH > graySource.rows()) roiH = graySource.rows() - roiY;
+
+        if (roiW < tplW || roiH < tplH || roiW <= 0 || roiH <= 0) {
+            rowTpl.release();
+            return 0.0;
+        }
+
+        Rect searchRect = new Rect(roiX, roiY, roiW, roiH);
+        Mat searchROI = graySource.submat(searchRect);
+
+        int resultW = roiW - tplW + 1;
+        int resultH = roiH - tplH + 1;
+        if (resultW <= 0 || resultH <= 0) {
+            searchROI.release();
+            rowTpl.release();
+            return 0.0;
+        }
+
+        Mat result = new Mat(resultH, resultW, CvType.CV_32FC1);
+        Imgproc.matchTemplate(searchROI, rowTpl, result, Imgproc.TM_CCOEFF_NORMED);
+        Core.MinMaxLocResult mmr = Core.minMaxLoc(result);
+        double score = mmr.maxVal;
+
+        result.release();
+        searchROI.release();
+        rowTpl.release();
+
+        return score;
+    }
+
+    /**
+     * Builds a synthetic reference pattern of `cols` circle outlines spaced
+     * `dx` pixels apart — i.e. what a real block's first printed row should
+     * look like, at this bitmap's scale.
+     */
+    private Mat buildRowTemplate(int cols, int radius, int dx) {
+        int pad = radius + 2;
+        int width = Math.max(1, cols - 1) * dx + 2 * pad;
+        int height = 2 * pad;
+
+        Mat tpl = new Mat(height, width, CvType.CV_8UC1, new Scalar(255));
+        for (int c = 0; c < cols; c++) {
+            Point centre = new Point(pad + (double) c * dx, pad);
+            Imgproc.circle(tpl, centre, radius, new Scalar(0), BUBBLE_OUTLINE_THICKNESS);
+        }
+        return tpl;
     }
 
     /**

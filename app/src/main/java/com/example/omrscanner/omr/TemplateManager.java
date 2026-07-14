@@ -371,6 +371,46 @@ public class TemplateManager {
         return new RotationDecision(winner, second, tieBreakApplied, scoreGap);
     }
 
+    /**
+     * Returns a [0,1] score for how strongly this candidate's ink distribution
+     * matches the "sparse header on top, dense bubble body below" layout that
+     * every supported template shares. Unlike matching a specific small bubble
+     * pattern — which can't reliably tell one orientation from its 180-degree
+     * opposite on a repetitive dot grid — overall ink density between the
+     * header band and the body is dramatically different, and it flips when
+     * the rotation is wrong, making it a much stronger orientation cue.
+     */
+    private double computeHeaderSparsityScore(Mat grayCandidate) {
+        int h = grayCandidate.rows();
+        int w = grayCandidate.cols();
+        int headerH = (int) Math.round(h * 0.20);
+        if (headerH <= 0 || headerH >= h) {
+            return 0.5;
+        }
+
+        Mat header = grayCandidate.submat(0, headerH, 0, w);
+        Mat body = grayCandidate.submat(headerH, h, 0, w);
+
+        double headerInk = darkPixelRatio(header);
+        double bodyInk = darkPixelRatio(body);
+
+        header.release();
+        body.release();
+
+        // Positive when body is denser than header (expected). Map into [0,1].
+        double diff = bodyInk - headerInk;
+        return Math.max(0.0, Math.min(1.0, 0.5 + diff * 2.0));
+    }
+
+    private double darkPixelRatio(Mat gray) {
+        Mat binary = new Mat();
+        Imgproc.threshold(gray, binary, 0, 255, Imgproc.THRESH_BINARY_INV | Imgproc.THRESH_OTSU);
+        int dark = Core.countNonZero(binary);
+        int total = Math.max(1, binary.rows() * binary.cols());
+        binary.release();
+        return (double) dark / total;
+    }
+
     private static boolean isOppositeQuarterTurns(int a, int b) {
         return (a == Core.ROTATE_90_CLOCKWISE && b == Core.ROTATE_90_COUNTERCLOCKWISE)
                 || (a == Core.ROTATE_90_COUNTERCLOCKWISE && b == Core.ROTATE_90_CLOCKWISE);

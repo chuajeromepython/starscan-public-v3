@@ -301,12 +301,16 @@ public class ResultActivity extends AppCompatActivity {
                     Log.d(TAG, "Using user-selected sheet type: " + selectedSheetType
                             + " (base=" + baseTemplateId + ", items=" + itemCount + ")");
 
-                    // Orientation always uses the REAL, full template — the physical
-                    // anchor positions don't move just because fewer items are scored.
-                    TemplateManager.OrientationResult orient =
-                            tm.detectAndOrientWithTemplate(alignedBitmap, baseTemplateId);
+                    // Orientation scoring must stay robust: score against ALL loaded
+                    // templates (like auto-detect does), not just the user-selected one.
+                    // A single template's bubble grid is symmetric enough that CW/CCW
+                    // scores land within the tie-break margin far more often, which was
+                    // silently flipping sheets 180°. We ignore orient.templateId here —
+                    // the physical template the user picked (baseTemplateId) still wins
+                    // for building the scan template below.
+                    TemplateManager.OrientationResult orient = tm.detectAndOrient(alignedBitmap);
                     scanBitmap = orient.orientedBitmap;
-                    sheetType = orient.templateId;
+                    sheetType = baseTemplateId;
 
                     // The scan itself uses a trimmed copy of that template.
                     template = tm.buildTruncatedTemplate(baseTemplateId, itemCount);
@@ -344,7 +348,7 @@ public class ResultActivity extends AppCompatActivity {
                 android.util.Log.d("SCORE_DEBUG", "activityId=" + activityId
                         + " correctAnswers=" + (correctAnswers == null ? "NULL" : java.util.Arrays.toString(correctAnswers)));
                 scanResult = scanner.scan(alignedBitmap, template, tm, correctAnswers);
-                scanResult = scanner.scan(alignedBitmap, template, tm, correctAnswers);
+                //scanResult = scanner.scan(alignedBitmap, template, tm, correctAnswers);
 
                 // Update UI
                 runOnUiThread(() -> {
