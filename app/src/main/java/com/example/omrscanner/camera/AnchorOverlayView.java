@@ -34,6 +34,13 @@ public class AnchorOverlayView extends View {
     // current hand orientation — the boxes themselves never move.
     private String[] labels = {"TL", "TR", "BL", "BR"};
 
+    // Degrees to rotate each label's text around its own box's center, so
+    // the letters stay upright for the user as the phone is physically
+    // tilted — mirrors CameraActivity's applyIconRotation() treatment of
+    // the other on-screen icons/status text. The boxes themselves never
+    // move or rotate, only the glyphs drawn inside them.
+    private int labelRotationDegrees = 0;
+
     // Fixed guide squares, in this view's own coordinate system.
     // Set once the parent knows its layout size.
     @Nullable
@@ -136,6 +143,21 @@ public class AnchorOverlayView extends View {
         }
     }
 
+    /**
+     * Updates the angle each corner label is rotated to, so the text stays
+     * upright as the phone is tilted. Call this from the same place that
+     * drives icon-rotation compensation (e.g. CameraActivity's
+     * orientation listener), passing the same degrees value.
+     *
+     * @param degrees clockwise rotation in degrees, matching View.rotation()'s convention
+     */
+    public void setLabelRotationDegrees(int degrees) {
+        if (this.labelRotationDegrees != degrees) {
+            this.labelRotationDegrees = degrees;
+            invalidate();
+        }
+    }
+
     /** Resets all progress/lock state back to zero, e.g. after a miss streak or retake. */
     public void resetProgress() {
         this.progress = new float[]{0f, 0f, 0f, 0f};
@@ -166,12 +188,24 @@ public class AnchorOverlayView extends View {
                 drawProgressRing(canvas, square, p);
             }
 
-            canvas.drawText(
-                    labels[i] + (locked[i] ? " \u2713" : ""),
-                    square.centerX(),
-                    square.centerY() + (labelPaint.getTextSize() / 3f), // vertically center the baseline
-                    labelPaint
-            );
+            if (labelRotationDegrees != 0) {
+                canvas.save();
+                canvas.rotate(labelRotationDegrees, square.centerX(), square.centerY());
+                canvas.drawText(
+                        labels[i] + (locked[i] ? " \u2713" : ""),
+                        square.centerX(),
+                        square.centerY() + (labelPaint.getTextSize() / 3f), // vertically center the baseline
+                        labelPaint
+                );
+                canvas.restore();
+            } else {
+                canvas.drawText(
+                        labels[i] + (locked[i] ? " \u2713" : ""),
+                        square.centerX(),
+                        square.centerY() + (labelPaint.getTextSize() / 3f), // vertically center the baseline
+                        labelPaint
+                );
+            }
         }
     }
 

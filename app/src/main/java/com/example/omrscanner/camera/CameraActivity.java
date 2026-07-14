@@ -1186,6 +1186,7 @@ public class CameraActivity extends AppCompatActivity {
      * Smoothly rotates the interactive icons/status text to stay upright
      * relative to the user's hand, without touching the camera preview,
      * guide squares, or overall layout — those stay portrait-locked.
+     * Editing to ensure that the anchor labels rotate on phone rotation
      */
     private void applyIconRotation(int rotationDegrees) {
         View[] rotatableViews = {
@@ -1195,6 +1196,15 @@ public class CameraActivity extends AppCompatActivity {
             if (v != null) {
                 v.animate().rotation(rotationDegrees).setDuration(200).start();
             }
+        }
+
+        // The corner-box labels drawn by AnchorOverlayView don't live in
+        // the normal view hierarchy (they're painted onto a Canvas), so
+        // View.animate().rotation() doesn't touch them — they need to be
+        // told the same tilt angle explicitly, or they stay stuck at their
+        // original orientation while every other icon turns with the phone.
+        if (anchorOverlay != null) {
+            anchorOverlay.setLabelRotationDegrees(rotationDegrees);
         }
     }
 
