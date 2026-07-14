@@ -183,6 +183,19 @@ public class CameraActivity extends AppCompatActivity {
     private static final float[] GUIDE_CENTER_X_FRACTION_LANDSCAPE = {0.12f, 0.88f, 0.12f, 0.88f};
     private static final float[] GUIDE_CENTER_Y_FRACTION_LANDSCAPE = {0.20f, 0.20f, 0.80f, 0.80f};
 
+    // ZPH50/ZPH60 group ("WIDE") — ZPH50/60 sheets are physically larger
+    // and a different aspect ratio (1.415:1) than ZPH30/40 (1.336:1), so
+    // the COMPACT boxes above never land on a ZPH60 sheet's real anchors.
+    // ⚠ PLACEHOLDER — derived only from the JSON aspect ratio, NOT yet
+    // measured against a real printed ZPH50/60 sheet the way COMPACT was.
+    // Recalibrate against a real device photo before relying on this in
+    // production. Portrait layout.
+    private static final float[] GUIDE_CENTER_X_FRACTION_PORTRAIT_WIDE = {0.08f, 0.92f, 0.08f, 0.92f};
+    private static final float[] GUIDE_CENTER_Y_FRACTION_PORTRAIT_WIDE = {0.08f, 0.08f, 0.92f, 0.92f};
+
+    private static final float[] GUIDE_CENTER_X_FRACTION_LANDSCAPE_WIDE = {0.08f, 0.92f, 0.08f, 0.92f};
+    private static final float[] GUIDE_CENTER_Y_FRACTION_LANDSCAPE_WIDE = {0.08f, 0.08f, 0.92f, 0.92f};
+
     // How many consecutive successful in-region detections make up a full
     // "lap" of the progress ring for that corner. Higher = slower/steadier
     // requirement, lower = faster but more prone to false locks on a
@@ -629,8 +642,17 @@ public class CameraActivity extends AppCompatActivity {
 
         boolean isLandscape = viewW > viewH;
         guideLandscapeMode = isLandscape;
-        float[] centerXFractions = isLandscape ? GUIDE_CENTER_X_FRACTION_LANDSCAPE : GUIDE_CENTER_X_FRACTION_PORTRAIT;
-        float[] centerYFractions = isLandscape ? GUIDE_CENTER_Y_FRACTION_LANDSCAPE : GUIDE_CENTER_Y_FRACTION_PORTRAIT;
+
+        boolean isWide = usesWideGuideGroup(selectedSheetType);
+        float[] centerXFractions;
+        float[] centerYFractions;
+        if (isWide) {
+            centerXFractions = isLandscape ? GUIDE_CENTER_X_FRACTION_LANDSCAPE_WIDE : GUIDE_CENTER_X_FRACTION_PORTRAIT_WIDE;
+            centerYFractions = isLandscape ? GUIDE_CENTER_Y_FRACTION_LANDSCAPE_WIDE : GUIDE_CENTER_Y_FRACTION_PORTRAIT_WIDE;
+        } else {
+            centerXFractions = isLandscape ? GUIDE_CENTER_X_FRACTION_LANDSCAPE : GUIDE_CENTER_X_FRACTION_PORTRAIT;
+            centerYFractions = isLandscape ? GUIDE_CENTER_Y_FRACTION_LANDSCAPE : GUIDE_CENTER_Y_FRACTION_PORTRAIT;
+        }
 
         float size = GUIDE_SQUARE_SIZE_FRACTION * Math.min(viewW, viewH);
         RectF[] squares = new RectF[4];
@@ -1144,6 +1166,12 @@ public class CameraActivity extends AppCompatActivity {
                     })
                     .start();
         }
+    }
+
+    /** Sheet types that use the WIDE guide-square group instead of COMPACT. */
+    private static boolean usesWideGuideGroup(@Nullable String sheetType) {
+        String base = com.example.omrscanner.models.ActivityFolder.parseBaseTemplateId(sheetType);
+        return "ZPH50".equals(base) || "ZPH60".equals(base);
     }
 
     // ─────────────────────────────────────────────────────────────
