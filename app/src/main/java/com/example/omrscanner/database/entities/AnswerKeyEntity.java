@@ -73,13 +73,6 @@ public class AnswerKeyEntity {
      * Number of items implied by sheet_type. Mirrors AssessmentEntity logic.
      */
     public int getNumItems() {
-        if (sheetType == null) return 30;
-        switch (sheetType) {
-            case "ZPH60": return 60;
-            case "ZPH50": return 50;
-            case "ZPH40": return 40;
-            case "ZPH30":
-            default:      return 30;
-        }
+        return com.example.omrscanner.models.ActivityFolder.parseItemCountFromSheetType(sheetType);
     }
 }

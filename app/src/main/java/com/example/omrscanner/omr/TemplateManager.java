@@ -141,6 +141,64 @@ public class TemplateManager {
     }
 
     /**
+     * Builds a scan-ready copy of a real template (ZPH40/ZPH60) trimmed to
+     * only the first {@code itemCount} questions. Trailing question blocks
+     * are dropped entirely, and the boundary block is shortened, so the
+     * scanner never measures bubbles the assessment doesn't use. The LNR
+     * block is always kept whole. templateId is preserved from the base
+     * template so LNR-profile lookups (e.g. ZPH60's special read profile)
+     * still apply correctly.
+     */
+    public OmrTemplate buildTruncatedTemplate(String baseTemplateId, int itemCount) {
+        OmrTemplate base = getTemplate(baseTemplateId);
+        if (base == null) {
+            Log.e(TAG, "buildTruncatedTemplate: unknown base template " + baseTemplateId);
+            return null;
+        }
+        if (itemCount <= 0 || itemCount >= base.getQuestionCount()) {
+            return base; // nothing to trim
+        }
+
+        OmrTemplate truncated = new OmrTemplate();
+        truncated.templateId = base.templateId;
+        truncated.width = base.width;
+        truncated.height = base.height;
+        truncated.blocks = new java.util.ArrayList<>();
+
+        int remaining = itemCount;
+        for (OmrBlock block : base.blocks) {
+            if (block.label.equals("LNR")) continue;
+            if (remaining <= 0) break;
+            if (remaining >= block.rows) {
+                truncated.blocks.add(block);
+                remaining -= block.rows;
+            } else {
+                OmrBlock partial = new OmrBlock();
+                partial.label = block.label;
+                partial.rows = remaining;
+                partial.cols = block.cols;
+                partial.startX = block.startX;
+                partial.startY = block.startY;
+                partial.dx = block.dx;
+                partial.dy = block.dy;
+                partial.radius = block.radius;
+                truncated.blocks.add(partial);
+                remaining = 0;
+            }
+        }
+        for (OmrBlock block : base.blocks) {
+            if (block.label.equals("LNR")) {
+                truncated.blocks.add(block);
+                break;
+            }
+        }
+
+        Log.i(TAG, String.format("Truncated %s -> %d items (%d question blocks + LNR)",
+                baseTemplateId, itemCount, truncated.blocks.size() - 1));
+        return truncated;
+    }
+
+    /**
      * @return all loaded template IDs
      */
     public List<String> getAvailableTemplateIds() {

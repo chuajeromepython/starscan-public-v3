@@ -480,8 +480,8 @@ public class DashboardDialogs {
         root.addView(dateInput);
 
         root.addView(ui.createFieldLabel("OMR SHEET TYPE"));
-        String[][] sheetTypes = {{"ZPH30","30 Items"},{"ZPH40","40 Items"},{"ZPH50","50 Items"},{"ZPH60","60 Items"}};
-        final String[] selectedType = {"ZPH30"};
+        String[][] sheetTypes = {{"ZPH40","40 Items"},{"ZPH60","60 Items"}};
+        final String[] selectedType = {"ZPH40 (40 Items)"};
 
         LinearLayout typeRow = new LinearLayout(activity);
         typeRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -493,8 +493,10 @@ public class DashboardDialogs {
         final TextView[] typeButtons = new TextView[sheetTypes.length];
         for (int i = 0; i < sheetTypes.length; i++) {
             final int idx = i;
+            final String baseId = sheetTypes[i][0];
+            final int maxItems = Integer.parseInt(sheetTypes[i][1].split(" ")[0]);
             TextView btn = new TextView(activity);
-            btn.setText(sheetTypes[i][0] + "\n" + sheetTypes[i][1]);
+            btn.setText(baseId + "\n" + sheetTypes[i][1]);
             btn.setTextSize(12);
             btn.setTypeface(null, Typeface.BOLD);
             btn.setGravity(Gravity.CENTER);
@@ -506,10 +508,11 @@ public class DashboardDialogs {
             if (i < sheetTypes.length - 1) blp.rightMargin = ui.dp(8);
             btn.setLayoutParams(blp);
             typeButtons[i] = btn;
-            btn.setOnClickListener(v -> {
-                selectedType[0] = sheetTypes[idx][0];
+            btn.setOnClickListener(v -> promptItemCount(baseId, maxItems, chosenCount -> {
+                selectedType[0] = baseId + " (" + chosenCount + " Items)";
+                btn.setText(baseId + "\n(" + chosenCount + " Items)");
                 updateSheetTypeSelection(typeButtons, idx);
-            });
+            }));
             typeRow.addView(btn);
         }
         root.addView(typeRow);
@@ -1101,16 +1104,13 @@ public class DashboardDialogs {
         root.addView(syPicker);
 
         root.addView(ui.createFieldLabel("OMR SHEET TYPE"));
-        String[][] sheetTypes = {{"ZPH30","30 Items"},{"ZPH40","40 Items"},{"ZPH50","50 Items"},{"ZPH60","60 Items"}};
-        
-        String initType = "ZPH30";
+        String[][] sheetTypes = {{"ZPH40","40 Items"},{"ZPH60","60 Items"}};
+
+        // If a default assessment was passed in, inherit its exact label
+        // (e.g. "ZPH40 (30 Items)") rather than resetting it.
+        String initType = "ZPH40 (40 Items)";
         if (defaultAct != null && defaultAct.getSheetType() != null) {
-            for (String[] st : sheetTypes) {
-                if (st[0].equals(defaultAct.getSheetType())) {
-                    initType = st[0];
-                    break;
-                }
-            }
+            initType = defaultAct.getSheetType();
         }
         final String[] selectedType = {initType};
 
@@ -1123,19 +1123,13 @@ public class DashboardDialogs {
 
         final String[] answerSelections = new String[60];
         for (int i=0; i<60; i++) answerSelections[i] = "";
-        
-        int initialItemCount = 30;
-        for (String[] st : sheetTypes) {
-            if (st[0].equals(selectedType[0])) {
-                initialItemCount = Integer.parseInt(st[1].split(" ")[0]);
-                break;
-            }
-        }
+
+        int initialItemCount = com.example.omrscanner.models.ActivityFolder.parseItemCountFromSheetType(selectedType[0]);
         final int[] currentItemCount = {initialItemCount};
 
         ScrollView answersScroll = new ScrollView(activity);
         answersScroll.setLayoutParams(new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ui.dp(240))); // Keep list scrollable but bound height
+                ViewGroup.LayoutParams.MATCH_PARENT, ui.dp(240)));
         LinearLayout gridContainer = new LinearLayout(activity);
         gridContainer.setOrientation(LinearLayout.VERTICAL);
         answersScroll.addView(gridContainer);
@@ -1143,8 +1137,10 @@ public class DashboardDialogs {
         final TextView[] typeButtons = new TextView[sheetTypes.length];
         for (int i = 0; i < sheetTypes.length; i++) {
             final int idx = i;
+            final String baseId = sheetTypes[i][0];
+            final int maxItems = Integer.parseInt(sheetTypes[i][1].split(" ")[0]);
             TextView btn = new TextView(activity);
-            btn.setText(sheetTypes[i][0] + "\n" + sheetTypes[i][1]);
+            btn.setText(baseId + "\n" + sheetTypes[i][1]);
             btn.setTextSize(12);
             btn.setTypeface(null, Typeface.BOLD);
             btn.setGravity(Gravity.CENTER);
@@ -1158,18 +1154,25 @@ public class DashboardDialogs {
             typeButtons[i] = btn;
             btn.setOnClickListener(v -> {
                 if (defaultAct != null) return;
-                selectedType[0] = sheetTypes[idx][0];
-                updateSheetTypeSelection(typeButtons, idx);
-                currentItemCount[0] = Integer.parseInt(sheetTypes[idx][1].split(" ")[0]);
-                renderAnswerGrid(gridContainer, answerSelections, currentItemCount[0]);
+                promptItemCount(baseId, maxItems, chosenCount -> {
+                    selectedType[0] = baseId + " (" + chosenCount + " Items)";
+                    btn.setText(baseId + "\n(" + chosenCount + " Items)");
+                    updateSheetTypeSelection(typeButtons, idx);
+                    currentItemCount[0] = chosenCount;
+                    renderAnswerGrid(gridContainer, answerSelections, currentItemCount[0]);
+                });
             });
             typeRow.addView(btn);
         }
         root.addView(typeRow);
+
         int initIdx = 0;
+        String initBaseId = com.example.omrscanner.models.ActivityFolder.parseBaseTemplateId(selectedType[0]);
         for (int i = 0; i < sheetTypes.length; i++) {
-            if (sheetTypes[i][0].equals(selectedType[0])) {
-                initIdx = i; break;
+            if (sheetTypes[i][0].equals(initBaseId)) {
+                initIdx = i;
+                typeButtons[i].setText(initBaseId + "\n(" + initialItemCount + " Items)");
+                break;
             }
         }
         updateSheetTypeSelection(typeButtons, initIdx);
@@ -1537,6 +1540,27 @@ public class DashboardDialogs {
             sb.append(" … and ").append(missing.size() - show).append(" more");
         }
         return sb.toString();
+    }
+
+    /**
+     * Shows a bounded NumberPicker (1..maxItems) so the user can choose how
+     * many of a real template's items this assessment/answer key actually
+     * uses — e.g. real ZPH40 paper, but only the first 30 items count.
+     */
+    private void promptItemCount(String baseTemplateId, int maxItems, java.util.function.Consumer<Integer> onChosen) {
+        final android.widget.NumberPicker picker = new android.widget.NumberPicker(activity);
+        picker.setMinValue(1);
+        picker.setMaxValue(maxItems);
+        picker.setValue(maxItems);
+        picker.setWrapSelectorWheel(false);
+
+        new android.app.AlertDialog.Builder(activity)
+                .setTitle(baseTemplateId + " — how many items?")
+                .setMessage("Choose how many of this sheet's " + maxItems + " items this assessment actually uses.")
+                .setView(picker)
+                .setPositiveButton("Use This", (dlg, which) -> onChosen.accept(picker.getValue()))
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private void updateSheetTypeSelection(TextView[] buttons, int selectedIdx) {

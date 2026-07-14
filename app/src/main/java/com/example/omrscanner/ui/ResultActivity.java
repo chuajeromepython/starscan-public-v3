@@ -295,14 +295,21 @@ public class ResultActivity extends AppCompatActivity {
                 OmrTemplate template;
 
                 if (selectedSheetType != null) {
-                    // User pre-selected the sheet type — use it directly
-                    // Still need orientation detection
-                    Log.d(TAG, "Using user-selected sheet type: " + selectedSheetType);
+                    String baseTemplateId = com.example.omrscanner.models.ActivityFolder.parseBaseTemplateId(selectedSheetType);
+                    int itemCount = com.example.omrscanner.models.ActivityFolder.parseItemCountFromSheetType(selectedSheetType);
+
+                    Log.d(TAG, "Using user-selected sheet type: " + selectedSheetType
+                            + " (base=" + baseTemplateId + ", items=" + itemCount + ")");
+
+                    // Orientation always uses the REAL, full template — the physical
+                    // anchor positions don't move just because fewer items are scored.
                     TemplateManager.OrientationResult orient =
-                            tm.detectAndOrientWithTemplate(alignedBitmap, selectedSheetType);
+                            tm.detectAndOrientWithTemplate(alignedBitmap, baseTemplateId);
                     scanBitmap = orient.orientedBitmap;
                     sheetType = orient.templateId;
-                    template = tm.getTemplate(sheetType);
+
+                    // The scan itself uses a trimmed copy of that template.
+                    template = tm.buildTruncatedTemplate(baseTemplateId, itemCount);
                 } else {
                     // No pre-selection — auto-detect sheet type
                     Log.d(TAG, "Auto-detecting sheet type...");

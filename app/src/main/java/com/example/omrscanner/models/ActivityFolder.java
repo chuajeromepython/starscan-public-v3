@@ -116,18 +116,45 @@ public class ActivityFolder {
     }
 
     public int getNumItems() {
-        switch (sheetType) {
-            case "ZPH60":
-                return 60;
-            case "ZPH50":
-                return 50;
-            case "ZPH40":
-                return 40;
-            case "ZPH30":
-                return 30;
-            default:
-                return 30;
+        return parseItemCountFromSheetType(sheetType);
+    }
+
+    /**
+     * Extracts how many items an assessment actually scores from its sheetType
+     * label. Handles the new "ZPH40 (30 Items)" format — where a real ZPH40
+     * sheet is only being used for its first 30 items — as well as the plain
+     * legacy labels ("ZPH30", "ZPH40", "ZPH50", "ZPH60").
+     */
+    public static int parseItemCountFromSheetType(String sheetType) {
+        if (sheetType == null) return 30;
+        java.util.regex.Matcher paren = java.util.regex.Pattern
+                .compile("\\((\\d+)\\s*Items?\\)", java.util.regex.Pattern.CASE_INSENSITIVE)
+                .matcher(sheetType);
+        if (paren.find()) {
+            try {
+                int n = Integer.parseInt(paren.group(1));
+                if (n > 0) return n;
+            } catch (NumberFormatException ignored) { }
         }
+        switch (sheetType) {
+            case "ZPH60": return 60;
+            case "ZPH50": return 50;
+            case "ZPH40": return 40;
+            case "ZPH30": return 30;
+            default: return 30;
+        }
+    }
+
+    /**
+     * Extracts the real, physical template ("ZPH40" or "ZPH60") this
+     * assessment is scanned with. For "ZPH40 (30 Items)" this is "ZPH40" —
+     * the paper's real bubble geometry, unaffected by how many items are
+     * actually scored on it.
+     */
+    public static String parseBaseTemplateId(String sheetType) {
+        if (sheetType == null) return "ZPH40";
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("^(ZPH\\d+)").matcher(sheetType.trim());
+        return m.find() ? m.group(1) : "ZPH40";
     }
 
     public String getFormattedDate() {
