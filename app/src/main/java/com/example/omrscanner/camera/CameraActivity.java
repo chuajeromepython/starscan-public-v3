@@ -84,8 +84,9 @@ public class CameraActivity extends AppCompatActivity {
     private static final int HANDHELD_RECOVERY_FRAME_INTERVAL = 2;
 
     // ~150-200ms of stable detection before capturing
-    private static final int REQUIRED_CONSECUTIVE_DETECTIONS = 5;
+    //private static final int REQUIRED_CONSECUTIVE_DETECTIONS = 5;
     //private static final int REQUIRED_CONSECUTIVE_DETECTIONS = 8;
+    private static final int REQUIRED_CONSECUTIVE_DETECTIONS = 1;
 
     // How long each hint stays visible before cycling (milliseconds)
     private static final long HINT_DISPLAY_DURATION_MS = 5000;
