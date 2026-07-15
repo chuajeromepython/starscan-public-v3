@@ -128,10 +128,21 @@ public class CameraActivity extends AppCompatActivity {
     private View tiltWarningOverlay;
 
     // ── Camera state ──────────────────────────────────────────────
+    // ── Camera state ──────────────────────────────────────────────
     private int cameraFacing = CameraSelector.LENS_FACING_BACK;
     private boolean isTorchOn = false;
     private boolean fixedMountMode = false;
     private boolean isRotationLocked = false;
+
+    /**
+     * Carries the rotation-lock choice across CameraActivity instances.
+     * A fresh CameraActivity is created for every scan (see onImageSaved,
+     * which finishes this activity after each capture), so a plain instance
+     * field would silently reset to unlocked on the very next scan. This
+     * static field survives that recreation and only resets if the app
+     * process itself is killed.
+     */
+    private static boolean rotationLockPersisted = false;
 
     // ── Auto-capture state ────────────────────────────────────────
     private int consecutiveDetections = 0;
@@ -324,6 +335,7 @@ public class CameraActivity extends AppCompatActivity {
 
             initializeViews();
             setupListeners();
+            applyPersistedRotationLock();
             applyFixedCornerLabels();
 
             cameraExecutor = Executors.newSingleThreadExecutor();
@@ -475,6 +487,11 @@ public class CameraActivity extends AppCompatActivity {
         initializeFixedMountZoomRatios();
         applyFixedMountZoom(true);
 
+// Flashlight defaults to ON every time the scanner opens — including
+// right after a scan, since a new CameraActivity is created for each
+// capture. The user can still tap the flash button to turn it off.
+        isTorchOn = true;
+        cameraControl.enableTorch(true);
         updateFlashButton();
 
         Log.d(TAG, "Camera bound successfully with ImageAnalysis, facing=" + cameraFacing
@@ -1295,14 +1312,27 @@ public class CameraActivity extends AppCompatActivity {
     }
 
     /**
-     * Toggles whether the icon-rotation-compensation feature is active.
-     * When locked, the icons/status text simply stop tracking phone tilt
-     * and stay however they were last drawn — the camera preview, guide
-     * squares, and overall layout were already portrait-locked and are
-     * unaffected either way.
+     * Restores whatever rotation-lock state the user left the scanner in
+     * on a previous scan, so pressing the lock stays in effect across
+     * captures instead of unlocking again on the next scan.
      */
+    private void applyPersistedRotationLock() {
+        isRotationLocked = rotationLockPersisted;
+        updateRotationLockButton();
+
+        if (isRotationLocked) {
+            isTiltCorrect = true;
+            if (tiltWarningOverlay != null) tiltWarningOverlay.setVisibility(View.GONE);
+            if (btnCapture != null) {
+                btnCapture.setEnabled(true);
+                btnCapture.setAlpha(1.0f);
+            }
+        }
+    }
+
     private void toggleRotationLock() {
         isRotationLocked = !isRotationLocked;
+        rotationLockPersisted = isRotationLocked;
         updateRotationLockButton();
 
         if (isRotationLocked) {

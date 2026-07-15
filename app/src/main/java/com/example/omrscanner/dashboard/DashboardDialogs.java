@@ -491,10 +491,12 @@ public class DashboardDialogs {
         typeRow.setLayoutParams(trLp);
 
         final TextView[] typeButtons = new TextView[sheetTypes.length];
+        int cumulativeStart = 1;
         for (int i = 0; i < sheetTypes.length; i++) {
             final int idx = i;
             final String baseId = sheetTypes[i][0];
             final int maxItems = Integer.parseInt(sheetTypes[i][1].split(" ")[0]);
+            final int rangeStart = cumulativeStart;
             TextView btn = new TextView(activity);
             btn.setText(baseId + "\n" + sheetTypes[i][1]);
             btn.setTextSize(12);
@@ -508,12 +510,13 @@ public class DashboardDialogs {
             if (i < sheetTypes.length - 1) blp.rightMargin = ui.dp(8);
             btn.setLayoutParams(blp);
             typeButtons[i] = btn;
-            btn.setOnClickListener(v -> promptItemCount(baseId, maxItems, chosenCount -> {
+            btn.setOnClickListener(v -> promptItemCount(baseId, rangeStart, maxItems, chosenCount -> {
                 selectedType[0] = baseId + " (" + chosenCount + " Items)";
                 btn.setText(baseId + "\n(" + chosenCount + " Items)");
                 updateSheetTypeSelection(typeButtons, idx);
             }));
             typeRow.addView(btn);
+            cumulativeStart = maxItems + 1;
         }
         root.addView(typeRow);
         updateSheetTypeSelection(typeButtons, 0);
@@ -1135,10 +1138,12 @@ public class DashboardDialogs {
         answersScroll.addView(gridContainer);
 
         final TextView[] typeButtons = new TextView[sheetTypes.length];
+        int cumulativeStart = 1;
         for (int i = 0; i < sheetTypes.length; i++) {
             final int idx = i;
             final String baseId = sheetTypes[i][0];
             final int maxItems = Integer.parseInt(sheetTypes[i][1].split(" ")[0]);
+            final int rangeStart = cumulativeStart;
             TextView btn = new TextView(activity);
             btn.setText(baseId + "\n" + sheetTypes[i][1]);
             btn.setTextSize(12);
@@ -1154,7 +1159,7 @@ public class DashboardDialogs {
             typeButtons[i] = btn;
             btn.setOnClickListener(v -> {
                 if (defaultAct != null) return;
-                promptItemCount(baseId, maxItems, chosenCount -> {
+                promptItemCount(baseId, rangeStart, maxItems, chosenCount -> {
                     selectedType[0] = baseId + " (" + chosenCount + " Items)";
                     btn.setText(baseId + "\n(" + chosenCount + " Items)");
                     updateSheetTypeSelection(typeButtons, idx);
@@ -1163,6 +1168,7 @@ public class DashboardDialogs {
                 });
             });
             typeRow.addView(btn);
+            cumulativeStart = maxItems + 1;
         }
         root.addView(typeRow);
 
@@ -1543,26 +1549,83 @@ public class DashboardDialogs {
     }
 
     /**
-     * Shows a bounded NumberPicker (1..maxItems) so the user can choose how
-     * many of a real template's items this assessment/answer key actually
-     * uses — e.g. real ZPH40 paper, but only the first 30 items count.
+     * Builds the list of item-count options in increments of five that fall
+     * within [rangeStart, rangeEnd], starting at the first multiple of five
+     * at or above rangeStart.
+     *
+     * e.g. ZPH40 covers items 1-40  -> 5, 10, 15, 20, 25, 30, 35, 40
+     *      ZPH60 continues on from ZPH40 and covers items 41-60
+     *                                 -> 45, 50, 55, 60
      */
-    private void promptItemCount(String baseTemplateId, int maxItems, java.util.function.Consumer<Integer> onChosen) {
-        final android.widget.NumberPicker picker = new android.widget.NumberPicker(activity);
-        picker.setMinValue(1);
-        picker.setMaxValue(maxItems);
-        picker.setValue(maxItems);
-        picker.setWrapSelectorWheel(false);
-
-        new android.app.AlertDialog.Builder(activity)
-                .setTitle(baseTemplateId + " — how many items?")
-                .setMessage("Choose how many of this sheet's " + maxItems + " items this assessment actually uses.")
-                .setView(picker)
-                .setPositiveButton("Use This", (dlg, which) -> onChosen.accept(picker.getValue()))
-                .setNegativeButton("Cancel", null)
-                .show();
+    private List<Integer> generateItemCountOptions(int rangeStart, int rangeEnd) {
+        List<Integer> options = new ArrayList<>();
+        int first = ((rangeStart + 4) / 5) * 5; // round up to nearest multiple of 5
+        for (int v = first; v <= rangeEnd; v += 5) {
+            options.add(v);
+        }
+        if (options.isEmpty()) {
+            options.add(rangeEnd);
+        }
+        return options;
     }
 
+    /**
+     * Shows a card grid of item-count options (multiples of five, bounded to
+     * this template's actual item range) so the user can choose how many
+     * items this assessment/answer key actually uses — e.g. real ZPH40
+     * paper, but only the first 30 items count.
+     */
+    private void promptItemCount(String baseTemplateId, int rangeStart, int rangeEnd, java.util.function.Consumer<Integer> onChosen) {
+        List<Integer> options = generateItemCountOptions(rangeStart, rangeEnd);
+
+        LinearLayout container = new LinearLayout(activity);
+        container.setOrientation(LinearLayout.VERTICAL);
+        container.setPadding(ui.dp(4), ui.dp(8), ui.dp(4), ui.dp(4));
+
+        android.widget.GridLayout grid = new android.widget.GridLayout(activity);
+        grid.setColumnCount(4);
+        container.addView(grid);
+
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(activity)
+                .setTitle(baseTemplateId + " — how many items?")
+                .setMessage("Choose how many items this assessment actually uses.")
+                .setView(container)
+                .setNegativeButton("Cancel", null)
+                .create();
+
+        for (int value : options) {
+            TextView card = new TextView(activity);
+            card.setText(String.valueOf(value));
+            card.setTextSize(14);
+            card.setTypeface(null, Typeface.BOLD);
+            card.setGravity(Gravity.CENTER);
+            card.setPadding(ui.dp(14), ui.dp(14), ui.dp(14), ui.dp(14));
+            card.setClickable(true);
+            card.setFocusable(true);
+
+            GradientDrawable bg = new GradientDrawable();
+            bg.setCornerRadius(ui.dp(10));
+            bg.setColor(Color.parseColor("#F8FAFC"));
+            bg.setStroke(ui.dp(1), Color.parseColor("#E2E8F0"));
+            card.setBackground(bg);
+            card.setTextColor(Color.parseColor("#1E293B"));
+
+            android.widget.GridLayout.LayoutParams glp = new android.widget.GridLayout.LayoutParams();
+            glp.width = ui.dp(64);
+            glp.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+            glp.setMargins(ui.dp(4), ui.dp(4), ui.dp(4), ui.dp(4));
+            card.setLayoutParams(glp);
+
+            card.setOnClickListener(v -> {
+                onChosen.accept(value);
+                dialog.dismiss();
+            });
+
+            grid.addView(card);
+        }
+
+        dialog.show();
+    }
     private void updateSheetTypeSelection(TextView[] buttons, int selectedIdx) {
         for (int i = 0; i < buttons.length; i++) {
             GradientDrawable bg = new GradientDrawable();
