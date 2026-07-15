@@ -372,18 +372,42 @@ public class TemplateManager {
     }
 
     /**
-     * Returns a [0,1] score for how strongly this candidate's ink distribution
-     * matches the "sparse header on top, dense bubble body below" layout that
-     * every supported template shares. Unlike matching a specific small bubble
-     * pattern — which can't reliably tell one orientation from its 180-degree
-     * opposite on a repetitive dot grid — overall ink density between the
-     * header band and the body is dramatically different, and it flips when
-     * the rotation is wrong, making it a much stronger orientation cue.
+     * Fraction of the page height, from the top, that should be blank on this
+     * specific template. Derived from the template's topmost block (min
+     * start_y), not hardcoded -- ZPH30/40 keep LNR beside the questions (blank
+     * area ~20% of height), while ZPH50/60 place LNR near the top instead
+     * (blank area only ~5-8% of height, just above the LNR block).
      */
-    private double computeHeaderSparsityScore(Mat grayCandidate) {
+    private double computeHeaderFraction(OmrTemplate tpl) {
+        if (tpl.blocks == null || tpl.blocks.isEmpty() || tpl.height <= 0) {
+            return 0.20;
+        }
+
+        double minStartY = Double.MAX_VALUE;
+        for (OmrBlock block : tpl.blocks) {
+            if (block.startY < minStartY) {
+                minStartY = block.startY;
+            }
+        }
+
+        // Leave a small margin so we don't clip into the first block itself.
+        double fraction = (minStartY / tpl.height) * 0.85;
+        return Math.max(0.05, Math.min(0.35, fraction));
+    }
+
+    /**
+     * Returns a [0,1] score for how strongly this candidate's ink distribution
+     * matches "sparse header, dense body" for the given header fraction.
+     * Unlike matching a specific small bubble pattern -- which can't reliably
+     * tell one orientation from its 180-degree opposite on a repetitive dot
+     * grid -- overall ink density between the header band and the body is
+     * dramatically different, and it flips when the rotation is wrong, making
+     * it a much stronger orientation cue.
+     */
+    private double computeHeaderSparsityScore(Mat grayCandidate, double headerFraction) {
         int h = grayCandidate.rows();
         int w = grayCandidate.cols();
-        int headerH = (int) Math.round(h * 0.20);
+        int headerH = (int) Math.round(h * headerFraction);
         if (headerH <= 0 || headerH >= h) {
             return 0.5;
         }
@@ -523,14 +547,20 @@ public class TemplateManager {
                 double scaleX = (double) cw / tpl.width;
                 double scaleY = (double) ch / tpl.height;
 
-                double score = aligner.getAlignmentScore(candidate, tpl, scaleX, scaleY);
+                double bubbleScore = aligner.getAlignmentScore(candidate, tpl, scaleX, scaleY);
+
+                double headerFraction = computeHeaderFraction(tpl);
+                double headerScore = computeHeaderSparsityScore(candidate, headerFraction);
+
+                double combinedScore = (bubbleScore * 0.3) + (headerScore * 0.7);
 
                 Log.d(TAG, String.format(
-                        "  rot=%d, template=%s, score=%.3f (img %dx%d → tpl %dx%d)",
-                        rotCode, tpl.templateId, score, cw, ch, tpl.width, tpl.height));
+                        "  rot=%d, template=%s, bubble=%.3f header=%.3f(frac=%.3f) combined=%.3f (img %dx%d → tpl %dx%d)",
+                        rotCode, tpl.templateId, bubbleScore, headerScore, headerFraction, combinedScore,
+                        cw, ch, tpl.width, tpl.height));
 
-                if (score > rotationBestScore) {
-                    rotationBestScore = score;
+                if (combinedScore > rotationBestScore) {
+                    rotationBestScore = combinedScore;
                     rotationBestTemplateId = tpl.templateId;
                 }
             }
