@@ -209,7 +209,6 @@ public class ScanDetailActivity extends AppCompatActivity {
         // DETECTED always shows raw bubble count in green
         tvScore.setText(currentScanEntity.detectedBubbles + "/" + currentScan.getNumItems());
         tvScore.setTextColor(Color.parseColor("#059669"));
-        // Score badge next to LRN — only visible when graded by answer key
         if (currentScan.isScored() && currentScanEntity.score != null) {
             tvScoreBadge.setText("Score: " + currentScanEntity.score + "/" + currentScan.getNumItems());
             android.graphics.drawable.GradientDrawable scoreBg = new android.graphics.drawable.GradientDrawable();
@@ -218,12 +217,10 @@ public class ScanDetailActivity extends AppCompatActivity {
             tvScoreBadge.setBackground(scoreBg);
             tvScoreBadge.setTextColor(Color.parseColor("#92400E"));
             tvScoreBadge.setVisibility(View.VISIBLE);
-            // Disable editing when a graded score is present
-            btnEditToggle.setVisibility(View.GONE);
         } else {
             tvScoreBadge.setVisibility(View.GONE);
-            btnEditToggle.setVisibility(View.VISIBLE);
         }
+        btnEditToggle.setVisibility(View.VISIBLE);
         tvDate.setText(currentScan.getFormattedDate());
         if (currentScan.needsAnswerCorrection()) {
             Toast.makeText(this,
@@ -477,9 +474,22 @@ public class ScanDetailActivity extends AppCompatActivity {
         String[] options = { "A", "B", "C", "D", "" };
         String[] labels = { "A", "B", "C", "D", "—" };
 
+        if (stillFlagged) {
+            TextView tvCurrentlyMarked = new TextView(this);
+            tvCurrentlyMarked.setText("Currently marked: " + currentVal + " — tap one to resolve");
+            tvCurrentlyMarked.setTextColor(Color.parseColor("#B45309"));
+            tvCurrentlyMarked.setTextSize(10);
+            LinearLayout.LayoutParams noteLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            noteLp.bottomMargin = dp(4);
+            tvCurrentlyMarked.setLayoutParams(noteLp);
+            wrapper.addView(tvCurrentlyMarked);
+        }
+
         for (int j = 0; j < options.length; j++) {
             final String optVal = options[j];
             boolean selected = optVal.equals(currentVal);
+            boolean partOfUnresolvedShade = stillFlagged && !optVal.isEmpty() && currentVal.contains(optVal);
 
             TextView btn = new TextView(this);
             btn.setText(labels[j]);
@@ -493,23 +503,17 @@ public class ScanDetailActivity extends AppCompatActivity {
                 btnParams.leftMargin = dp(6);
             btn.setLayoutParams(btnParams);
 
-            if (selected) {
-                // Selected: blue bg, white text, rounded
-                btn.setBackgroundColor(Color.parseColor(COLOR_BLUE));
-                btn.setTextColor(Color.WHITE);
-            } else {
-                // Unselected: light blue bg, blue text
-                btn.setBackgroundColor(Color.parseColor(COLOR_BLUE_LIGHT));
-                btn.setTextColor(Color.parseColor(COLOR_BLUE_MID));
-            }
-
-            // Round corners programmatically via GradientDrawable
             android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
             bg.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
             bg.setCornerRadius(dp(8));
-            bg.setColor(Color.parseColor(selected ? COLOR_BLUE : COLOR_BLUE_LIGHT));
+            String fillColor = selected ? COLOR_BLUE : (partOfUnresolvedShade ? "#FDE68A" : COLOR_BLUE_LIGHT);
+            bg.setColor(Color.parseColor(fillColor));
+            if (partOfUnresolvedShade && !selected) {
+                bg.setStroke(dp(1), Color.parseColor("#B45309"));
+            }
             btn.setBackground(bg);
-            btn.setTextColor(Color.parseColor(selected ? "#FFFFFF" : COLOR_BLUE_MID));
+            btn.setTextColor(Color.parseColor(
+                    selected ? "#FFFFFF" : (partOfUnresolvedShade ? "#92400E" : COLOR_BLUE_MID)));
 
             btn.setOnClickListener(v -> {
                 editedAnswers.put(qNum, optVal);
@@ -572,22 +576,34 @@ public class ScanDetailActivity extends AppCompatActivity {
         // 2. Commit edited answers
         currentScan.setAnswers(new LinkedHashMap<>(editedAnswers));
 
-        // 3. Recalculate detected answer count (editing clears the graded score)
+        // 3. Recalculate detected answer count
         currentScan.setScore(currentScan.getAnsweredCount());
-        currentScan.setScored(false); // score is now just detected count after manual edit
+        currentScanEntity.detectedBubbles = currentScan.getAnsweredCount();
+
+        // 4. Re-grade against the answer key if one exists, instead of
+        //    wiping the score/graded state on every save.
+        if (currentAnswerKey != null && correctAnswers != null) {
+            int recomputedScore = 0;
+            for (int i = 0; i < correctAnswers.length; i++) {
+                String keyAns = correctAnswers[i].trim();
+                if (keyAns.isEmpty() || keyAns.equals("?")) continue;
+                String studentAns = editedAnswers.containsKey(i + 1) ? editedAnswers.get(i + 1) : "";
+                if (keyAns.equals(studentAns)) recomputedScore++;
+            }
+            currentScan.setScore(recomputedScore);
+            currentScan.setScored(true);
+            currentScanEntity.score = recomputedScore;
+        }
 
         currentScanEntity.studentLrn = currentScan.getLrn();
-        currentScanEntity.score = null; // null = not graded; will re-grade on next assign
-        currentScanEntity.detectedBubbles = currentScan.getScore();
 
-        // 4. Update scan in DB
+        // 5. Update scan in DB
         repo.updateScan(currentScanEntity, ignored1 -> {
-            // 5. Update individual answers map in DB
+            // 6. Update individual answers map in DB
             repo.insertAnswersFromMap(currentScanEntity.id, editedAnswers, ignored2 -> {
                 runOnUiThread(() -> {
                     Toast.makeText(this, "Changes saved", Toast.LENGTH_SHORT).show();
 
-                    // Exit edit mode
                     isEditing = false;
                     btnEditToggle.setText("EDIT");
                     btnEditToggle.setTextColor(Color.parseColor(COLOR_BLUE));
@@ -595,7 +611,6 @@ public class ScanDetailActivity extends AppCompatActivity {
                     etLrn.setBackgroundColor(Color.TRANSPARENT);
                     btnSaveChanges.setVisibility(View.GONE);
 
-                    // Refresh score display + grid
                     updateScoreDisplay();
                     renderAnswers();
                 });

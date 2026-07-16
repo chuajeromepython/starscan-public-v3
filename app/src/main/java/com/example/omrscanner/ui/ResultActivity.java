@@ -629,20 +629,22 @@ public class ResultActivity extends AppCompatActivity {
         btnConfirmLrn.setText("CONFIRMED ✓");
         updateSaveButtonState();
 
-        if (btnExport.isEnabled()) {
-            Toast.makeText(this, "LRN verified ✓ Saving...", Toast.LENGTH_SHORT).show();
-            exportResults();
-        } else {
-            Toast.makeText(this, "LRN verified ✓ — resolve the flagged answer(s) above before saving.",
-                    Toast.LENGTH_LONG).show();
-        }
-
-        // Enable the SAVE button and auto-save
+        // Enable the SAVE button and auto-save (single call — do not call
+        // exportResults() more than once here, it was previously being
+        // triggered twice, which caused duplicate scans to be saved).
         btnExport.setEnabled(true);
 
-        Toast.makeText(this, "LRN verified ✓ Saving...", Toast.LENGTH_SHORT).show();
-        
-        // Auto-save immediately after confirmation
+        // Informational only — does NOT gate the save below. Flagged
+        // multi-shade answers are still allowed to save (they show up
+        // with a yellow border in the scan list for later correction);
+        // this just lets the teacher know that's the state it's in.
+        if (scanResult != null && scanResult.hasMultiLetterAnswers() && !correctionDeferred) {
+            Toast.makeText(this, "LRN verified ✓ — resolve the flagged answer(s) above before saving.",
+                    Toast.LENGTH_LONG).show();
+        } else {
+            Toast.makeText(this, "LRN verified ✓ Saving...", Toast.LENGTH_SHORT).show();
+        }
+
         exportResults();
     }
 
