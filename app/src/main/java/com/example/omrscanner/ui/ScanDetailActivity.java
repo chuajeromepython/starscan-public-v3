@@ -225,8 +225,18 @@ public class ScanDetailActivity extends AppCompatActivity {
             btnEditToggle.setVisibility(View.VISIBLE);
         }
         tvDate.setText(currentScan.getFormattedDate());
-
-        renderAnswers();
+        if (currentScan.needsAnswerCorrection()) {
+            Toast.makeText(this,
+                    "⚠ This scan has question(s) with multiple marks — please correct and save.",
+                    Toast.LENGTH_LONG).show();
+            if (!isEditing) {
+                toggleEditMode(); // jump straight into correction mode
+            } else {
+                renderAnswers();
+            }
+        } else {
+            renderAnswers();
+        }
     }
 
     // ──────────────────────────────────────────────────────────
@@ -357,9 +367,11 @@ public class ScanDetailActivity extends AppCompatActivity {
         row.addView(tvNum);
 
         // Answer letter — #1E293B bold 14sp (dash if empty)
+
+        boolean flagged = answer != null && answer.length() > 1;
         TextView tvAns = new TextView(this);
-        tvAns.setText(answer.isEmpty() ? "—" : answer);
-        tvAns.setTextColor(Color.parseColor(answer.isEmpty() ? COLOR_MUTED : COLOR_DARK));
+        tvAns.setText(answer.isEmpty() ? "—" : (flagged ? answer + " ⚠" : answer));
+        tvAns.setTextColor(Color.parseColor(flagged ? "#DC2626" : (answer.isEmpty() ? COLOR_MUTED : COLOR_DARK)));
         tvAns.setTextSize(14);
         tvAns.setTypeface(ResourcesCompat.getFont(this, R.font.poppins_black), Typeface.BOLD);
         row.addView(tvAns);
@@ -432,7 +444,10 @@ public class ScanDetailActivity extends AppCompatActivity {
 
         // Zebra stripe
         boolean isOdd = (qNum % 2 != 0);
-        wrapper.setBackgroundColor(Color.parseColor(isOdd ? COLOR_STRIPE_ODD : COLOR_WHITE));
+        String currentValForFlag = editedAnswers.getOrDefault(qNum, "");
+        boolean stillFlagged = currentValForFlag != null && currentValForFlag.length() > 1;
+        wrapper.setBackgroundColor(Color.parseColor(
+                stillFlagged ? "#FFFBEB" : (isOdd ? COLOR_STRIPE_ODD : COLOR_WHITE)));
 
         // Row content
         LinearLayout row = new LinearLayout(this);
@@ -442,11 +457,11 @@ public class ScanDetailActivity extends AppCompatActivity {
 
         // Q# label — #0038A8 bold 12sp, 40dp wide
         TextView tvQ = new TextView(this);
-        tvQ.setText(String.format("#%d", qNum));
-        tvQ.setTextColor(Color.parseColor(COLOR_BLUE));
+        tvQ.setText(stillFlagged ? String.format("#%d ⚠", qNum) : String.format("#%d", qNum));
+        tvQ.setTextColor(Color.parseColor(stillFlagged ? "#B45309" : COLOR_BLUE));
         tvQ.setTextSize(12);
         tvQ.setTypeface(ResourcesCompat.getFont(this, R.font.poppins_medium), Typeface.BOLD);
-        LinearLayout.LayoutParams qParams = new LinearLayout.LayoutParams(dp(40),
+        LinearLayout.LayoutParams qParams = new LinearLayout.LayoutParams(dp(56),
                 ViewGroup.LayoutParams.WRAP_CONTENT);
         tvQ.setLayoutParams(qParams);
         row.addView(tvQ);

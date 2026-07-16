@@ -89,9 +89,11 @@ public class ActivityScreenRenderer {
         card.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
 
         GradientDrawable cardBg = new GradientDrawable();
-        cardBg.setColor(Color.WHITE);
+        boolean needsCorrection = scan.needsAnswerCorrection();
+        cardBg.setColor(needsCorrection ? Color.parseColor("#FFFBEB") : Color.WHITE);
         cardBg.setCornerRadius(ui.dp(16));
-        cardBg.setStroke(ui.dp(1), Color.parseColor("#E2E8F0"));
+        cardBg.setStroke(ui.dp(needsCorrection ? 2 : 1),
+                Color.parseColor(needsCorrection ? "#F59E0B" : "#E2E8F0"));
         card.setBackground(cardBg);
 
         LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
@@ -137,6 +139,20 @@ public class ActivityScreenRenderer {
         lrn.setTypeface(null, Typeface.BOLD);
         lrn.setClickable(false);
         info.addView(lrn);
+
+        if (needsCorrection) {
+            TextView needsFix = new TextView(activity);
+            needsFix.setText("⚠ Needs correction (multiple marks)");
+            needsFix.setTextColor(Color.parseColor("#B45309"));
+            needsFix.setTextSize(11);
+            needsFix.setTypeface(null, Typeface.BOLD);
+            needsFix.setClickable(false);
+            LinearLayout.LayoutParams nfLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            nfLp.topMargin = ui.dp(2);
+            needsFix.setLayoutParams(nfLp);
+            info.addView(needsFix);
+        }
 
         TextView detail = new TextView(activity);
         detail.setText("Student #" + (index + 1) + " · " + selectedActivity.getSheetType());

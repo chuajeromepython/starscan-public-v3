@@ -48,6 +48,14 @@ public class ScanResult {
     public Map<Integer, String> answers;
 
     /**
+     * 1-based question numbers where MORE THAN ONE bubble was shaded
+     * (e.g. "AC", "ABCD"). These must be resolved to a single letter (or
+     * blank) by the teacher before this scan's answers can be trusted for
+     * grading or upload — a multi-mark answer is never valid.
+     */
+    public List<Integer> multiLetterAnswerPositions = new ArrayList<>();
+
+    /**
      * Copy of the warped bitmap with visual overlay:
      * green filled circles for FILLED bubbles,
      * blue outline circles for EMPTY bubbles.
@@ -56,6 +64,25 @@ public class ScanResult {
 
     public ScanResult() {
         this.answers = new LinkedHashMap<>();
+    }
+
+    /** @return true if any question currently has more than one letter marked (e.g. "AC"). */
+    public boolean hasMultiLetterAnswers() {
+        return multiLetterAnswerPositions != null && !multiLetterAnswerPositions.isEmpty();
+    }
+
+    /**
+     * Recomputes {@link #multiLetterAnswerPositions} from the current contents
+     * of {@link #answers}. Call this after a manual correction so the flag
+     * stays in sync with whatever the teacher just typed/tapped.
+     */
+    public void refreshMultiLetterFlags() {
+        multiLetterAnswerPositions.clear();
+        for (Map.Entry<Integer, String> e : answers.entrySet()) {
+            if (e.getValue() != null && e.getValue().length() > 1) {
+                multiLetterAnswerPositions.add(e.getKey());
+            }
+        }
     }
 
     /** @return true if any LRN digit position was not clearly shaded. */

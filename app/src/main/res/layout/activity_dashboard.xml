@@ -1181,7 +1181,7 @@
         android:layout_marginEnd="16dp"
         app:srcCompat="@drawable/ic_plus"
         app:tint="#FFFFFF"
-        app:backgroundTint="#1E293B"
+        app:backgroundTint="#0038A8"
         app:elevation="8dp"
         app:layout_constraintBottom_toTopOf="@id/footer"
         app:layout_constraintEnd_toEndOf="parent" />

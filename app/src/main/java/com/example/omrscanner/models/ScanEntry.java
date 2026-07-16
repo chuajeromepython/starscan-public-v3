@@ -20,6 +20,25 @@ public class ScanEntry {
     /** True when score was computed by comparing against an answer key; false = raw detected count. */
     private boolean isScored;
 
+    /**
+     * True if any answer in this scan currently has more than one letter
+     * (e.g. "AC"). This scan's data must NOT be trusted for grading or
+     * included in an upload-assessment CSV until every such answer is
+     * corrected down to a single letter (or blank).
+     */
+    public boolean needsAnswerCorrection() {
+        return hasMultiLetterAnswer(answers);
+    }
+
+    /** Static helper so other layers (exporter, upload check) can reuse the same rule. */
+    public static boolean hasMultiLetterAnswer(Map<Integer, String> answers) {
+        if (answers == null) return false;
+        for (String v : answers.values()) {
+            if (v != null && v.length() > 1) return true;
+        }
+        return false;
+    }
+
     public ScanEntry() {
         // Default constructor for deserialization
         this.answers = new LinkedHashMap<>();

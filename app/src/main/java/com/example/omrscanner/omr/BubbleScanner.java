@@ -97,7 +97,7 @@ public class BubbleScanner {
                 int[] safeOffset = sanitizeAlignmentOffset(block, scaleX, scaleY, scaledRadius, offX, offY);
                 questionCounter = scanQuestionBlock(block, scaleX, scaleY,
                         scaledRadius, gray, overlay,
-                        result.answers, questionCounter, safeOffset[0], safeOffset[1], correctAnswers);
+                        result, questionCounter, safeOffset[0], safeOffset[1], correctAnswers);
             }
         }
 
@@ -205,7 +205,7 @@ public class BubbleScanner {
 
     private int scanQuestionBlock(OmrBlock block, double scaleX, double scaleY,
                                   int scaledRadius, Mat gray, Mat overlay,
-                                  Map<Integer, String> answers, int questionCounter,
+                                  ScanResult result, int questionCounter,
                                   int offX, int offY, String[] correctAnswers) {
 
         for (int row = 0; row < block.rows; row++) {
@@ -224,7 +224,7 @@ public class BubbleScanner {
                     detected.append(CHOICE_LABELS[col]);
                 }
 
-                Boolean isCorrect = null; // null = no answer key / ungraded → black
+                Boolean isCorrect = null;
                 if (filled && correctAnswers != null && questionCounter - 1 < correctAnswers.length) {
                     String key = correctAnswers[questionCounter - 1].trim();
                     if (!key.isEmpty() && !key.equals("?") && col < CHOICE_LABELS.length) {
@@ -232,20 +232,18 @@ public class BubbleScanner {
                     }
                 }
 
-                if (filled) {
-                    Log.d("SCORE_DEBUG", "Q" + questionCounter + " col=" + col
-                            + " correctAnswersIsNull=" + (correctAnswers == null)
-                            + " isCorrect=" + isCorrect);
-                }
-
                 drawBubble(overlay, cx, cy, scaledRadius, filled, isCorrect);
             }
 
             String answer = detected.toString();
-            answers.put(questionCounter, answer);
+            result.answers.put(questionCounter, answer);
 
-            Log.d(TAG, String.format("Q%d: %s", questionCounter,
-                    answer.isEmpty() ? "(blank)" : answer));
+            if (answer.length() > 1) {
+                result.multiLetterAnswerPositions.add(questionCounter);
+                Log.w(TAG, String.format(
+                        "Q%d: MULTI-LETTER answer detected (%s) — needs teacher correction before grading/upload",
+                        questionCounter, answer));
+            }
         }
 
         return questionCounter;

@@ -129,6 +129,11 @@ public class ClassExporter {
 
             StringBuilder actCsv = new StringBuilder();
             for (ScanEntry scan : scans) {
+                // Never let a scan with unresolved multi-letter answers (e.g. "AC")
+                // reach the CSV that gets uploaded to STARS — it must be corrected
+                // to a single letter (or blank) in the app first.
+                if (scan.needsAnswerCorrection()) continue;
+
                 String lrnVal = scan.getLrn() != null ? scan.getLrn() : "";
                 for (int c = 0; c < lrnVal.length(); c++) actCsv.append(lrnVal.charAt(c)).append(";");
                 for (int i = 1; i <= act.getNumItems(); i++) {

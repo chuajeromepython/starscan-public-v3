@@ -11,6 +11,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -63,6 +64,15 @@ public class ResultActivity extends AppCompatActivity {
     private MaterialButton btnConfirmLrn;
     private boolean isLrnConfirmed = false;
 
+    private MaterialCardView answersCard;
+    private LinearLayout answersListContainer;
+    private LinearLayout answersActionRow;
+    private TextView tvAnswersStatus;
+    private TextView tvAnswersHelper;
+    private MaterialButton btnCorrectLater;
+    private MaterialButton btnFixNow;
+    private boolean correctionDeferred = false;
+
     private Bitmap alignedBitmap;
     private ScanResult scanResult;
     private String originalImagePath;
@@ -108,6 +118,15 @@ public class ResultActivity extends AppCompatActivity {
         lrnInputContainer = findViewById(R.id.lrnInputContainer);
         btnConfirmLrn = findViewById(R.id.btnConfirmLrn);
 
+        // Results
+        answersCard = findViewById(R.id.answersCard);
+        answersListContainer = findViewById(R.id.answersListContainer);
+        answersActionRow = findViewById(R.id.answersActionRow);
+        tvAnswersStatus = findViewById(R.id.tvAnswersStatus);
+        tvAnswersHelper = findViewById(R.id.tvAnswersHelper);
+        btnCorrectLater = findViewById(R.id.btnCorrectLater);
+        btnFixNow = findViewById(R.id.btnFixNow);
+
         setupLrnBoxes();
 
         // Get data from intent
@@ -146,6 +165,8 @@ public class ResultActivity extends AppCompatActivity {
         btnRetry.setOnClickListener(v -> retakePhoto());
         btnExport.setOnClickListener(v -> exportResults());
         btnConfirmLrn.setOnClickListener(v -> confirmLrn());
+        btnCorrectLater.setOnClickListener(v -> onCorrectLaterTapped());
+        btnFixNow.setOnClickListener(v -> onFixNowTapped());
 
     }
 
@@ -392,6 +413,10 @@ public class ResultActivity extends AppCompatActivity {
                         // Show LRN verification card with detected LRN
                         // (auto-confirms if LRN is valid; shows manual edit if error)
                         showLrnVerification(scanResult.lnr);
+                        // ALWAYS check for multi-letter (double/triple/etc. marked) answers,
+// regardless of whether the LRN was detected cleanly — this only happens
+// when anchors were valid and a scan actually ran.
+                        showAnswersReview();
 
                     } else {
                         Toast.makeText(
@@ -485,7 +510,8 @@ public class ResultActivity extends AppCompatActivity {
             tvLrnHelper.setText("LRN is correctly detected. You can proceed to save.");
             tvLrnHelper.setTextColor(0xFF64748B);
             tvLrnHelper.setTextSize(11);
-            btnExport.setEnabled(true);
+            //btnExport.setEnabled(true);
+            updateSaveButtonState();
             return;
         }
 
@@ -601,6 +627,15 @@ public class ResultActivity extends AppCompatActivity {
         tvLrnHelper.setText("LRN confirmed: " + lrn + ". You can now save the result.");
         tvLrnHelper.setTextColor(0xFF22C55E);
         btnConfirmLrn.setText("CONFIRMED ✓");
+        updateSaveButtonState();
+
+        if (btnExport.isEnabled()) {
+            Toast.makeText(this, "LRN verified ✓ Saving...", Toast.LENGTH_SHORT).show();
+            exportResults();
+        } else {
+            Toast.makeText(this, "LRN verified ✓ — resolve the flagged answer(s) above before saving.",
+                    Toast.LENGTH_LONG).show();
+        }
 
         // Enable the SAVE button and auto-save
         btnExport.setEnabled(true);
@@ -903,5 +938,180 @@ public class ResultActivity extends AppCompatActivity {
                 !scanResult.overlayBitmap.isRecycled()) {
             scanResult.overlayBitmap.recycle();
         }
+    }
+
+    // ──────────────────────────────────────────────────────────
+// ANSWERS REVIEW / MULTI-LETTER CORRECTION
+// ──────────────────────────────────────────────────────────
+
+    private void showAnswersReview() {
+        if (scanResult == null) return;
+        correctionDeferred = false;
+        answersCard.setVisibility(View.VISIBLE);
+        renderAnswersReviewList();
+    }
+
+    private void renderAnswersReviewList() {
+        answersListContainer.removeAllViews();
+        int numItems = scanResult.getQuestionCount();
+        for (int q = 1; q <= numItems; q++) {
+            answersListContainer.addView(createAnswerReviewRow(q));
+        }
+        updateAnswersStatusUi();
+    }
+
+    private View createAnswerReviewRow(int qNum) {
+        scanResult.refreshMultiLetterFlags();
+        String currentVal = scanResult.answers.getOrDefault(qNum, "");
+        boolean flagged = currentVal != null && currentVal.length() > 1;
+
+        android.widget.LinearLayout wrapper = new android.widget.LinearLayout(this);
+        wrapper.setOrientation(android.widget.LinearLayout.VERTICAL);
+        wrapper.setLayoutParams(new android.widget.LinearLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT));
+        wrapper.setPadding(dp(8), dp(6), dp(8), dp(6));
+
+        android.graphics.drawable.GradientDrawable rowBg = new android.graphics.drawable.GradientDrawable();
+        rowBg.setCornerRadius(dp(8));
+        rowBg.setColor(flagged ? 0xFFFFFBEB : (qNum % 2 == 0 ? 0xFFFFFFFF : 0xFFF8FAFC));
+        if (flagged) rowBg.setStroke(dp(1), 0xFFF59E0B);
+        wrapper.setBackground(rowBg);
+        android.widget.LinearLayout.LayoutParams wrapLp = new android.widget.LinearLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+        wrapLp.bottomMargin = dp(4);
+        wrapper.setLayoutParams(wrapLp);
+
+        android.widget.LinearLayout topRow = new android.widget.LinearLayout(this);
+        topRow.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+        topRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+
+        TextView tvQ = new TextView(this);
+        tvQ.setText("Q" + qNum);
+        tvQ.setTextColor(0xFF0038A8);
+        tvQ.setTextSize(12);
+        tvQ.setTypeface(null, android.graphics.Typeface.BOLD);
+        android.widget.LinearLayout.LayoutParams qLp = new android.widget.LinearLayout.LayoutParams(
+                dp(36), android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+        tvQ.setLayoutParams(qLp);
+        topRow.addView(tvQ);
+
+        TextView tvAns = new TextView(this);
+        tvAns.setText(currentVal == null || currentVal.isEmpty() ? "—" : currentVal);
+        tvAns.setTextColor(flagged ? 0xFFDC2626 : 0xFF1E293B);
+        tvAns.setTextSize(14);
+        tvAns.setTypeface(null, android.graphics.Typeface.BOLD);
+        android.widget.LinearLayout.LayoutParams ansLp = new android.widget.LinearLayout.LayoutParams(
+                0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        tvAns.setLayoutParams(ansLp);
+        topRow.addView(tvAns);
+
+        if (flagged) {
+            TextView tvWarn = new TextView(this);
+            tvWarn.setText("⚠ multiple marks");
+            tvWarn.setTextColor(0xFFB45309);
+            tvWarn.setTextSize(11);
+            tvWarn.setTypeface(null, android.graphics.Typeface.BOLD);
+            topRow.addView(tvWarn);
+        }
+        wrapper.addView(topRow);
+
+        if (flagged) {
+            android.widget.LinearLayout pickerRow = new android.widget.LinearLayout(this);
+            pickerRow.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+            pickerRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            android.widget.LinearLayout.LayoutParams prLp = new android.widget.LinearLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+            prLp.topMargin = dp(6);
+            pickerRow.setLayoutParams(prLp);
+
+            String[] options = {"A", "B", "C", "D", ""};
+            String[] labels = {"A", "B", "C", "D", "—"};
+            for (int j = 0; j < options.length; j++) {
+                final String optVal = options[j];
+                TextView btn = new TextView(this);
+                btn.setText(labels[j]);
+                btn.setGravity(android.view.Gravity.CENTER);
+                btn.setTextSize(12);
+                btn.setTypeface(null, android.graphics.Typeface.BOLD);
+                int btnW = j == options.length - 1 ? dp(44) : dp(36);
+                android.widget.LinearLayout.LayoutParams btnLp =
+                        new android.widget.LinearLayout.LayoutParams(btnW, dp(34));
+                if (j > 0) btnLp.leftMargin = dp(6);
+                btn.setLayoutParams(btnLp);
+
+                android.graphics.drawable.GradientDrawable btnBg = new android.graphics.drawable.GradientDrawable();
+                btnBg.setCornerRadius(dp(8));
+                btnBg.setColor(0xFFEFF6FF);
+                btn.setBackground(btnBg);
+                btn.setTextColor(0xFF2563EB);
+
+                btn.setOnClickListener(v -> {
+                    scanResult.answers.put(qNum, optVal);
+                    renderAnswersReviewList();
+                });
+
+                pickerRow.addView(btn);
+            }
+            wrapper.addView(pickerRow);
+        }
+
+        return wrapper;
+    }
+
+    private void updateAnswersStatusUi() {
+        scanResult.refreshMultiLetterFlags();
+        int flaggedCount = scanResult.multiLetterAnswerPositions.size();
+
+        if (flaggedCount == 0) {
+            correctionDeferred = false;
+            tvAnswersStatus.setText("✓ OK");
+            tvAnswersStatus.setTextColor(0xFF22C55E);
+            tvAnswersHelper.setText("All answers have a single mark (or none). Ready to save.");
+            tvAnswersHelper.setTextColor(0xFF64748B);
+            answersActionRow.setVisibility(View.GONE);
+        } else {
+            tvAnswersStatus.setText("⚠ " + flaggedCount + (flaggedCount == 1 ? " item" : " items") + " flagged");
+            tvAnswersStatus.setTextColor(0xFFDC2626);
+            if (correctionDeferred) {
+                tvAnswersHelper.setText("⚠ " + flaggedCount + " question(s) still have multiple marks. "
+                        + "This scan will be saved with a yellow border in the scan list and excluded from "
+                        + "upload until you correct it there.");
+                tvAnswersHelper.setTextColor(0xFFB45309);
+                answersActionRow.setVisibility(View.GONE);
+            } else {
+                tvAnswersHelper.setText(flaggedCount + " question(s) have more than one bubble marked "
+                        + "(highlighted below). Tap the correct letter for each one, or choose to correct later.");
+                tvAnswersHelper.setTextColor(0xFFDC2626);
+                answersActionRow.setVisibility(View.VISIBLE);
+            }
+        }
+
+        updateSaveButtonState();
+    }
+
+    private void onCorrectLaterTapped() {
+        correctionDeferred = true;
+        Toast.makeText(this, "You can correct this later from the scan list.", Toast.LENGTH_SHORT).show();
+        updateAnswersStatusUi();
+    }
+
+    private void onFixNowTapped() {
+        answersActionRow.setVisibility(View.GONE);
+        scrollView.post(() -> scrollView.smoothScrollTo(0, answersCard.getTop()));
+        Toast.makeText(this, "Tap the correct letter for each flagged question above.", Toast.LENGTH_SHORT).show();
+    }
+
+    private void updateSaveButtonState() {
+        if (scanResult == null) {
+            btnExport.setEnabled(false);
+            return;
+        }
+        boolean answersOk = !scanResult.hasMultiLetterAnswers() || correctionDeferred;
+        btnExport.setEnabled(isLrnConfirmed && answersOk);
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
     }
 }

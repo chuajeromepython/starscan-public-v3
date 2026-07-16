@@ -510,6 +510,31 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             return;
         }
 
+        // ── Block upload while any scan still has an unresolved multi-letter
+        //    answer (e.g. "AC") — these must be corrected in the scan list first.
+        java.util.List<ScanEntry> scans = act.getScans();
+        java.util.List<String> pending = new java.util.ArrayList<>();
+        if (scans != null) {
+            for (ScanEntry s : scans) {
+                if (s.needsAnswerCorrection()) {
+                    pending.add(s.getLrn() != null && !s.getLrn().trim().isEmpty()
+                            ? s.getLrn() : "(missing LRN)");
+                }
+            }
+        }
+        if (!pending.isEmpty()) {
+            StringBuilder msg = new StringBuilder();
+            msg.append(pending.size()).append(" scan(s) have questions with more than one bubble marked ")
+                    .append("and must be corrected before this assessment can be uploaded:\n\n");
+            for (String lrn : pending) {
+                msg.append("• ").append(lrn).append("\n");
+            }
+            msg.append("\nOpen each highlighted scan (yellow border) in the scan list to fix it.");
+            ui.showErrorDialog("Corrections needed", msg.toString());
+            return;
+        }
+
+
         java.io.File csvFile = ClassExporter.getAssessmentCsvFile(cls, act);
         if (!csvFile.exists()) {
             ui.showErrorDialog("No scans to upload",
