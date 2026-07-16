@@ -282,12 +282,14 @@ public class OMRRepository {
       if (existing != null) {
         incoming.id = existing.id;
         incoming.createdAt = existing.createdAt;
+        incoming.updatedAt = System.currentTimeMillis();
+        db.classDao().update(incoming);   // UPDATE, not INSERT OR REPLACE — no delete, no cascade
       } else {
         incoming.id = java.util.UUID.randomUUID().toString().substring(0, 7);
         incoming.createdAt = System.currentTimeMillis();
+        incoming.updatedAt = System.currentTimeMillis();
+        db.classDao().insert(incoming);   // only a true INSERT for genuinely new classes
       }
-      incoming.updatedAt = System.currentTimeMillis();
-      db.classDao().insert(incoming); // REPLACE strategy on primary key id
       if (callback != null) callback.onResult(null);
     });
   }
