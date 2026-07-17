@@ -71,7 +71,9 @@ public class ResultActivity extends AppCompatActivity {
     private TextView tvAnswersHelper;
     private MaterialButton btnCorrectLater;
     private MaterialButton btnFixNow;
+    private LinearLayout reviewAnswersChip;
     private boolean correctionDeferred = false;
+    private boolean fixModeActive = false;
 
     private Bitmap alignedBitmap;
     private ScanResult scanResult;
@@ -126,6 +128,7 @@ public class ResultActivity extends AppCompatActivity {
         tvAnswersHelper = findViewById(R.id.tvAnswersHelper);
         btnCorrectLater = findViewById(R.id.btnCorrectLater);
         btnFixNow = findViewById(R.id.btnFixNow);
+        reviewAnswersChip = findViewById(R.id.reviewAnswersChip);
 
         setupLrnBoxes();
 
@@ -167,6 +170,7 @@ public class ResultActivity extends AppCompatActivity {
         btnConfirmLrn.setOnClickListener(v -> confirmLrn());
         btnCorrectLater.setOnClickListener(v -> onCorrectLaterTapped());
         btnFixNow.setOnClickListener(v -> onFixNowTapped());
+        reviewAnswersChip.setOnClickListener(v -> onReviewAnswersChipTapped());
 
     }
 
@@ -629,9 +633,9 @@ public class ResultActivity extends AppCompatActivity {
         btnConfirmLrn.setText("CONFIRMED ✓");
         updateSaveButtonState();
 
-        // Enable the SAVE button and auto-save (single call — do not call
-        // exportResults() more than once here, it was previously being
-        // triggered twice, which caused duplicate scans to be saved).
+        // Enable the SAVE button. Saving itself now only happens when the
+        // teacher taps SAVE (btnExport -> exportResults()) — CONFIRM no
+        // longer auto-saves and exits the screen on its own.
         btnExport.setEnabled(true);
 
         // Informational only — does NOT gate the save below. Flagged
@@ -639,13 +643,11 @@ public class ResultActivity extends AppCompatActivity {
         // with a yellow border in the scan list for later correction);
         // this just lets the teacher know that's the state it's in.
         if (scanResult != null && scanResult.hasMultiLetterAnswers() && !correctionDeferred) {
-            Toast.makeText(this, "LRN verified ✓ — resolve the flagged answer(s) above before saving.",
+            Toast.makeText(this, "LRN verified ✓ — resolve the flagged answer(s) above, then tap SAVE.",
                     Toast.LENGTH_LONG).show();
         } else {
-            Toast.makeText(this, "LRN verified ✓ Saving...", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "LRN verified ✓ — tap SAVE to save this scan.", Toast.LENGTH_SHORT).show();
         }
-
-        exportResults();
     }
 
     private void exportResults() {
@@ -949,7 +951,9 @@ public class ResultActivity extends AppCompatActivity {
     private void showAnswersReview() {
         if (scanResult == null) return;
         correctionDeferred = false;
+        fixModeActive = false;
         answersCard.setVisibility(View.VISIBLE);
+        reviewAnswersChip.setVisibility(View.GONE);
         renderAnswersReviewList();
     }
 
@@ -1018,7 +1022,7 @@ public class ResultActivity extends AppCompatActivity {
         }
         wrapper.addView(topRow);
 
-        if (flagged) {
+        if (flagged && fixModeActive) {
             android.widget.LinearLayout pickerRow = new android.widget.LinearLayout(this);
             pickerRow.setOrientation(android.widget.LinearLayout.HORIZONTAL);
             pickerRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
@@ -1056,6 +1060,16 @@ public class ResultActivity extends AppCompatActivity {
                 pickerRow.addView(btn);
             }
             wrapper.addView(pickerRow);
+        } else if (flagged) {
+            TextView tvLocked = new TextView(this);
+            tvLocked.setText("🔒 Locked — tap \"Fix now\" below to edit");
+            tvLocked.setTextColor(0xFF94A3B8);
+            tvLocked.setTextSize(11);
+            android.widget.LinearLayout.LayoutParams lockLp = new android.widget.LinearLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+            lockLp.topMargin = dp(4);
+            tvLocked.setLayoutParams(lockLp);
+            wrapper.addView(tvLocked);
         }
 
         return wrapper;
@@ -1067,26 +1081,34 @@ public class ResultActivity extends AppCompatActivity {
 
         if (flaggedCount == 0) {
             correctionDeferred = false;
+            fixModeActive = false;
             tvAnswersStatus.setText("✓ OK");
             tvAnswersStatus.setTextColor(0xFF22C55E);
             tvAnswersHelper.setText("All answers have a single mark (or none). Ready to save.");
             tvAnswersHelper.setTextColor(0xFF64748B);
             answersActionRow.setVisibility(View.GONE);
+        } else if (correctionDeferred) {
+            tvAnswersStatus.setText("⚠ " + flaggedCount + (flaggedCount == 1 ? " item" : " items") + " flagged");
+            tvAnswersStatus.setTextColor(0xFFDC2626);
+            tvAnswersHelper.setText("⚠ " + flaggedCount + " question(s) still have multiple marks. "
+                    + "This scan will be saved with a yellow border in the scan list and excluded from "
+                    + "upload until you correct it there.");
+            tvAnswersHelper.setTextColor(0xFFB45309);
+            answersActionRow.setVisibility(View.GONE);
+        } else if (fixModeActive) {
+            tvAnswersStatus.setText("⚠ " + flaggedCount + (flaggedCount == 1 ? " item" : " items") + " flagged");
+            tvAnswersStatus.setTextColor(0xFFDC2626);
+            tvAnswersHelper.setText(flaggedCount + " question(s) have more than one bubble marked "
+                    + "(highlighted below). Tap the correct letter for each one.");
+            tvAnswersHelper.setTextColor(0xFFDC2626);
+            answersActionRow.setVisibility(View.GONE);
         } else {
             tvAnswersStatus.setText("⚠ " + flaggedCount + (flaggedCount == 1 ? " item" : " items") + " flagged");
             tvAnswersStatus.setTextColor(0xFFDC2626);
-            if (correctionDeferred) {
-                tvAnswersHelper.setText("⚠ " + flaggedCount + " question(s) still have multiple marks. "
-                        + "This scan will be saved with a yellow border in the scan list and excluded from "
-                        + "upload until you correct it there.");
-                tvAnswersHelper.setTextColor(0xFFB45309);
-                answersActionRow.setVisibility(View.GONE);
-            } else {
-                tvAnswersHelper.setText(flaggedCount + " question(s) have more than one bubble marked "
-                        + "(highlighted below). Tap the correct letter for each one, or choose to correct later.");
-                tvAnswersHelper.setTextColor(0xFFDC2626);
-                answersActionRow.setVisibility(View.VISIBLE);
-            }
+            tvAnswersHelper.setText(flaggedCount + " question(s) have more than one bubble marked "
+                    + "(highlighted below). Tap \"Fix now\" to correct them, or \"Correct later\" to save as-is.");
+            tvAnswersHelper.setTextColor(0xFFDC2626);
+            answersActionRow.setVisibility(View.VISIBLE);
         }
 
         updateSaveButtonState();
@@ -1094,14 +1116,27 @@ public class ResultActivity extends AppCompatActivity {
 
     private void onCorrectLaterTapped() {
         correctionDeferred = true;
+        fixModeActive = false;
+        answersCard.setVisibility(View.GONE);
+        reviewAnswersChip.setVisibility(View.VISIBLE);
         Toast.makeText(this, "You can correct this later from the scan list.", Toast.LENGTH_SHORT).show();
-        updateAnswersStatusUi();
+        updateSaveButtonState();
     }
 
     private void onFixNowTapped() {
-        answersActionRow.setVisibility(View.GONE);
+        fixModeActive = true;
+        renderAnswersReviewList();
         scrollView.post(() -> scrollView.smoothScrollTo(0, answersCard.getTop()));
         Toast.makeText(this, "Tap the correct letter for each flagged question above.", Toast.LENGTH_SHORT).show();
+    }
+
+    private void onReviewAnswersChipTapped() {
+        reviewAnswersChip.setVisibility(View.GONE);
+        correctionDeferred = false;
+        fixModeActive = false;
+        answersCard.setVisibility(View.VISIBLE);
+        renderAnswersReviewList();
+        scrollView.post(() -> scrollView.smoothScrollTo(0, answersCard.getTop()));
     }
 
     private void updateSaveButtonState() {
@@ -1116,4 +1151,5 @@ public class ResultActivity extends AppCompatActivity {
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
+
 }

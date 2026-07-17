@@ -42,4 +42,8 @@ public class AssessmentListRow {
   /** Nullable: the name of the assigned answer key (from LEFT JOIN), or null if none. */
   @ColumnInfo(name = "answerKeyName")
   public String answerKeyName;
+
+  /** Number of scans in this assessment with at least one ambiguous (multi-letter) answer. */
+  @ColumnInfo(name = "needsCorrectionCount")
+  public int needsCorrectionCount;
 }

@@ -229,24 +229,54 @@ public class ClassScreenRenderer {
         meta.setLayoutParams(mlp);
         card.addView(meta);
 
-        // Answer key badge (shown only when a key is assigned)
-        if (row.answerKeyName != null && !row.answerKeyName.isEmpty()) {
-            TextView keyBadge = new TextView(activity);
-            keyBadge.setText("🗝 " + row.answerKeyName);
-            keyBadge.setTextColor(Color.parseColor("#059669"));
-            keyBadge.setTextSize(11);
-            keyBadge.setTypeface(null, Typeface.ITALIC);
-            GradientDrawable badgeBg = new GradientDrawable();
-            badgeBg.setColor(Color.parseColor("#ECFDF5"));
-            badgeBg.setCornerRadius(ui.dp(8));
-            badgeBg.setStroke(ui.dp(1), Color.parseColor("#A7F3D0"));
-            keyBadge.setBackground(badgeBg);
-            keyBadge.setPadding(ui.dp(8), ui.dp(3), ui.dp(8), ui.dp(3));
-            LinearLayout.LayoutParams kblp = new LinearLayout.LayoutParams(
+        // Answer key badge + needs-correction badge (shown only when applicable)
+        boolean hasKeyBadge = row.answerKeyName != null && !row.answerKeyName.isEmpty();
+        boolean hasCorrectionBadge = row.needsCorrectionCount > 0;
+        if (hasKeyBadge || hasCorrectionBadge) {
+            LinearLayout badgeRow = new LinearLayout(activity);
+            badgeRow.setOrientation(LinearLayout.HORIZONTAL);
+            badgeRow.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout.LayoutParams badgeRowLp = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            kblp.topMargin = ui.dp(6);
-            keyBadge.setLayoutParams(kblp);
-            card.addView(keyBadge);
+            badgeRowLp.topMargin = ui.dp(6);
+            badgeRow.setLayoutParams(badgeRowLp);
+
+            if (hasKeyBadge) {
+                TextView keyBadge = new TextView(activity);
+                keyBadge.setText("🗝 " + row.answerKeyName);
+                keyBadge.setTextColor(Color.parseColor("#059669"));
+                keyBadge.setTextSize(11);
+                keyBadge.setTypeface(null, Typeface.ITALIC);
+                GradientDrawable badgeBg = new GradientDrawable();
+                badgeBg.setColor(Color.parseColor("#ECFDF5"));
+                badgeBg.setCornerRadius(ui.dp(8));
+                badgeBg.setStroke(ui.dp(1), Color.parseColor("#A7F3D0"));
+                keyBadge.setBackground(badgeBg);
+                keyBadge.setPadding(ui.dp(8), ui.dp(3), ui.dp(8), ui.dp(3));
+                badgeRow.addView(keyBadge);
+            }
+
+            if (hasCorrectionBadge) {
+                TextView correctionBadge = new TextView(activity);
+                correctionBadge.setText("⚠ " + row.needsCorrectionCount
+                        + (row.needsCorrectionCount == 1 ? " student needs correction" : " students need correction"));
+                correctionBadge.setTextColor(Color.parseColor("#B45309"));
+                correctionBadge.setTextSize(11);
+                correctionBadge.setTypeface(null, Typeface.ITALIC);
+                GradientDrawable correctionBg = new GradientDrawable();
+                correctionBg.setColor(Color.parseColor("#FFFBEB"));
+                correctionBg.setCornerRadius(ui.dp(8));
+                correctionBg.setStroke(ui.dp(1), Color.parseColor("#FDE68A"));
+                correctionBadge.setBackground(correctionBg);
+                correctionBadge.setPadding(ui.dp(8), ui.dp(3), ui.dp(8), ui.dp(3));
+                LinearLayout.LayoutParams cblp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                if (hasKeyBadge) cblp.leftMargin = ui.dp(6);
+                correctionBadge.setLayoutParams(cblp);
+                badgeRow.addView(correctionBadge);
+            }
+
+            card.addView(badgeRow);
         }
 
         View divider = new View(activity);

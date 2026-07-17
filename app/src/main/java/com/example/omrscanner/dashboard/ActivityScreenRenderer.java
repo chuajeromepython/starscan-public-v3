@@ -207,13 +207,13 @@ public class ActivityScreenRenderer {
         GradientDrawable badgeBg = new GradientDrawable();
         badgeBg.setCornerRadius(ui.dp(8));
         if (scan.isScored()) {
-            // Real graded score — gold/amber to distinguish from raw count
-            badgeBg.setColor(Color.parseColor("#FEF9C3"));
-            badge.setTextColor(Color.parseColor("#854D0E"));
-        } else {
-            // Detected bubbles only — neutral green
+            // Real graded score — now green
             badgeBg.setColor(Color.parseColor("#DCFCE7"));
             badge.setTextColor(Color.parseColor("#059669"));
+        } else {
+            // Detected bubbles only, no key — now amber
+            badgeBg.setColor(Color.parseColor("#FEF9C3"));
+            badge.setTextColor(Color.parseColor("#854D0E"));
         }
         badge.setBackground(badgeBg);
         return badge;
