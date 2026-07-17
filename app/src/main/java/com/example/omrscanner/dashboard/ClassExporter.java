@@ -186,8 +186,19 @@ public class ClassExporter {
     }
 
     private static void writeTextFile(File target, String content) throws Exception {
-        try (FileWriter writer = new FileWriter(target)) {
+        File tmp = new File(target.getParentFile(), target.getName() + ".tmp");
+        try (FileWriter writer = new FileWriter(tmp)) {
             writer.write(content);
+        }
+        if (!tmp.renameTo(target)) {
+            // renameTo can fail across filesystems/edge cases — fall back to copy+delete
+            try (java.io.FileInputStream in = new java.io.FileInputStream(tmp);
+                 java.io.FileOutputStream out = new java.io.FileOutputStream(target)) {
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
+            }
+            tmp.delete();
         }
     }
 

@@ -601,6 +601,12 @@ public class ScanDetailActivity extends AppCompatActivity {
         repo.updateScan(currentScanEntity, ignored1 -> {
             // 6. Update individual answers map in DB
             repo.insertAnswersFromMap(currentScanEntity.id, editedAnswers, ignored2 -> {
+                // 7. Rebuild the exported CSV now that the DB write has committed —
+                //    without this, the on-disk CSV stays stale until some other
+                //    scan happens to re-trigger autoSaveClassData.
+                com.example.omrscanner.dashboard.ClassExporter.autoSaveClassData(
+                        this, classId, activityId);
+
                 runOnUiThread(() -> {
                     Toast.makeText(this, "Changes saved", Toast.LENGTH_SHORT).show();
 

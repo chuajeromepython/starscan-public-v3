@@ -536,7 +536,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
 
         java.io.File csvFile = ClassExporter.getAssessmentCsvFile(cls, act);
-        if (!csvFile.exists()) {
+        if (!csvFile.exists() || csvFile.length() == 0) {
             ui.showErrorDialog("No scans to upload",
                     "No CSV was found for this assessment yet — scan at least one sheet first.");
             return;
@@ -1654,14 +1654,17 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             r.updateScan(entity, null);
             r.deleteAnswersByScan(existing.id,
                     done -> {
-                        r.insertAnswersFromMap(existing.id, scanEntry.getAnswers(), null);
-                        ClassExporter.autoSaveClassData(context, classId, activityId);
+                        r.insertAnswersFromMap(existing.id, scanEntry.getAnswers(), ignored ->
+                                ClassExporter.autoSaveClassData(context, classId, activityId));
                     });
         } else {
             r.insertScan(entity, newId -> {
-                if (newId != null && newId > 0)
-                    r.insertAnswersFromMap(newId.intValue(), scanEntry.getAnswers(), null);
-                ClassExporter.autoSaveClassData(context, classId, activityId);
+                if (newId != null && newId > 0) {
+                    r.insertAnswersFromMap(newId.intValue(), scanEntry.getAnswers(), ignored ->
+                            ClassExporter.autoSaveClassData(context, classId, activityId));
+                } else {
+                    ClassExporter.autoSaveClassData(context, classId, activityId);
+                }
             });
         }
 
