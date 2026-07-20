@@ -441,6 +441,24 @@ public class TemplateManager {
     }
 
     /**
+     * Human-readable name for a rotation code, for logging only.
+     */
+    private static String rotationName(int rotCode) {
+        switch (rotCode) {
+            case -1:
+                return "NONE (as-captured)";
+            case Core.ROTATE_90_CLOCKWISE:
+                return "90° CLOCKWISE";
+            case Core.ROTATE_90_COUNTERCLOCKWISE:
+                return "90° COUNTER-CLOCKWISE";
+            case Core.ROTATE_180:
+                return "180°";
+            default:
+                return "UNKNOWN(" + rotCode + ")";
+        }
+    }
+
+    /**
      * Detect the correct orientation and sheet type in one pass.
      *
      * <p>The {@link PerspectiveAligner} always outputs a <b>portrait</b>
@@ -593,6 +611,10 @@ public class TemplateManager {
                 "detectAndOrient: winner template=%s rot=%d score=%.3f",
                 bestTemplateId, bestRotation, bestScore));
 
+        Log.i(TAG, "ORIENTATION_DECISION: input was " + (isPortrait ? "PORTRAIT" : "LANDSCAPE")
+                + " (" + w + "x" + h + ") -> applying rotation [" + rotationName(bestRotation)
+                + "] -> matched template=" + bestTemplateId);
+
         // ── Produce the correctly-oriented bitmap ───────────────────────
         Bitmap orientedBitmap;
         if (bestRotation == -1) {
@@ -694,12 +716,19 @@ public class TemplateManager {
             double scaleX = (double) cw / tpl.width;
             double scaleY = (double) ch / tpl.height;
 
-            double score = aligner.getAlignmentScore(candidate, tpl, scaleX, scaleY);
+            double bubbleScore = aligner.getAlignmentScore(candidate, tpl, scaleX, scaleY);
 
-            Log.d(TAG, String.format("  rot=%d, template=%s, score=%.3f",
-                    rotCode, templateId, score));
+            // headerScore is still computed and logged for visibility, but no
+            // longer decides the rotation — see conversation history for why.
+            double headerFraction = computeHeaderFraction(tpl);
+            double headerScore = computeHeaderSparsityScore(candidate, headerFraction);
+            double combinedScore = bubbleScore;
 
-            rotationCandidates.add(new RotationCandidate(rotCode, templateId, score));
+            Log.d(TAG, String.format(
+                    "  rot=%d, template=%s, bubble=%.3f header=%.3f(frac=%.3f, informational only) decision=%.3f",
+                    rotCode, templateId, bubbleScore, headerScore, headerFraction, combinedScore));
+
+            rotationCandidates.add(new RotationCandidate(rotCode, templateId, combinedScore));
 
             if (rotCode != -1) {
                 candidate.release();
@@ -723,6 +752,10 @@ public class TemplateManager {
 
         Log.i(TAG, String.format("detectAndOrientWithTemplate: template=%s rot=%d score=%.3f",
                 templateId, bestRotation, bestScore));
+
+        Log.i(TAG, "ORIENTATION_DECISION: input was " + (isPortrait ? "PORTRAIT" : "LANDSCAPE")
+                + " (" + w + "x" + h + ") -> applying rotation [" + rotationName(bestRotation)
+                + "] -> forced template=" + templateId);
 
         // Produce the correctly-oriented bitmap
         Bitmap orientedBitmap;

@@ -333,7 +333,8 @@ public class ResultActivity extends AppCompatActivity {
                     // silently flipping sheets 180°. We ignore orient.templateId here —
                     // the physical template the user picked (baseTemplateId) still wins
                     // for building the scan template below.
-                    TemplateManager.OrientationResult orient = tm.detectAndOrient(alignedBitmap);
+                    TemplateManager.OrientationResult orient =
+                            tm.detectAndOrientWithTemplate(alignedBitmap, baseTemplateId);
                     scanBitmap = orient.orientedBitmap;
                     sheetType = baseTemplateId;
 
@@ -354,6 +355,12 @@ public class ResultActivity extends AppCompatActivity {
                     alignedBitmap.recycle();
                     alignedBitmap = scanBitmap;
                 }
+
+                int finalW = alignedBitmap.getWidth();
+                int finalH = alignedBitmap.getHeight();
+                Log.i(TAG, "PRE_SCAN_ORIENTATION: sheetType=" + sheetType
+                        + " | final bitmap=" + finalW + "x" + finalH
+                        + " | shape=" + (finalW > finalH ? "LANDSCAPE" : (finalH > finalW ? "PORTRAIT" : "SQUARE")));
 
                 BubbleScanner scanner = new BubbleScanner();
                 String[] correctAnswers = null;

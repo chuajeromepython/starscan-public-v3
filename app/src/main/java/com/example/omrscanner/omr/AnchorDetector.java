@@ -641,6 +641,11 @@ public class AnchorDetector {
             }
         }
 
+        Log.i(TAG, String.format(
+                "RAW_ANCHORS: TL=(%.0f,%.0f) TR=(%.0f,%.0f) BL=(%.0f,%.0f) BR=(%.0f,%.0f)",
+                corners[0].x, corners[0].y, corners[1].x, corners[1].y,
+                corners[2].x, corners[2].y, corners[3].x, corners[3].y));
+
         return corners;
     }
 
