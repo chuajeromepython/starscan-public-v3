@@ -491,8 +491,6 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                         "Please scan your QR code from the website system before syncing."));
                 return;
             }
-            runOnUiThread(() ->
-                    android.widget.Toast.makeText(this, "Syncing students…", android.widget.Toast.LENGTH_SHORT).show());
             performAssessmentSync(selectedClass.getClassroomId(), user.serverIp);
         });
     }
@@ -502,6 +500,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         syncStudentsForClass(this, localClassId, classroomId, serverIp);
     }
 
+    // Sends the aggregate data of students along with their LRNs and answers
     @Override
     public void uploadAssessment(ActivityFolder act, ClassFolder cls, int assessmentId) {
         if (cls.getClassroomId() == null) {
