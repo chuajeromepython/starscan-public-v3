@@ -272,6 +272,15 @@ public class GridAligner {
         Core.MinMaxLocResult mmr = Core.minMaxLoc(result);
         double score = mmr.maxVal;
 
+        // ★ NEW — confirm whether the match landed on the expected row or drifted
+        // into a neighboring one
+        double matchedX = roiX + mmr.maxLoc.x;
+        double matchedY = roiY + mmr.maxLoc.y;
+        Log.d(TAG, String.format(
+                "    rowMatch[%s]: expected=(%d,%d) matchedAt=(%.0f,%.0f) offsetY=%.1f score=%.3f",
+                block.label, expectedX, expectedY, matchedX, matchedY,
+                matchedY - expectedY, score));
+
         result.release();
         searchROI.release();
         rowTpl.release();
