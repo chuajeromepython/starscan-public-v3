@@ -86,6 +86,25 @@ public class TemplateManager {
     // actively harmful, not just redundant.
     private static final int REQUIRED_PORTRAIT_ROTATION = Core.ROTATE_90_COUNTERCLOCKWISE;
 
+    // Fixed content rotation applied ONLY when the paper's corners were resolved
+    // via ArUco identity (Tilt Agnostic Mode), bypassing CW/CCW guessing entirely.
+    //
+    // ArUco establishes canonical paper-space TL/TR/BL/BR regardless of which way
+    // the phone was physically tilted at capture -- so once alignPerspective has
+    // run, the relationship between paper-canonical space and this template's
+    // content orientation is a fixed constant. There's no per-photo ambiguity
+    // left to test for, unlike the geometric detector's output (whose "handedness"
+    // varies with tilt direction, which is what REQUIRED_PORTRAIT_ROTATION above
+    // was tuned to compensate for -- do NOT reuse that constant here, it belongs
+    // to a different reference frame).
+    //
+    // PLACEHOLDER: verify against a known-good ArUco capture before relying on
+    // this. Check logcat for "ARUCO_ORIENTATION_CANDIDATES" -- it logs the score
+    // for both CW and CCW against the same content even though only one is
+    // applied, so you can confirm this constant picked the visually-correct one.
+    // Flip CLOCKWISE <-> COUNTERCLOCKWISE if the result comes out wrong.
+    private static final int ARUCO_RESOLVED_CONTENT_ROTATION = Core.ROTATE_90_CLOCKWISE; // TODO verify empirically
+
     // Minimum score on REQUIRED_PORTRAIT_ROTATION to accept the scan. Sits
     // between the lowest observed "correct" score (0.305) and the highest
     // observed "upside-down" score (0.236) with margin on both sides. TUNE
@@ -505,6 +524,10 @@ public class TemplateManager {
      *         the detected template ID, and the winning score
      */
     public OrientationResult detectAndOrient(Bitmap warpedBitmap) {
+        return detectAndOrient(warpedBitmap, false);
+    }
+
+    public OrientationResult detectAndOrient(Bitmap warpedBitmap, boolean arucoResolved) {
         if (warpedBitmap == null) {
             Log.e(TAG, "detectAndOrient: bitmap is null");
             return new OrientationResult(warpedBitmap, "ZPH50", 0.0, false);
@@ -533,7 +556,34 @@ public class TemplateManager {
         //   - the rotation code (-1 = none)
         //   - whether we need to release the Mat afterwards
         int[][] rotations;
-        if (isPortrait) {
+        if (isPortrait && arucoResolved) {
+            // ArUco already established canonical paper-space orientation --
+            // no per-photo ambiguity left, so skip the guess entirely and
+            // apply the fixed content rotation. We still log what CW/CCW
+            // would have scored (below) purely for verification purposes.
+            rotations = new int[][] { { ARUCO_RESOLVED_CONTENT_ROTATION } };
+
+            Mat diagCW = new Mat();
+            Mat diagCCW = new Mat();
+            Core.rotate(srcGray, diagCW, Core.ROTATE_90_CLOCKWISE);
+            Core.rotate(srcGray, diagCCW, Core.ROTATE_90_COUNTERCLOCKWISE);
+            double diagScoreCW = -1.0, diagScoreCCW = -1.0;
+            GridAligner diagAligner = new GridAligner();
+            for (OmrTemplate tpl : templates.values()) {
+                double sxCW = (double) diagCW.cols() / tpl.width;
+                double syCW = (double) diagCW.rows() / tpl.height;
+                double sxCCW = (double) diagCCW.cols() / tpl.width;
+                double syCCW = (double) diagCCW.rows() / tpl.height;
+                diagScoreCW = Math.max(diagScoreCW, diagAligner.getAlignmentScore(diagCW, tpl, sxCW, syCW));
+                diagScoreCCW = Math.max(diagScoreCCW, diagAligner.getAlignmentScore(diagCCW, tpl, sxCCW, syCCW));
+            }
+            diagAligner.release();
+            diagCW.release();
+            diagCCW.release();
+            Log.i(TAG, String.format(
+                    "ARUCO_ORIENTATION_CANDIDATES: CW_score=%.3f CCW_score=%.3f applied=%s",
+                    diagScoreCW, diagScoreCCW, rotationName(ARUCO_RESOLVED_CONTENT_ROTATION)));
+        } else if (isPortrait) {
             // Portrait input from PerspectiveAligner is the normal scan path.
             // Sheet content is landscape per the template coordinate system,
             // so the warped output needs a quarter-turn — but WHICH quarter
@@ -676,6 +726,10 @@ public class TemplateManager {
      * @return an {@link OrientationResult} with the correctly rotated bitmap
      */
     public OrientationResult detectAndOrientWithTemplate(Bitmap warpedBitmap, String templateId) {
+        return detectAndOrientWithTemplate(warpedBitmap, templateId, false);
+    }
+
+    public OrientationResult detectAndOrientWithTemplate(Bitmap warpedBitmap, String templateId, boolean arucoResolved) {
         if (warpedBitmap == null) {
             Log.e(TAG, "detectAndOrientWithTemplate: bitmap is null");
             return new OrientationResult(warpedBitmap, templateId, 0.0, false);
@@ -750,6 +804,23 @@ public class TemplateManager {
                     candidate.release();
                 }
             }
+        } else if (isPortrait && arucoResolved) {
+            int rotCode = ARUCO_RESOLVED_CONTENT_ROTATION;
+            Mat candidate = new Mat();
+            Core.rotate(srcGray, candidate, rotCode);
+
+            int cw = candidate.cols();
+            int ch = candidate.rows();
+            double scaleX = (double) cw / tpl.width;
+            double scaleY = (double) ch / tpl.height;
+
+            double bubbleScore = aligner.getAlignmentScore(candidate, tpl, scaleX, scaleY);
+
+            Log.d(TAG, String.format(
+                    "  rot=%d (aruco-resolved, fixed), template=%s, score=%.3f", rotCode, templateId, bubbleScore));
+
+            rotationCandidates.add(new RotationCandidate(rotCode, templateId, bubbleScore));
+            candidate.release();
         } else if (isPortrait) {
             int rotCode = REQUIRED_PORTRAIT_ROTATION;
             Mat candidate = new Mat();

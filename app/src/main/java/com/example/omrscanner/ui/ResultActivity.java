@@ -83,6 +83,7 @@ public class ResultActivity extends AppCompatActivity {
     private String activityId;
     private String imageSource;
     private boolean fixedMountMode;
+    private boolean tiltAgnosticMode;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -140,6 +141,7 @@ public class ResultActivity extends AppCompatActivity {
         activityId = getIntent().getStringExtra(DashboardActivity.EXTRA_ACTIVITY_ID);
         imageSource = getIntent().getStringExtra(PreviewActivity.IMAGE_SOURCE);
         fixedMountMode = getIntent().getBooleanExtra(CameraActivity.EXTRA_FIXED_MOUNT_MODE, false);
+        tiltAgnosticMode = getIntent().getBooleanExtra(CameraActivity.EXTRA_TILT_AGNOSTIC_MODE, false);
 
         Log.d(TAG, "Received sheet type: " + selectedSheetType + ", classId: " + classId + ", activityId: " + activityId);
 
@@ -271,6 +273,37 @@ public class ResultActivity extends AppCompatActivity {
                 }
 
                 Point[] finalAnchors = anchors;
+                boolean resolvedViaArucoIdentity = false;
+
+                // Scoped strictly to Tilt Agnostic Mode captures -- this is
+                // the ONLY path that runs identity-based ArUco detection on
+                // the full-resolution photo. Every other sheet pipeline
+                // (fixed mount, handheld guide-square, legacy whole-frame)
+                // is completely untouched and still goes straight to the
+                // geometric detector below, exactly as before this change.
+                //
+                // Why this is needed: CameraActivity's live preview already
+                // runs ArUco identity detection correctly, but that result
+                // never reaches this activity -- takePhoto() doesn't forward
+                // anchor points, so finalAnchors above is always null and
+                // this method fell straight through to the geometric
+                // AnchorDetector, which assigns TL/TR/BL/BR by raw position
+                // in the frame. That's correct only when the sheet happens
+                // to be right-side-up relative to the camera; tilt the other
+                // way and geometric-TL is physically BR, so the perspective
+                // warp flips the sheet and the bubble/LRN regions are missed
+                // entirely. Re-running identity detection here on the actual
+                // full-res capture fixes that for this pipeline only.
+                if (tiltAgnosticMode && finalAnchors == null) {
+                    finalAnchors = com.example.omrscanner.omr.ArucoAnchorDetector.detectIdentityAnchors(original);
+                    if (finalAnchors != null) {
+                        resolvedViaArucoIdentity = true;
+                        Log.d(TAG, "Tilt Agnostic Mode: full-res anchors resolved via ArUco identity detection");
+                    } else {
+                        Log.w(TAG, "Tilt Agnostic Mode: ArUco identity detection found no markers on full-res capture, falling back to geometric detector");
+                    }
+                }
+
                 if (finalAnchors == null) {
                     finalAnchors = com.example.omrscanner.omr.AnchorDetector.detectAnchors(original);
                     if (finalAnchors == null || finalAnchors.length != 4) {
@@ -288,7 +321,10 @@ public class ResultActivity extends AppCompatActivity {
                 }
 
                 // Validate anchors
-                if (!PerspectiveAligner.validateAnchors(finalAnchors)) {
+                boolean anchorsValid = resolvedViaArucoIdentity
+                        ? PerspectiveAligner.validateAnchorsOrientationAgnostic(finalAnchors)
+                        : PerspectiveAligner.validateAnchors(finalAnchors);
+                if (!anchorsValid) {
                     runOnUiThread(() -> {
                         Toast.makeText(
                                 this,
@@ -334,7 +370,7 @@ public class ResultActivity extends AppCompatActivity {
                     // the physical template the user picked (baseTemplateId) still wins
                     // for building the scan template below.
                     TemplateManager.OrientationResult orient =
-                            tm.detectAndOrientWithTemplate(alignedBitmap, baseTemplateId);
+                            tm.detectAndOrientWithTemplate(alignedBitmap, baseTemplateId, resolvedViaArucoIdentity);
                     scanBitmap = orient.orientedBitmap;
                     sheetType = baseTemplateId;
 
@@ -343,7 +379,7 @@ public class ResultActivity extends AppCompatActivity {
                 } else {
                     // No pre-selection — auto-detect sheet type
                     Log.d(TAG, "Auto-detecting sheet type...");
-                    TemplateManager.OrientationResult orient = tm.detectAndOrient(alignedBitmap);
+                    TemplateManager.OrientationResult orient = tm.detectAndOrient(alignedBitmap, resolvedViaArucoIdentity);
                     scanBitmap = orient.orientedBitmap;
                     sheetType = orient.templateId;
                     template = tm.getTemplate(sheetType);

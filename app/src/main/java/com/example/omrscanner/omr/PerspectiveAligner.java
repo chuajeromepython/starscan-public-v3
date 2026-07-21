@@ -38,6 +38,39 @@ public class PerspectiveAligner {
      * @param anchors 4 corner points [TopLeft, TopRight, BottomLeft, BottomRight]
      * @return Warped/flattened bitmap at exactly 1000x1414, or null on failure
      */
+
+    /**
+     * Same sanity checks as {@link #validateAnchors(Point[])} MINUS the
+     * "TL must be left of TR / above BL" directional assumption.
+     *
+     * That assumption only holds when corners were labeled by raw frame
+     * position (the legacy geometric detector), where it's tautological.
+     * ArUco identity anchors are labeled by physical marker ID instead, so
+     * a genuinely-tilted capture can legitimately have the true TL corner
+     * land anywhere in the raw buffer -- rejecting that as "invalid
+     * ordering" is exactly what silently produces an upside-down result
+     * for Tilt Agnostic Mode captures. Use this validator for anchors that
+     * came from {@link ArucoAnchorDetector}; use the original
+     * {@link #validateAnchors(Point[])} for anything from the geometric
+     * detector, unchanged.
+     */
+    public static boolean validateAnchorsOrientationAgnostic(Point[] anchors) {
+        if (anchors == null || anchors.length != 4) {
+            return false;
+        }
+
+        for (Point p : anchors) {
+            if (p == null) return false;
+        }
+
+        double area = calculateQuadrilateralArea(anchors);
+        if (area < 10000) {
+            Log.w(TAG, "Anchor area too small: " + area);
+            return false;
+        }
+
+        return true;
+    }
     public static Bitmap alignPerspective(Bitmap bitmap, Point[] anchors) {
         if (anchors == null || anchors.length != 4) {
             Log.e(TAG, "Invalid anchors - need exactly 4 points");
