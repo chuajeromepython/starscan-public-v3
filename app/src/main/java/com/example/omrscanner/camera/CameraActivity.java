@@ -70,6 +70,10 @@ public class CameraActivity extends AppCompatActivity {
     private static final int CAMERA_PERMISSION_REQUEST = 1001;
     private static final String TAG = "CameraActivity";
     public static final String EXTRA_FIXED_MOUNT_MODE = "fixed_mount_mode";
+    // "Tilt Agnostic Mode" from the scan-entry dialog. When true, skips the
+    // fixed on-screen guide squares and the single-orientation tilt gate,
+    // using free-floating whole-frame anchor detection instead.
+    public static final String EXTRA_TILT_AGNOSTIC_MODE = "tilt_agnostic_mode";
     // Steps (0-3, clockwise) that the guide-square identities were rotated
     // by at the moment of capture. Downstream processing needs this to
     // know which physical guide box was truthfully "TL"/"TR"/"BL"/"BR" —
@@ -133,6 +137,7 @@ public class CameraActivity extends AppCompatActivity {
     private int cameraFacing = CameraSelector.LENS_FACING_BACK;
     private boolean isTorchOn = false;
     private boolean fixedMountMode = false;
+    private boolean tiltAgnosticMode = false;
     private boolean isRotationLocked = false;
 
     /**
@@ -318,7 +323,9 @@ public class CameraActivity extends AppCompatActivity {
             classId = getIntent().getStringExtra(DashboardActivity.EXTRA_CLASS_ID);
             activityId = getIntent().getStringExtra(DashboardActivity.EXTRA_ACTIVITY_ID);
             fixedMountMode = getIntent().getBooleanExtra(EXTRA_FIXED_MOUNT_MODE, false);
-            Log.d(TAG, "Received sheet type: " + selectedSheetType + ", classId: " + classId);
+            tiltAgnosticMode = getIntent().getBooleanExtra(EXTRA_TILT_AGNOSTIC_MODE, false);
+            Log.d(TAG, "Received sheet type: " + selectedSheetType + ", classId: " + classId
+                    + ", tiltAgnosticMode: " + tiltAgnosticMode);
 
             // Full screen — hide status bar and navigation bar
             WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
@@ -336,8 +343,13 @@ public class CameraActivity extends AppCompatActivity {
 
             initializeViews();
             setupListeners();
-            applyPersistedRotationLock();
-            applyFixedCornerLabels();
+            // Both of these exist to support the single fixed scanning
+            // orientation (rotation-lock persistence, fixed TL/TR/BL/BR
+            // guide-square labels) — neither applies in Tilt Agnostic Mode.
+            if (!tiltAgnosticMode) {
+                applyPersistedRotationLock();
+                applyFixedCornerLabels();
+            }
 
             cameraExecutor = Executors.newSingleThreadExecutor();
 
@@ -373,6 +385,21 @@ public class CameraActivity extends AppCompatActivity {
         iconRotationLock = findViewById(R.id.iconRotationLock);
         tiltWarningOverlay = findViewById(R.id.tiltWarningOverlay);
 
+        // Tilt Agnostic Mode doesn't track phone tilt at all, so none of
+        // the single-orientation UI applies: the rotation-lock control
+        // (which exists to freeze tilt-based corner relabeling) and the
+        // "tilt the phone to the right" warning banner both have nothing
+        // to do here. Hide them and make sure capture is never disabled
+        // for tilt reasons in this mode.
+        if (tiltAgnosticMode) {
+            if (btnRotationLock != null) btnRotationLock.setVisibility(View.GONE);
+            if (tiltWarningOverlay != null) tiltWarningOverlay.setVisibility(View.GONE);
+            if (btnCapture != null) {
+                btnCapture.setEnabled(true);
+                btnCapture.setAlpha(1.0f);
+            }
+        }
+
         if (previewView   == null) Log.e(TAG, "previewView is null!");
         if (btnCapture    == null) Log.e(TAG, "btnCapture is null!");
     }
@@ -382,7 +409,9 @@ public class CameraActivity extends AppCompatActivity {
         if (btnCapture != null) btnCapture.setOnClickListener(v -> takePhoto());
         if (btnCameraBack != null) btnCameraBack.setOnClickListener(v -> finish());
         if (btnFlash != null) btnFlash.setOnClickListener(v -> toggleFlash());
-        if (btnRotationLock != null) btnRotationLock.setOnClickListener(v -> toggleRotationLock());
+        if (btnRotationLock != null && !tiltAgnosticMode) {
+            btnRotationLock.setOnClickListener(v -> toggleRotationLock());
+        }
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -527,7 +556,7 @@ public class CameraActivity extends AppCompatActivity {
         }
 
         try {
-            if (GUIDE_SQUARE_MODE_ENABLED) {
+            if (GUIDE_SQUARE_MODE_ENABLED && !tiltAgnosticMode) {
                 analyzeFrameGuideSquareMode(imageProxy);
             } else {
                 analyzeFrameWholeFrameLegacy(imageProxy);
@@ -1394,7 +1423,7 @@ public class CameraActivity extends AppCompatActivity {
     // ─────────────────────────────────────────────────────────────
     private void takePhoto() {
         Log.d(TAG, "takePhoto called");
-        if (!isTiltCorrect) {
+        if (!tiltAgnosticMode && !isTiltCorrect) {
             Log.d(TAG, "takePhoto blocked: phone is not tilted to the required orientation");
             autoCaptureTriggered = false;
             return;
@@ -1477,10 +1506,15 @@ public class CameraActivity extends AppCompatActivity {
             anchorOverlay.resetProgress();
         }
 
-        if (orientationEventListener == null) {
-            setupOrientationListener();
-        } else {
-            orientationEventListener.enable();
+        // Tilt Agnostic Mode doesn't gate on phone orientation at all, so
+        // there's no reason to run the sensor listener that drives the
+        // tilt warning / capture-blocking / icon-rotation behavior.
+        if (!tiltAgnosticMode) {
+            if (orientationEventListener == null) {
+                setupOrientationListener();
+            } else {
+                orientationEventListener.enable();
+            }
         }
     }
 

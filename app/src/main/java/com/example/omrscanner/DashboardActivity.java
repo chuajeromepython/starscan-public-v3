@@ -1396,11 +1396,35 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     @Override
     public void openCamera() {
         try {
-            showCameraModeDialog();
+            showScanEntryDialog();
         } catch (Exception e) {
             Log.e(TAG, "Error opening camera", e);
             Toast.makeText(this, "Error opening camera: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
+    }
+
+    /**
+     * First dialog shown after tapping "Open Camera". Routes to either the
+     * existing guide-square scanner (unchanged) or the new free-detection
+     * Tilt Agnostic Mode.
+     */
+    private void showScanEntryDialog() {
+        final String[] entryOptions = {
+                "Continue to scan\nUse the current scanner with on-screen guide squares.",
+                "Tilt Agnostic Mode (Beta)\nAuto-detects the sheet's corners in any orientation — no need to line up guide squares or tilt the phone."
+        };
+
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Open Camera")
+                .setItems(entryOptions, (dialog, which) -> {
+                    if (which == 0) {
+                        showCameraModeDialog();
+                    } else {
+                        launchCamera(false, true);
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private void showCameraModeDialog() {
@@ -1427,8 +1451,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     }
 
     private void launchCamera(boolean fixedMountMode) {
+        launchCamera(fixedMountMode, false);
+    }
+
+    private void launchCamera(boolean fixedMountMode, boolean tiltAgnosticMode) {
         Intent intent = new Intent(this, CameraActivity.class);
         intent.putExtra(CameraActivity.EXTRA_FIXED_MOUNT_MODE, fixedMountMode);
+        intent.putExtra(CameraActivity.EXTRA_TILT_AGNOSTIC_MODE, tiltAgnosticMode);
         if (selectedSheetType != null) intent.putExtra(EXTRA_SHEET_TYPE, selectedSheetType);
         if (selectedClass != null) intent.putExtra(EXTRA_CLASS_ID, selectedClass.getId());
         if (selectedActivity != null) intent.putExtra(EXTRA_ACTIVITY_ID, selectedActivity.getId());
@@ -1500,10 +1529,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             for (ClassEntity ce : classEntities) {
                 //ClassFolder cf = DataMapper.toClassFolder(ce, globalTeacherName);
                 // TEMP: showing the scanned-in user's full name (from UserEntity) on class cards.
-// Revisit if it turns out "advisor" (the per-classroom homeroom teacher from
-// sync data) is actually what should be shown instead — advisor can differ
-// from the syncing teacher when they're a subject teacher, not the adviser,
-// for that section. Ask OJT trainor to confirm before removing this fallback.
+                // Revisit if it turns out "advisor" (the per-classroom homeroom teacher from
+                // sync data) is actually what should be shown instead — advisor can differ
+                // from the syncing teacher when they're a subject teacher, not the adviser,
+                // for that section. Ask OJT trainor to confirm before removing this fallback.
                 String displayTeacherName = (activeUserFirstName != null && !activeUserFirstName.isEmpty())
                         ? (activeUserFirstName + (activeUserLastName != null && !activeUserLastName.isEmpty() ? " " + activeUserLastName : ""))
                         : globalTeacherName;
