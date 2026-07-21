@@ -104,6 +104,7 @@ public class TemplateManager {
     // applied, so you can confirm this constant picked the visually-correct one.
     // Flip CLOCKWISE <-> COUNTERCLOCKWISE if the result comes out wrong.
     private static final int ARUCO_RESOLVED_CONTENT_ROTATION = Core.ROTATE_90_CLOCKWISE; // TODO verify empirically
+    //private static final int ARUCO_RESOLVED_CONTENT_ROTATION = Core.ROTATE_90_COUNTERCLOCKWISE;
 
     // Minimum score on REQUIRED_PORTRAIT_ROTATION to accept the scan. Sits
     // between the lowest observed "correct" score (0.305) and the highest
