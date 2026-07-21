@@ -49,6 +49,7 @@ import androidx.camera.core.MeteringPoint;
 import androidx.camera.core.MeteringPointFactory;
 
 import com.example.omrscanner.DashboardActivity;
+import com.example.omrscanner.omr.ArucoAnchorDetector;
 import com.example.omrscanner.R;
 import com.example.omrscanner.omr.AnchorDetector;
 import com.example.omrscanner.ui.PreviewActivity;
@@ -556,7 +557,9 @@ public class CameraActivity extends AppCompatActivity {
         }
 
         try {
-            if (GUIDE_SQUARE_MODE_ENABLED && !tiltAgnosticMode) {
+            if (tiltAgnosticMode) {
+                analyzeFrameArucoIdentityMode(imageProxy);
+            } else if (GUIDE_SQUARE_MODE_ENABLED) {
                 analyzeFrameGuideSquareMode(imageProxy);
             } else {
                 analyzeFrameWholeFrameLegacy(imageProxy);
@@ -567,6 +570,49 @@ public class CameraActivity extends AppCompatActivity {
             onAnchorsNotDetected();
         } finally {
             imageProxy.close();
+        }
+    }
+
+    /**
+     * Tilt Agnostic Mode's detection path. Identifies corners by ArUco
+     * marker ID rather than frame position, so an upside-down or rotated
+     * capture still produces correctly-ordered [TL, TR, BL, BR] anchors
+     * for PerspectiveAligner.
+     */
+    private void analyzeFrameArucoIdentityMode(@NonNull ImageProxy imageProxy) {
+        Mat gray = AnchorDetector.toGrayMat(imageProxy);
+        if (gray == null) {
+            onDetectionMiss();
+            onAnchorsNotDetected();
+            return;
+        }
+
+        Point[] anchors;
+        try {
+            anchors = ArucoAnchorDetector.detectIdentityAnchors(gray);
+        } finally {
+            gray.release();
+        }
+
+        if (anchors != null) {
+            onDetectionSuccess();
+            PointF[] viewPoints = scaleAnchorsToView(
+                    anchors, imageProxy.getWidth(), imageProxy.getHeight(),
+                    imageProxy.getImageInfo().getRotationDegrees()
+            );
+
+            onAnchorsDetected(viewPoints, false);
+
+            boolean captureStarted = false;
+            if (consecutiveDetections >= REQUIRED_CONSECUTIVE_DETECTIONS) {
+                captureStarted = triggerAutoCapture();
+                if (captureStarted) {
+                    updateStatusTextForCaptureStarted();
+                }
+            }
+        } else {
+            onDetectionMiss();
+            onAnchorsNotDetected();
         }
     }
 
