@@ -75,6 +75,24 @@ public class TemplateManager {
      * them as equivalent and apply deterministic tie-breaking.
      */
     private static final double ROTATION_TIE_MARGIN = 0.015;
+    // The one physical placement the tilt-gated capture flow enforces (see
+    // CameraActivity's updateTiltGate / REQUIRED_TILT_ROTATION). Confirmed by
+    // direct comparison of right-side-up vs. deliberately upside-down captures
+    // on both physical sheets:
+    //   ZPH40: correct=0.534  upside-down=0.236
+    //   ZPH60: correct=0.305  upside-down=0.218
+    // CCW is the correct answer for both, and CW is only ever a good score
+    // when the sheet itself was placed upside down — i.e. testing CW is
+    // actively harmful, not just redundant.
+    private static final int REQUIRED_PORTRAIT_ROTATION = Core.ROTATE_90_COUNTERCLOCKWISE;
+
+    // Minimum score on REQUIRED_PORTRAIT_ROTATION to accept the scan. Sits
+    // between the lowest observed "correct" score (0.305) and the highest
+    // observed "upside-down" score (0.236) with margin on both sides. TUNE
+    // THIS after collecting real logs — see conversation notes; two samples
+    // per template isn't enough to fully trust this exact number yet.
+    private static final double MIN_ORIENTATION_CONFIDENCE = 0.28;
+    private static final boolean USE_LEGACY_DUAL_ROTATION_GUESS = false;
     /**
      * Preferred orientation when CW and CCW are effectively tied.
      */
@@ -289,11 +307,15 @@ public class TemplateManager {
         public final String templateId;
         /** The alignment score that won the detection. */
         public final double score;
+        /** True if score didn't clear MIN_ORIENTATION_CONFIDENCE — caller
+         *  should reject the scan and prompt a retake rather than proceed. */
+        public final boolean lowConfidence;
 
-        public OrientationResult(Bitmap orientedBitmap, String templateId, double score) {
+        public OrientationResult(Bitmap orientedBitmap, String templateId, double score, boolean lowConfidence) {
             this.orientedBitmap = orientedBitmap;
             this.templateId = templateId;
             this.score = score;
+            this.lowConfidence = lowConfidence;
         }
     }
 
@@ -485,7 +507,7 @@ public class TemplateManager {
     public OrientationResult detectAndOrient(Bitmap warpedBitmap) {
         if (warpedBitmap == null) {
             Log.e(TAG, "detectAndOrient: bitmap is null");
-            return new OrientationResult(warpedBitmap, "ZPH50", 0.0);
+            return new OrientationResult(warpedBitmap, "ZPH50", 0.0, false);
         }
 
         int w = warpedBitmap.getWidth();
@@ -638,7 +660,7 @@ public class TemplateManager {
                     orientedBitmap.getWidth(), orientedBitmap.getHeight()));
         }
 
-        return new OrientationResult(orientedBitmap, bestTemplateId, bestScore);
+        return new OrientationResult(orientedBitmap, bestTemplateId, bestScore, false);
     }
 
     /**
@@ -656,7 +678,7 @@ public class TemplateManager {
     public OrientationResult detectAndOrientWithTemplate(Bitmap warpedBitmap, String templateId) {
         if (warpedBitmap == null) {
             Log.e(TAG, "detectAndOrientWithTemplate: bitmap is null");
-            return new OrientationResult(warpedBitmap, templateId, 0.0);
+            return new OrientationResult(warpedBitmap, templateId, 0.0, false);
         }
 
         OmrTemplate tpl = templates.get(templateId);
@@ -678,38 +700,60 @@ public class TemplateManager {
         Imgproc.cvtColor(srcColour, srcGray, Imgproc.COLOR_BGR2GRAY);
         srcColour.release();
 
-        int[][] rotations;
-        if (isPortrait) {
-            // See the matching comment in detectAndOrient() above: try both
-            // quarter-turns rather than forcing one fixed direction, since
-            // the correct direction depends on which way the phone was
-            // tilted at capture time.
-            rotations = new int[][] {
-                    { Core.ROTATE_90_CLOCKWISE },
-                    { Core.ROTATE_90_COUNTERCLOCKWISE }
-            };
-        } else {
-            rotations = new int[][] {
-                    { -1 },
-                    { Core.ROTATE_180 },
-                    { Core.ROTATE_90_CLOCKWISE },
-                    { Core.ROTATE_90_COUNTERCLOCKWISE }
-            };
-        }
-
         List<RotationCandidate> rotationCandidates = new ArrayList<>();
-
         GridAligner aligner = new GridAligner();
 
-        for (int[] rot : rotations) {
-            int rotCode = rot[0];
-            Mat candidate;
-            if (rotCode == -1) {
-                candidate = srcGray;
+        if (USE_LEGACY_DUAL_ROTATION_GUESS) {
+            int[][] rotations;
+            if (isPortrait) {
+                rotations = new int[][] {
+                        { Core.ROTATE_90_CLOCKWISE },
+                        { Core.ROTATE_90_COUNTERCLOCKWISE }
+                };
             } else {
-                candidate = new Mat();
-                Core.rotate(srcGray, candidate, rotCode);
+                rotations = new int[][] {
+                        { -1 },
+                        { Core.ROTATE_180 },
+                        { Core.ROTATE_90_CLOCKWISE },
+                        { Core.ROTATE_90_COUNTERCLOCKWISE }
+                };
             }
+
+            for (int[] rot : rotations) {
+                int rotCode = rot[0];
+                Mat candidate;
+                if (rotCode == -1) {
+                    candidate = srcGray;
+                } else {
+                    candidate = new Mat();
+                    Core.rotate(srcGray, candidate, rotCode);
+                }
+
+                int cw = candidate.cols();
+                int ch = candidate.rows();
+                double scaleX = (double) cw / tpl.width;
+                double scaleY = (double) ch / tpl.height;
+
+                double bubbleScore = aligner.getAlignmentScore(candidate, tpl, scaleX, scaleY);
+
+                double headerFraction = computeHeaderFraction(tpl);
+                double headerScore = computeHeaderSparsityScore(candidate, headerFraction);
+                double combinedScore = bubbleScore;
+
+                Log.d(TAG, String.format(
+                        "  rot=%d, template=%s, bubble=%.3f header=%.3f(frac=%.3f, informational only) decision=%.3f",
+                        rotCode, templateId, bubbleScore, headerScore, headerFraction, combinedScore));
+
+                rotationCandidates.add(new RotationCandidate(rotCode, templateId, combinedScore));
+
+                if (rotCode != -1) {
+                    candidate.release();
+                }
+            }
+        } else if (isPortrait) {
+            int rotCode = REQUIRED_PORTRAIT_ROTATION;
+            Mat candidate = new Mat();
+            Core.rotate(srcGray, candidate, rotCode);
 
             int cw = candidate.cols();
             int ch = candidate.rows();
@@ -718,20 +762,30 @@ public class TemplateManager {
 
             double bubbleScore = aligner.getAlignmentScore(candidate, tpl, scaleX, scaleY);
 
-            // headerScore is still computed and logged for visibility, but no
-            // longer decides the rotation — see conversation history for why.
-            double headerFraction = computeHeaderFraction(tpl);
-            double headerScore = computeHeaderSparsityScore(candidate, headerFraction);
-            double combinedScore = bubbleScore;
-
             Log.d(TAG, String.format(
-                    "  rot=%d, template=%s, bubble=%.3f header=%.3f(frac=%.3f, informational only) decision=%.3f",
-                    rotCode, templateId, bubbleScore, headerScore, headerFraction, combinedScore));
+                    "  rot=%d (required), template=%s, score=%.3f", rotCode, templateId, bubbleScore));
 
-            rotationCandidates.add(new RotationCandidate(rotCode, templateId, combinedScore));
+            rotationCandidates.add(new RotationCandidate(rotCode, templateId, bubbleScore));
+            candidate.release();
+        } else {
+            int[][] rotations = {
+                    { -1 }, { Core.ROTATE_180 },
+                    { Core.ROTATE_90_CLOCKWISE }, { Core.ROTATE_90_COUNTERCLOCKWISE }
+            };
+            for (int[] rot : rotations) {
+                int rotCode = rot[0];
+                Mat candidate = (rotCode == -1) ? srcGray : new Mat();
+                if (rotCode != -1) Core.rotate(srcGray, candidate, rotCode);
 
-            if (rotCode != -1) {
-                candidate.release();
+                int cw = candidate.cols();
+                int ch = candidate.rows();
+                double scaleX = (double) cw / tpl.width;
+                double scaleY = (double) ch / tpl.height;
+                double bubbleScore = aligner.getAlignmentScore(candidate, tpl, scaleX, scaleY);
+
+                Log.d(TAG, String.format("  rot=%d, template=%s, score=%.3f", rotCode, templateId, bubbleScore));
+                rotationCandidates.add(new RotationCandidate(rotCode, templateId, bubbleScore));
+                if (rotCode != -1) candidate.release();
             }
         }
 
@@ -741,6 +795,7 @@ public class TemplateManager {
         RotationDecision decision = chooseRotationCandidate(rotationCandidates);
         int bestRotation = decision.winner.rotationCode;
         double bestScore = decision.winner.score;
+        boolean lowConfidence = bestScore < MIN_ORIENTATION_CONFIDENCE;
 
         if (decision.runnerUp != null) {
             Log.i(TAG, String.format(
@@ -750,14 +805,15 @@ public class TemplateManager {
                     decision.scoreGap, decision.tieBreakApplied));
         }
 
-        Log.i(TAG, String.format("detectAndOrientWithTemplate: template=%s rot=%d score=%.3f",
-                templateId, bestRotation, bestScore));
+        Log.i(TAG, String.format("detectAndOrientWithTemplate: template=%s rot=%d score=%.3f lowConfidence=%b",
+                templateId, bestRotation, bestScore, lowConfidence));
 
         Log.i(TAG, "ORIENTATION_DECISION: input was " + (isPortrait ? "PORTRAIT" : "LANDSCAPE")
                 + " (" + w + "x" + h + ") -> applying rotation [" + rotationName(bestRotation)
-                + "] -> forced template=" + templateId);
+                + "] -> forced template=" + templateId
+                + " -> score=" + String.format("%.3f", bestScore)
+                + (lowConfidence ? " -> REJECTED (below " + MIN_ORIENTATION_CONFIDENCE + ")" : " -> accepted"));
 
-        // Produce the correctly-oriented bitmap
         Bitmap orientedBitmap;
         if (bestRotation == -1) {
             orientedBitmap = warpedBitmap;
@@ -775,7 +831,7 @@ public class TemplateManager {
             rotated.release();
         }
 
-        return new OrientationResult(orientedBitmap, templateId, bestScore);
+        return new OrientationResult(orientedBitmap, templateId, bestScore, lowConfidence);
     }
 
     // =====================================================================

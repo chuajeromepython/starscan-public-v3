@@ -500,7 +500,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         syncStudentsForClass(this, localClassId, classroomId, serverIp);
     }
 
-    // Sends the aggregate data of students along with their LRNs and answers
+    // Sends the aggregate data of students along with their LRNs and answers to the system
     @Override
     public void uploadAssessment(ActivityFolder act, ClassFolder cls, int assessmentId) {
         if (cls.getClassroomId() == null) {
