@@ -12,6 +12,7 @@ import android.util.AttributeSet;
 import android.view.View;
 
 import androidx.annotation.Nullable;
+import java.util.List;
 
 /**
  * Transparent overlay drawn on top of the camera preview.
@@ -27,6 +28,36 @@ import androidx.annotation.Nullable;
  * to draw.
  */
 public class AnchorOverlayView extends View {
+    /**
+     * One live-tracked marker box: the marker's 4 corners in THIS view's
+     * coordinate space (already rotated/scaled from image space by the
+     * caller), plus the label to draw above it (e.g. "TL", or "#7" for a
+     * marker that isn't one of the 4 known identity anchors).
+     */
+    public static final class TrackedMarker {
+        public final PointF[] quad;
+        @Nullable public final String label;
+
+        public TrackedMarker(PointF[] quad, @Nullable String label) {
+            this.quad = quad;
+            this.label = label;
+        }
+    }
+
+    // Live ArUco tracking boxes (Tilt Agnostic Mode only). Null/empty when
+    // nothing is currently detected. Unlike guideSquares these move every
+    // frame -- they follow wherever the physical marker currently is. This
+    // is completely independent of guideSquares/progress/locked, which
+    // remain the legacy scanner's red/green boxes, untouched.
+    @Nullable
+    private List<TrackedMarker> trackedMarkers = null;
+
+    private final Paint trackedBoxPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint trackedLabelBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint trackedLabelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Path trackedPath = new Path();
+    private float density = 1f;
+
     // Default labels, portrait orientation. Order matches CameraActivity's
     // GUIDE_CENTER_X/Y_FRACTION arrays: [TL, TR, BL, BR]. Updated live via
     // setCornerLabels() as the phone tilts, so each box's label always
@@ -77,6 +108,24 @@ public class AnchorOverlayView extends View {
 
     private void init(Context context) {
         float density = context.getResources().getDisplayMetrics().density;
+        this.density = density;
+
+        // Live ArUco tracking box -- green outline that follows the
+        // marker's actual detected corners frame to frame. Separate paint
+        // objects from the legacy guide-square paints below.
+        trackedBoxPaint.setStyle(Paint.Style.STROKE);
+        trackedBoxPaint.setColor(Color.parseColor("#4CAF50")); // green
+        trackedBoxPaint.setStrokeWidth(3f * density);
+        trackedBoxPaint.setStrokeJoin(Paint.Join.ROUND);
+
+        trackedLabelBgPaint.setStyle(Paint.Style.FILL);
+        trackedLabelBgPaint.setColor(Color.parseColor("#4CAF50"));
+
+        trackedLabelPaint.setColor(Color.parseColor("#FFFFFF"));
+        trackedLabelPaint.setTextSize(12 * density);
+        trackedLabelPaint.setStyle(Paint.Style.FILL);
+        trackedLabelPaint.setTextAlign(Paint.Align.CENTER);
+        trackedLabelPaint.setFakeBoldText(true);
 
         // Static guide square outline — light/red, always visible, marks
         // where the teacher should line up the real anchor.
@@ -162,12 +211,30 @@ public class AnchorOverlayView extends View {
     public void resetProgress() {
         this.progress = new float[]{0f, 0f, 0f, 0f};
         this.locked = new boolean[]{false, false, false, false};
+        this.trackedMarkers = null;
+        invalidate();
+    }
+
+    /**
+     * Updates the set of live ArUco tracking boxes and redraws. Called every
+     * analyzed frame in Tilt Agnostic Mode with whatever markers are
+     * currently visible -- pass null/empty to clear the boxes when nothing
+     * is detected. Does not touch guideSquares/progress/locked.
+     */
+    public void setTrackedMarkers(@Nullable List<TrackedMarker> markers) {
+        this.trackedMarkers = markers;
         invalidate();
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+
+        if (trackedMarkers != null) {
+            for (TrackedMarker marker : trackedMarkers) {
+                drawTrackedMarker(canvas, marker);
+            }
+        }
 
         if (guideSquares == null || guideSquares.length != 4) return;
 
@@ -207,6 +274,52 @@ public class AnchorOverlayView extends View {
                 );
             }
         }
+    }
+
+    /**
+     * Draws one live tracking box: a green outline following the marker's
+     * actual detected quad (so it follows tilt/perspective, not just a
+     * fixed-size box on the center point), plus a small filled label
+     * floating just above it.
+     */
+    private void drawTrackedMarker(Canvas canvas, TrackedMarker marker) {
+        PointF[] quad = marker.quad;
+        if (quad == null || quad.length != 4) return;
+
+        trackedPath.reset();
+        trackedPath.moveTo(quad[0].x, quad[0].y);
+        for (int i = 1; i < 4; i++) {
+            trackedPath.lineTo(quad[i].x, quad[i].y);
+        }
+        trackedPath.close();
+        canvas.drawPath(trackedPath, trackedBoxPaint);
+
+        if (marker.label == null) return;
+
+        float minY = quad[0].y;
+        float cx = 0f;
+        for (PointF p : quad) {
+            cx += p.x;
+            if (p.y < minY) minY = p.y;
+        }
+        cx /= 4f;
+
+        float paddingH = 8f * density;
+        float paddingV = 4f * density;
+        float textWidth = trackedLabelPaint.measureText(marker.label);
+        float labelHeight = trackedLabelPaint.getTextSize() + paddingV * 2f;
+        float labelBottom = minY - (4f * density);
+        float labelTop = labelBottom - labelHeight;
+
+        RectF labelRect = new RectF(
+                cx - textWidth / 2f - paddingH,
+                labelTop,
+                cx + textWidth / 2f + paddingH,
+                labelBottom);
+        canvas.drawRoundRect(labelRect, 6f * density, 6f * density, trackedLabelBgPaint);
+        float baseline = labelRect.centerY()
+                - ((trackedLabelPaint.descent() + trackedLabelPaint.ascent()) / 2f);
+        canvas.drawText(marker.label, cx, baseline, trackedLabelPaint);
     }
 
     /**

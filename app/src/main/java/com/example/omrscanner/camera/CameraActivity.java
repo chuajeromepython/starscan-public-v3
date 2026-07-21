@@ -66,6 +66,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.Map;
 
 public class CameraActivity extends AppCompatActivity {
     private static final int CAMERA_PERMISSION_REQUEST = 1001;
@@ -584,22 +585,31 @@ public class CameraActivity extends AppCompatActivity {
         if (gray == null) {
             onDetectionMiss();
             onAnchorsNotDetected();
+            updateTrackedMarkerOverlay(null, 0, 0, 0);
             return;
         }
 
+        int imageWidth = imageProxy.getWidth();
+        int imageHeight = imageProxy.getHeight();
+        int rotationDegrees = imageProxy.getImageInfo().getRotationDegrees();
+
+        Map<Integer, Point[]> quadsById;
         Point[] anchors;
         try {
-            anchors = ArucoAnchorDetector.detectIdentityAnchors(gray);
+            // Single detection pass per frame: quadsById drives the live
+            // "searching" boxes for whatever markers are currently visible,
+            // anchors is non-null only once all 4 identity markers are found.
+            quadsById = ArucoAnchorDetector.detectMarkerQuads(gray);
+            anchors = ArucoAnchorDetector.identityAnchorsFromQuads(quadsById);
         } finally {
             gray.release();
         }
 
+        updateTrackedMarkerOverlay(quadsById, imageWidth, imageHeight, rotationDegrees);
+
         if (anchors != null) {
             onDetectionSuccess();
-            PointF[] viewPoints = scaleAnchorsToView(
-                    anchors, imageProxy.getWidth(), imageProxy.getHeight(),
-                    imageProxy.getImageInfo().getRotationDegrees()
-            );
+            PointF[] viewPoints = scaleAnchorsToView(anchors, imageWidth, imageHeight, rotationDegrees);
 
             onAnchorsDetected(viewPoints, false);
 
@@ -977,6 +987,84 @@ public class CameraActivity extends AppCompatActivity {
         return missCounter >= missThreshold
                 && frameInterval > 0
                 && recoveryFrameCounter % frameInterval == 0;
+    }
+
+    /**
+     * Converts the raw per-marker ArUco quads (image space) into
+     * AnchorOverlayView.TrackedMarker objects (view space) and pushes them
+     * to the overlay. This is what makes the green boxes appear and follow
+     * each marker live while it's being searched, independent of whether
+     * all 4 identity anchors have been found yet. Only used by Tilt
+     * Agnostic Mode -- guide-square mode's red/green boxes are untouched.
+     */
+    private void updateTrackedMarkerOverlay(
+            @Nullable Map<Integer, Point[]> quadsById,
+            int imageWidth,
+            int imageHeight,
+            int rotationDegrees
+    ) {
+        List<AnchorOverlayView.TrackedMarker> markers = null;
+
+        if (quadsById != null && !quadsById.isEmpty()) {
+            markers = new ArrayList<>();
+            for (Map.Entry<Integer, Point[]> entry : quadsById.entrySet()) {
+                Point[] quad = entry.getValue();
+                if (quad == null || quad.length != 4) continue;
+
+                PointF[] viewQuad = new PointF[4];
+                for (int i = 0; i < 4; i++) {
+                    viewQuad[i] = transformPointToView(quad[i], imageWidth, imageHeight, rotationDegrees);
+                }
+
+                String label = ArucoAnchorDetector.labelForMarkerId(entry.getKey());
+                if (label == null) {
+                    label = "#" + entry.getKey();
+                }
+                markers.add(new AnchorOverlayView.TrackedMarker(viewQuad, label));
+            }
+        }
+
+        List<AnchorOverlayView.TrackedMarker> finalMarkers = markers;
+        mainHandler.post(() -> {
+            if (anchorOverlay != null) {
+                anchorOverlay.setTrackedMarkers(finalMarkers);
+            }
+        });
+    }
+
+    /**
+     * Transforms a single point from image (analysis-frame) space into this
+     * view's coordinate space -- same rotation/scale math as
+     * scaleAnchorsToView below, but for one arbitrary point instead of
+     * exactly 4. Used only by the ArUco live tracking boxes above.
+     */
+    private PointF transformPointToView(
+            Point point,
+            int imageWidth,
+            int imageHeight,
+            int rotationDegrees
+    ) {
+        int viewWidth = anchorOverlay != null ? anchorOverlay.getWidth() : 0;
+        int viewHeight = anchorOverlay != null ? anchorOverlay.getHeight() : 0;
+
+        if (viewWidth == 0 || viewHeight == 0) {
+            viewWidth = previewView.getWidth();
+            viewHeight = previewView.getHeight();
+        }
+
+        if (viewWidth == 0 || viewHeight == 0) {
+            return new PointF((float) point.x, (float) point.y);
+        }
+
+        boolean swapDimensions = rotationDegrees == 90 || rotationDegrees == 270;
+        int rotatedWidth = swapDimensions ? imageHeight : imageWidth;
+        int rotatedHeight = swapDimensions ? imageWidth : imageHeight;
+
+        float scaleX = (float) viewWidth / rotatedWidth;
+        float scaleY = (float) viewHeight / rotatedHeight;
+
+        PointF rotated = rotatePointToDisplay(point, imageWidth, imageHeight, rotationDegrees);
+        return new PointF(rotated.x * scaleX, rotated.y * scaleY);
     }
 
     /**

@@ -80,20 +80,30 @@ public class ArucoAnchorDetector {
      */
     @Nullable
     public static Point[] detectIdentityAnchors(@NonNull Mat image) {
-        Map<Integer, Point> byId = detectMarkerCenters(image);
+        return identityAnchorsFromQuads(detectMarkerQuads(image));
+    }
 
-        if (!byId.containsKey(MARKER_ID_TOP_LEFT)
-                || !byId.containsKey(MARKER_ID_TOP_RIGHT)
-                || !byId.containsKey(MARKER_ID_BOTTOM_LEFT)
-                || !byId.containsKey(MARKER_ID_BOTTOM_RIGHT)) {
+    /**
+     * Same as {@link #detectIdentityAnchors(Mat)} but reuses an already-run
+     * detection pass (see {@link #detectMarkerQuads}) instead of re-running
+     * the detector. Lets a caller get both the "all 4 markers found" result
+     * AND the raw per-marker quads (e.g. for live tracking-box UI) from a
+     * single detection pass per frame.
+     */
+    @Nullable
+    public static Point[] identityAnchorsFromQuads(@NonNull Map<Integer, Point[]> quadsById) {
+        if (!quadsById.containsKey(MARKER_ID_TOP_LEFT)
+                || !quadsById.containsKey(MARKER_ID_TOP_RIGHT)
+                || !quadsById.containsKey(MARKER_ID_BOTTOM_LEFT)
+                || !quadsById.containsKey(MARKER_ID_BOTTOM_RIGHT)) {
             return null;
         }
 
         return new Point[] {
-                byId.get(MARKER_ID_TOP_LEFT),
-                byId.get(MARKER_ID_TOP_RIGHT),
-                byId.get(MARKER_ID_BOTTOM_LEFT),
-                byId.get(MARKER_ID_BOTTOM_RIGHT)
+                centerOfQuad(quadsById.get(MARKER_ID_TOP_LEFT)),
+                centerOfQuad(quadsById.get(MARKER_ID_TOP_RIGHT)),
+                centerOfQuad(quadsById.get(MARKER_ID_BOTTOM_LEFT)),
+                centerOfQuad(quadsById.get(MARKER_ID_BOTTOM_RIGHT))
         };
     }
 
@@ -106,6 +116,23 @@ public class ArucoAnchorDetector {
     @NonNull
     public static Map<Integer, Point> detectMarkerCenters(@NonNull Mat image) {
         Map<Integer, Point> result = new HashMap<>();
+        for (Map.Entry<Integer, Point[]> entry : detectMarkerQuads(image).entrySet()) {
+            result.put(entry.getKey(), centerOfQuad(entry.getValue()));
+        }
+        return result;
+    }
+
+    /**
+     * Runs raw ArUco detection and returns a map of marker ID -> its 4
+     * corner points in the image (clockwise from the marker's own
+     * top-left), for EVERY marker currently visible -- not just the 4
+     * identity anchors. This is what drives the live "green tracking box"
+     * UI: each visible marker gets its own box drawn around its actual
+     * corners as it's found, before all 4 are ever located.
+     */
+    @NonNull
+    public static Map<Integer, Point[]> detectMarkerQuads(@NonNull Mat image) {
+        Map<Integer, Point[]> result = new HashMap<>();
 
         List<Mat> corners = new ArrayList<>();
         Mat ids = new Mat();
@@ -114,11 +141,11 @@ public class ArucoAnchorDetector {
             getDetector().detectMarkers(image, corners, ids);
 
             for (int i = 0; i < corners.size(); i++) {
-                Point center = centerOfMarker(corners.get(i));
-                if (center == null) continue;
+                Point[] quad = quadOfMarker(corners.get(i));
+                if (quad == null) continue;
 
                 int id = (int) ids.get(i, 0)[0];
-                result.put(id, center);
+                result.put(id, quad);
             }
         } catch (Exception e) {
             Log.e(TAG, "ArUco detection failed", e);
@@ -130,19 +157,41 @@ public class ArucoAnchorDetector {
         return result;
     }
 
+    /**
+     * Human-readable label for one of the 4 known corner marker IDs (e.g.
+     * for drawing "TL" on its tracking box). Returns null for any other
+     * marker ID that isn't one of the sheet's identity anchors.
+     */
     @Nullable
-    private static Point centerOfMarker(Mat markerCorners) {
+    public static String labelForMarkerId(int id) {
+        if (id == MARKER_ID_TOP_LEFT) return "TL";
+        if (id == MARKER_ID_TOP_RIGHT) return "TR";
+        if (id == MARKER_ID_BOTTOM_LEFT) return "BL";
+        if (id == MARKER_ID_BOTTOM_RIGHT) return "BR";
+        return null;
+    }
+
+    @Nullable
+    private static Point[] quadOfMarker(Mat markerCorners) {
         // markerCorners is a 1x4 CV_32FC2 Mat -- the 4 corners of a single
-        // marker, clockwise from its own top-left. Average them for center.
+        // marker, clockwise from its own top-left.
         if (markerCorners.rows() < 1 || markerCorners.cols() < 4) return null;
 
         float[] buffer = new float[8];
         markerCorners.get(0, 0, buffer);
 
-        double sumX = 0, sumY = 0;
+        Point[] quad = new Point[4];
         for (int i = 0; i < 4; i++) {
-            sumX += buffer[i * 2];
-            sumY += buffer[i * 2 + 1];
+            quad[i] = new Point(buffer[i * 2], buffer[i * 2 + 1]);
+        }
+        return quad;
+    }
+
+    private static Point centerOfQuad(Point[] quad) {
+        double sumX = 0, sumY = 0;
+        for (Point p : quad) {
+            sumX += p.x;
+            sumY += p.y;
         }
         return new Point(sumX / 4.0, sumY / 4.0);
     }
