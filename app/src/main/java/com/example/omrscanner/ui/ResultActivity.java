@@ -469,15 +469,20 @@ public class ResultActivity extends AppCompatActivity {
                 }
 
                 // STEP 1: Apply perspective alignment (now maintains correct aspect ratio!)
-                // ArUco-resolved anchors already come from a pre-rotated,
-                // reading-orientation capture -- they form a genuinely
-                // LANDSCAPE quad (every ZPH template is landscape), so warp
-                // into a matching landscape canvas rather than the portrait
-                // one the geometric handheld pipeline expects. See
-                // PerspectiveAligner.alignPerspective's landscapeContent
-                // javadoc for why forcing portrait here silently wrecked
-                // every Tilt Agnostic Mode scan.
-                alignedBitmap = PerspectiveAligner.alignPerspective(original, finalAnchors, resolvedViaArucoIdentity);
+                // Landscape canvas is keyed on tiltAgnosticMode, NOT
+                // resolvedViaArucoIdentity: both the ArUco-identity-success
+                // case AND the geometric-fallback-within-Tilt-Agnostic-Mode
+                // case (ArUco found no markers) operate on the SAME
+                // pre-rotated `original` buffer from
+                // rotateToNormalReadingOrientation() above, so both produce
+                // a genuinely landscape-shaped anchor quad. Keying this off
+                // resolvedViaArucoIdentity instead left the fallback case
+                // squeezed into the portrait canvas exactly like before the
+                // original fix -- resolvedViaArucoIdentity now only means
+                // "identity-verified", used below for the mirror check and
+                // TemplateManager's trust-rotation shortcut, not for canvas
+                // shape.
+                alignedBitmap = PerspectiveAligner.alignPerspective(original, finalAnchors, tiltAgnosticMode);
 
                 if (alignedBitmap == null) {
                     runOnUiThread(() -> {
@@ -493,7 +498,6 @@ public class ResultActivity extends AppCompatActivity {
                 Bitmap scanBitmap;
                 String sheetType;
                 OmrTemplate template;
-                boolean orientationLowConfidence;
 
                 if (selectedSheetType != null) {
                     String baseTemplateId = com.example.omrscanner.models.ActivityFolder.parseBaseTemplateId(selectedSheetType);
@@ -513,7 +517,6 @@ public class ResultActivity extends AppCompatActivity {
                             tm.detectAndOrientWithTemplate(alignedBitmap, baseTemplateId, resolvedViaArucoIdentity);
                     scanBitmap = orient.orientedBitmap;
                     sheetType = baseTemplateId;
-                    orientationLowConfidence = orient.lowConfidence;
 
                     // The scan itself uses a trimmed copy of that template.
                     template = tm.buildTruncatedTemplate(baseTemplateId, itemCount);
@@ -523,28 +526,7 @@ public class ResultActivity extends AppCompatActivity {
                     TemplateManager.OrientationResult orient = tm.detectAndOrient(alignedBitmap, resolvedViaArucoIdentity);
                     scanBitmap = orient.orientedBitmap;
                     sheetType = orient.templateId;
-                    orientationLowConfidence = orient.lowConfidence;
                     template = tm.getTemplate(sheetType);
-                }
-
-                // detectAndOrient(WithTemplate) already logs "REJECTED" when
-                // the winning score is below MIN_ORIENTATION_CONFIDENCE, but
-                // previously kept scanning anyway -- producing exactly the
-                // wall of "Low score — ignoring offset" block warnings this
-                // was meant to prevent. Actually stop here and ask for a
-                // retake instead of silently returning a scan nobody should
-                // trust.
-                if (orientationLowConfidence) {
-                    runOnUiThread(() -> {
-                        Toast.makeText(
-                                this,
-                                "⚠ Couldn't confidently align the sheet -- please retake",
-                                Toast.LENGTH_LONG
-                        ).show();
-                        imageResult.setImageBitmap(alignedBitmap);
-                        showLoading(false);
-                    });
-                    return;
                 }
 
                 // If the oriented bitmap is different from the original, update

@@ -557,7 +557,15 @@ public class TemplateManager {
         //   - the rotation code (-1 = none)
         //   - whether we need to release the Mat afterwards
         int[][] rotations;
-        if (isPortrait) {
+        if (arucoResolved && !isPortrait) {
+            // See the matching comment in detectAndOrientWithTemplate: ArUco
+            // identity anchors + the mirror/winding check already guarantee
+            // this warp is correctly oriented by construction. Don't let the
+            // generic bubble-grid heuristic guess override a provably-correct
+            // result -- OMR grids are regular enough that a wrong rotation
+            // can sometimes outscore the correct one.
+            rotations = new int[][] { { -1 } };
+        } else if (isPortrait) {
             // Portrait input from PerspectiveAligner is the normal scan path.
             // Sheet content is landscape per the template coordinate system,
             // so the warped output needs a quarter-turn — but WHICH quarter
@@ -819,6 +827,31 @@ public class TemplateManager {
                 rotationCandidates.add(new RotationCandidate(rotCode, templateId, bubbleScore));
                 candidate.release();
             }
+        } else if (!isPortrait && arucoResolved) {
+            // ArUco identity anchors + the mirror/winding check already
+            // GUARANTEE this warp is correctly oriented by construction --
+            // finalAnchors[0] (the physical TL marker) was mapped straight
+            // to dst (0,0), full stop. There is no ambiguity left to guess
+            // at here, unlike handheld's geometric anchors (which only
+            // know raw frame position, not physical identity) or a
+            // not-yet-mirror-checked capture. Letting the generic
+            // {-1,180,CW,CCW} bubble-grid heuristic vote anyway is actively
+            // harmful: OMR grids are regular/repetitive enough that a
+            // WRONG rotation can outscore the correct one on that metric
+            // alone. Trust the construction; only rot=-1 is evaluated.
+            int rotCode = -1;
+            int cw = srcGray.cols();
+            int ch = srcGray.rows();
+            double scaleX = (double) cw / tpl.width;
+            double scaleY = (double) ch / tpl.height;
+
+            double bubbleScore = aligner.getAlignmentScore(srcGray, tpl, scaleX, scaleY);
+
+            Log.d(TAG, String.format(
+                    "  rot=%d (aruco-resolved, trusted -- no guessing), template=%s, score=%.3f",
+                    rotCode, templateId, bubbleScore));
+
+            rotationCandidates.add(new RotationCandidate(rotCode, templateId, bubbleScore));
         } else if (isPortrait) {
             int rotCode = REQUIRED_PORTRAIT_ROTATION;
             Mat candidate = new Mat();
