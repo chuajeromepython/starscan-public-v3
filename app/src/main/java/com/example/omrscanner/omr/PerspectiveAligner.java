@@ -69,9 +69,58 @@ public class PerspectiveAligner {
             return false;
         }
 
+        // Reject mirrored correspondences. getPerspectiveTransform() maps
+        // src[TL,TR,BL,BR] onto a NORMAL-winding destination rectangle
+        // ((0,0),(W,0),(0,H),(W,H)). If the src points themselves wind the
+        // opposite way, the resulting homography bakes in a reflection --
+        // TemplateManager's CW/CCW rotation search can never undo that,
+        // it can only ever pick between two equally-wrong mirrored results.
+        // Better to fail fast here with a retake prompt than warp into a
+        // permanently unscannable image.
+        if (!isWindingNormal(anchors)) {
+            Log.w(TAG, "Anchors encode a mirrored correspondence, not a pure rotation -- rejecting");
+            return false;
+        }
+
         return true;
     }
+
+    /**
+     * Checks whether [TL, TR, BL, BR] anchors wind the same direction as
+     * the destination rectangle used in {@link #alignPerspective}. See
+     * {@link #validateAnchorsOrientationAgnostic} for why this matters.
+     */
+    public static boolean isWindingNormal(Point[] anchors) {
+        Point tl = anchors[0], tr = anchors[1], bl = anchors[2], br = anchors[3];
+        double signedArea =
+                (tl.x * tr.y - tr.x * tl.y) +
+                        (tr.x * br.y - br.x * tr.y) +
+                        (br.x * bl.y - bl.x * br.y) +
+                        (bl.x * tl.y - tl.x * bl.y);
+        return signedArea > 0;
+    }
     public static Bitmap alignPerspective(Bitmap bitmap, Point[] anchors) {
+        return alignPerspective(bitmap, anchors, false);
+    }
+
+    /**
+     * @param landscapeContent When true, warps into a LANDSCAPE canonical
+     *        rectangle (CANONICAL_HEIGHT x CANONICAL_WIDTH) instead of the
+     *        default portrait one. ArUco-identity-resolved anchors (Tilt
+     *        Agnostic Mode) come from a full-res capture that's already
+     *        been pre-rotated to normal reading orientation, so they form
+     *        a genuinely LANDSCAPE quad matching the sheet's actual content
+     *        shape (every ZPH template is landscape -- e.g. ZPH60 is
+     *        1609x1134). Forcing that quad onto the portrait 1000x1414 dst
+     *        rectangle used by the geometric handheld pipeline doesn't
+     *        rotate the content -- TL still maps to TL, TR to TR, etc. --
+     *        it anisotropically SQUEEZES it (long edge crushed into the
+     *        short dst dimension, short edge stretched into the long dst
+     *        dimension). No amount of post-warp 90-degree rotation can
+     *        undo that distortion, which is why TemplateManager's
+     *        rotate-and-score search was scoring badly in both directions.
+     */
+    public static Bitmap alignPerspective(Bitmap bitmap, Point[] anchors, boolean landscapeContent) {
         if (anchors == null || anchors.length != 4) {
             Log.e(TAG, "Invalid anchors - need exactly 4 points");
             return null;
@@ -89,12 +138,15 @@ public class PerspectiveAligner {
                 anchors[3]   // Bottom-Right
         );
 
+        int dstWidth = landscapeContent ? CANONICAL_HEIGHT : CANONICAL_WIDTH;
+        int dstHeight = landscapeContent ? CANONICAL_WIDTH : CANONICAL_HEIGHT;
+
         // Destination points: the 4 corners of a perfect rectangle
         MatOfPoint2f dstMat = new MatOfPoint2f(
-                new Point(0, 0),                                    // Top-Left
-                new Point(CANONICAL_WIDTH, 0),                      // Top-Right
-                new Point(0, CANONICAL_HEIGHT),                     // Bottom-Left
-                new Point(CANONICAL_WIDTH, CANONICAL_HEIGHT)        // Bottom-Right
+                new Point(0, 0),                     // Top-Left
+                new Point(dstWidth, 0),               // Top-Right
+                new Point(0, dstHeight),              // Bottom-Left
+                new Point(dstWidth, dstHeight)        // Bottom-Right
         );
 
         // Calculate the 3x3 perspective transform matrix
@@ -106,13 +158,13 @@ public class PerspectiveAligner {
                 src,
                 warped,
                 transformMatrix,
-                new Size(CANONICAL_WIDTH, CANONICAL_HEIGHT)
+                new Size(dstWidth, dstHeight)
         );
 
         // Convert back to Bitmap
         Bitmap result = Bitmap.createBitmap(
-                CANONICAL_WIDTH,
-                CANONICAL_HEIGHT,
+                dstWidth,
+                dstHeight,
                 Bitmap.Config.ARGB_8888
         );
         Utils.matToBitmap(warped, result);
@@ -124,8 +176,8 @@ public class PerspectiveAligner {
         srcMat.release();
         dstMat.release();
 
-        Log.d(TAG, "Perspective alignment successful -> " +
-                CANONICAL_WIDTH + "x" + CANONICAL_HEIGHT);
+        Log.d(TAG, "Perspective alignment successful -> " + dstWidth + "x" + dstHeight
+                + (landscapeContent ? " (landscape canonical)" : " (portrait canonical)"));
         return result;
     }
 

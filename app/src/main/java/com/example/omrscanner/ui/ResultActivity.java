@@ -408,19 +408,17 @@ public class ResultActivity extends AppCompatActivity {
                         Log.i(TAG, "ARUCO_TL_LANDS_IN_QUADRANT: " + tlQuadrant + " (should be LEFT-TOP for an unrotated capture)");
 
                         // Winding/chirality check: does the identity-anchor correspondence
-                        // encode a pure rotation, or a MIRROR? Walk TL->TR->BR->BL (the
-                        // same perimeter order PerspectiveAligner's dst rectangle uses)
-                        // and compute the signed area. A positive result matches the dst
-                        // rectangle's own winding (pure rotation-safe); negative means the
-                        // correspondence fed to getPerspectiveTransform bakes in a
+                        // encode a pure rotation, or a MIRROR? A positive signed area
+                        // (walking TL->TR->BR->BL) matches PerspectiveAligner's dst
+                        // rectangle's own winding (pure rotation-safe); negative means
+                        // the correspondence fed to getPerspectiveTransform bakes in a
                         // reflection -- no post-warp rotation choice can undo that.
-                        double signedArea =
-                                (idTL.x * idTR.y - idTR.x * idTL.y) +
-                                        (idTR.x * idBR.y - idBR.x * idTR.y) +
-                                        (idBR.x * idBL.y - idBL.x * idBR.y) +
-                                        (idBL.x * idTL.y - idTL.x * idBL.y);
-                        String windingVerdict = signedArea > 0 ? "NORMAL (rotation-only, safe)" : "MIRRORED (no rotation can fix this)";
-                        Log.i(TAG, String.format("ARUCO_WINDING_CHECK: signedArea=%.0f -> %s", signedArea, windingVerdict));
+                        // Actual rejection now happens inside
+                        // PerspectiveAligner.validateAnchorsOrientationAgnostic() below --
+                        // this block just keeps the diagnostic logging for triage.
+                        boolean windingNormal = PerspectiveAligner.isWindingNormal(finalAnchors);
+                        String windingVerdict = windingNormal ? "NORMAL (rotation-only, safe)" : "MIRRORED (no rotation can fix this)";
+                        Log.i(TAG, "ARUCO_WINDING_CHECK: " + windingVerdict);
                         // ── END ORIENTATION DIAGNOSTIC ──────────────────────────────────
                     } else {
                         Log.w(TAG, "Tilt Agnostic Mode: ArUco identity detection found no markers on full-res capture, falling back to geometric detector");
@@ -448,12 +446,19 @@ public class ResultActivity extends AppCompatActivity {
                         ? PerspectiveAligner.validateAnchorsOrientationAgnostic(finalAnchors)
                         : PerspectiveAligner.validateAnchors(finalAnchors);
                 if (!anchorsValid) {
+                    // Distinguish the mirrored-correspondence case from other
+                    // validation failures (too small / missing anchors) so
+                    // this specific, previously-silent failure mode is
+                    // diagnosable from the field rather than looking like a
+                    // generic detection miss.
+                    boolean mirrored = resolvedViaArucoIdentity
+                            && finalAnchors != null
+                            && !PerspectiveAligner.isWindingNormal(finalAnchors);
+                    String message = mirrored
+                            ? "⚠ Marker layout looks mirrored -- please retake with the sheet flat and unflipped"
+                            : "Invalid anchor points detected";
                     runOnUiThread(() -> {
-                        Toast.makeText(
-                                this,
-                                "Invalid anchor points detected",
-                                Toast.LENGTH_LONG
-                        ).show();
+                        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
                         imageResult.setImageBitmap(original);
                         showLoading(false);
                     });
@@ -461,7 +466,15 @@ public class ResultActivity extends AppCompatActivity {
                 }
 
                 // STEP 1: Apply perspective alignment (now maintains correct aspect ratio!)
-                alignedBitmap = PerspectiveAligner.alignPerspective(original, finalAnchors);
+                // ArUco-resolved anchors already come from a pre-rotated,
+                // reading-orientation capture -- they form a genuinely
+                // LANDSCAPE quad (every ZPH template is landscape), so warp
+                // into a matching landscape canvas rather than the portrait
+                // one the geometric handheld pipeline expects. See
+                // PerspectiveAligner.alignPerspective's landscapeContent
+                // javadoc for why forcing portrait here silently wrecked
+                // every Tilt Agnostic Mode scan.
+                alignedBitmap = PerspectiveAligner.alignPerspective(original, finalAnchors, resolvedViaArucoIdentity);
 
                 if (alignedBitmap == null) {
                     runOnUiThread(() -> {
@@ -477,6 +490,7 @@ public class ResultActivity extends AppCompatActivity {
                 Bitmap scanBitmap;
                 String sheetType;
                 OmrTemplate template;
+                boolean orientationLowConfidence;
 
                 if (selectedSheetType != null) {
                     String baseTemplateId = com.example.omrscanner.models.ActivityFolder.parseBaseTemplateId(selectedSheetType);
@@ -496,6 +510,7 @@ public class ResultActivity extends AppCompatActivity {
                             tm.detectAndOrientWithTemplate(alignedBitmap, baseTemplateId, resolvedViaArucoIdentity);
                     scanBitmap = orient.orientedBitmap;
                     sheetType = baseTemplateId;
+                    orientationLowConfidence = orient.lowConfidence;
 
                     // The scan itself uses a trimmed copy of that template.
                     template = tm.buildTruncatedTemplate(baseTemplateId, itemCount);
@@ -505,7 +520,28 @@ public class ResultActivity extends AppCompatActivity {
                     TemplateManager.OrientationResult orient = tm.detectAndOrient(alignedBitmap, resolvedViaArucoIdentity);
                     scanBitmap = orient.orientedBitmap;
                     sheetType = orient.templateId;
+                    orientationLowConfidence = orient.lowConfidence;
                     template = tm.getTemplate(sheetType);
+                }
+
+                // detectAndOrient(WithTemplate) already logs "REJECTED" when
+                // the winning score is below MIN_ORIENTATION_CONFIDENCE, but
+                // previously kept scanning anyway -- producing exactly the
+                // wall of "Low score — ignoring offset" block warnings this
+                // was meant to prevent. Actually stop here and ask for a
+                // retake instead of silently returning a scan nobody should
+                // trust.
+                if (orientationLowConfidence) {
+                    runOnUiThread(() -> {
+                        Toast.makeText(
+                                this,
+                                "⚠ Couldn't confidently align the sheet -- please retake",
+                                Toast.LENGTH_LONG
+                        ).show();
+                        imageResult.setImageBitmap(alignedBitmap);
+                        showLoading(false);
+                    });
+                    return;
                 }
 
                 // If the oriented bitmap is different from the original, update
