@@ -20,6 +20,8 @@
         <item name="shapeAppearanceOverlay">@style/ShapeAppearance.OMRScanner.Dialog</item>
         <item name="materialAlertDialogTitleTextStyle">@style/TextAppearance.OMRScanner.DialogTitle</item>
         <item name="materialAlertDialogBodyTextStyle">@style/TextAppearance.OMRScanner.DialogBody</item>
+        <item name="textColorAlertDialogListItem">@android:color/black</item>
+        <item name="android:textColorPrimary">@android:color/black</item>
         <item name="buttonBarPositiveButtonStyle">@style/Widget.OMRScanner.Dialog.Button</item>
         <item name="buttonBarNegativeButtonStyle">@style/Widget.OMRScanner.Dialog.Button</item>
         <item name="buttonBarNeutralButtonStyle">@style/Widget.OMRScanner.Dialog.Button</item>
