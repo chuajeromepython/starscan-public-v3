@@ -1,5 +1,7 @@
 package com.example.omrscanner.dashboard;
 
+import com.example.omrscanner.R;
+
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -59,7 +61,7 @@ public class ClassScreenRenderer {
                 ASSESSMENT_SORT_NAME_ASC, ASSESSMENT_SORT_NAME_DESC,
                 ASSESSMENT_SORT_EXAM_DATE_NEWEST, ASSESSMENT_SORT_EXAM_DATE_OLDEST};
         int checked = indexOfKey(keys, selectedAssessmentSort);
-        new android.app.AlertDialog.Builder(activity)
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_OMRScanner_Dialog)
                 .setTitle("Sort Assessments")
                 .setSingleChoiceItems(labels, checked, (dialog, which) -> {
                     onSelected.accept(keys[which]);

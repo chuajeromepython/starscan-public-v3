@@ -44,6 +44,8 @@ public class PreviewActivity extends AppCompatActivity {
     private String selectedSheetType;
     private String classId;
     private String activityId;
+    private boolean fixedMountMode;
+    private boolean tiltAgnosticMode;
     private Bitmap originalBitmap;
     private Point[] detectedAnchors;
 
@@ -82,6 +84,10 @@ public class PreviewActivity extends AppCompatActivity {
         // Get class/activity IDs for folder-based saving
         classId = getIntent().getStringExtra(DashboardActivity.EXTRA_CLASS_ID);
         activityId = getIntent().getStringExtra(DashboardActivity.EXTRA_ACTIVITY_ID);
+
+        // Get camera mode so "Retake" can relaunch the camera in the same mode
+        fixedMountMode = getIntent().getBooleanExtra(CameraActivity.EXTRA_FIXED_MOUNT_MODE, false);
+        tiltAgnosticMode = getIntent().getBooleanExtra(CameraActivity.EXTRA_TILT_AGNOSTIC_MODE, false);
 
         if (imagePath != null) {
             loadAndProcessImage();
@@ -164,9 +170,15 @@ public class PreviewActivity extends AppCompatActivity {
     }
 
     private void retakePhoto() {
-        // Always go back to camera
+        // Go back to camera, preserving the mode and sheet/class/activity context
+        // the user originally picked (previously this always fell back to Handheld).
         Intent intent = new Intent(this, CameraActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        intent.putExtra(CameraActivity.EXTRA_FIXED_MOUNT_MODE, fixedMountMode);
+        intent.putExtra(CameraActivity.EXTRA_TILT_AGNOSTIC_MODE, tiltAgnosticMode);
+        if (selectedSheetType != null) intent.putExtra(DashboardActivity.EXTRA_SHEET_TYPE, selectedSheetType);
+        if (classId != null) intent.putExtra(DashboardActivity.EXTRA_CLASS_ID, classId);
+        if (activityId != null) intent.putExtra(DashboardActivity.EXTRA_ACTIVITY_ID, activityId);
         startActivity(intent);
         finish();
     }

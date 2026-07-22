@@ -250,13 +250,16 @@ public class ResultActivity extends AppCompatActivity {
     }
 
     private void retakePhoto() {
-        // Always go back to camera
+        // Go back to camera, preserving the mode the user originally picked
+        // (previously EXTRA_TILT_AGNOSTIC_MODE wasn't forwarded, so retake
+        // always fell back to Handheld / guide-square mode).
         Intent intent = new Intent(this, CameraActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         if (selectedSheetType != null) intent.putExtra(DashboardActivity.EXTRA_SHEET_TYPE, selectedSheetType);
         if (classId    != null) intent.putExtra(DashboardActivity.EXTRA_CLASS_ID, classId);
         if (activityId != null) intent.putExtra(DashboardActivity.EXTRA_ACTIVITY_ID, activityId);
         intent.putExtra(CameraActivity.EXTRA_FIXED_MOUNT_MODE, fixedMountMode);
+        intent.putExtra(CameraActivity.EXTRA_TILT_AGNOSTIC_MODE, tiltAgnosticMode);
         startActivity(intent);
         finish();
     }
@@ -934,8 +937,8 @@ public class ResultActivity extends AppCompatActivity {
 
         btnExport.setEnabled(false);
 
-        android.app.AlertDialog.Builder builder =
-                new android.app.AlertDialog.Builder(this)
+        com.google.android.material.dialog.MaterialAlertDialogBuilder builder =
+                new com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_OMRScanner_Dialog)
                 .setTitle("LRN Not Recognized")
                 .setMessage("LRN " + scanResult.lnr
                         + " was not found in the student LRN list. "
@@ -960,7 +963,7 @@ public class ResultActivity extends AppCompatActivity {
      */
     private void triggerStudentSync() {
         if (classId == null) {
-            new android.app.AlertDialog.Builder(this)
+            new com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_OMRScanner_Dialog)
                     .setTitle("No class selected")
                     .setMessage("Open a class before syncing its students.")
                     .setPositiveButton("OK", null)
@@ -975,7 +978,7 @@ public class ResultActivity extends AppCompatActivity {
             com.example.omrscanner.database.entities.ClassEntity classEntity = repo.getClassByIdSync(classId);
 
             if (classEntity == null || classEntity.classroomId == null) {
-                runOnUiThread(() -> new android.app.AlertDialog.Builder(this)
+                runOnUiThread(() -> new com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_OMRScanner_Dialog)
                         .setTitle("Missing classroom ID")
                         .setMessage("This class wasn't synced from the server, so it has no classroom ID to sync students for.")
                         .setPositiveButton("OK", null)
@@ -985,7 +988,7 @@ public class ResultActivity extends AppCompatActivity {
 
             repo.getActiveUser(user -> {
                 if (user == null || user.serverIp == null || user.serverIp.trim().isEmpty()) {
-                    runOnUiThread(() -> new android.app.AlertDialog.Builder(this)
+                    runOnUiThread(() -> new com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_OMRScanner_Dialog)
                             .setTitle("Scan required")
                             .setMessage("Please scan your QR code from the website system before syncing.")
                             .setPositiveButton("OK", null)
@@ -1008,7 +1011,7 @@ public class ResultActivity extends AppCompatActivity {
                 boolean exists = DashboardActivity.isLrnExists(this, classId, activityId, scanResult.lnr);
                 runOnUiThread(() -> {
                     if (exists) {
-                        new android.app.AlertDialog.Builder(this)
+                        new com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_OMRScanner_Dialog)
                                 .setTitle("Duplicate LRN detected")
                                 .setMessage("A scan with LRN " + scanResult.lnr + " already exists in this assessment. Do you want to replace it?")
                                 .setPositiveButton("Replace", (dialog, which) -> proceedWithExport(true))

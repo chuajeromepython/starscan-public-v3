@@ -6,7 +6,8 @@ package com.example.omrscanner.camera;
 import android.os.Bundle;
 import android.util.Base64;
 import android.widget.ImageButton;
-import androidx.appcompat.app.AlertDialog;
+import android.widget.Toast;
+//import androidx.appcompat.app.AlertDialog;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -315,15 +316,23 @@ public class QrScannerActivity extends AppCompatActivity {
 
 
     private void showMessageDialog(String title, String message) {
-        new AlertDialog.Builder(this)
-                .setTitle(title)
-                .setMessage(message)
-                .setPositiveButton("OK", (dialog, which) -> {
-                    dialog.dismiss();
-                    scanned = false;
-                })
-                .setCancelable(false)
-                .show();
+        showMessageDialog(title, message, /* isSuccess= */ "Success".equals(title));
+    }
+
+    private void showMessageDialog(String title, String message, boolean isSuccess) {
+        if (isSuccess) {
+            // Successful scan — show a dialog; exit only when the user taps OK.
+            new com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_OMRScanner_Dialog)
+                    .setTitle(title)
+                    .setMessage(message)
+                    .setPositiveButton("OK", (dialog, which) -> finish())
+                    .setCancelable(false)
+                    .show();
+        } else {
+            // Failed/error scan — toast it and let the user rescan, no exit.
+            Toast.makeText(this, title + ": " + message, Toast.LENGTH_LONG).show();
+            scanned = false;
+        }
     }
     private void pingServer(String serverUrl, PingCallback callback) {
         cameraExecutor.execute(() -> {

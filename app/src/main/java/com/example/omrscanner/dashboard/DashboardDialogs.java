@@ -1,5 +1,7 @@
 package com.example.omrscanner.dashboard;
 
+import com.example.omrscanner.R;
+
 import android.app.DatePickerDialog;
 import android.app.Dialog;
 import android.graphics.Color;
@@ -138,7 +140,7 @@ public class DashboardDialogs {
             if (host.getGlobalTeacherName() == null || host.getGlobalTeacherName().trim().isEmpty()) {
                 saveAction.run();
             } else {
-                new android.app.AlertDialog.Builder(activity)
+                new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_OMRScanner_Dialog)
                         .setTitle("Change Teacher Name?")
                         .setMessage("Are you sure you want to change the teacher name to \""
                                 + newName + "\"?\n\nThis will apply to all class folders.")
@@ -172,7 +174,7 @@ public class DashboardDialogs {
         TextView gradePicker = ui.createDropdownField(gradeOptions[0]);
         gradePicker.setTextColor(Color.parseColor("#1E293B"));
         gradePicker.setOnClickListener(v ->
-                new android.app.AlertDialog.Builder(activity)
+                new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_OMRScanner_Dialog)
                         .setTitle("Select Grade Level")
                         .setItems(gradeOptions, (dlg, which) -> {
                             selectedGrade[0] = gradeOptions[which];
@@ -196,7 +198,7 @@ public class DashboardDialogs {
         TextView syPicker = ui.createDropdownField(syOptions[defIdx]);
         syPicker.setTextColor(Color.parseColor("#1E293B"));
         syPicker.setOnClickListener(v ->
-                new android.app.AlertDialog.Builder(activity)
+                new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_OMRScanner_Dialog)
                         .setTitle("Select School Year")
                         .setItems(syOptions, (dlg, which) -> {
                             selectedSY[0] = syOptions[which];
@@ -273,7 +275,7 @@ public class DashboardDialogs {
         TextView gradePicker = ui.createDropdownField(currentGrade);
         gradePicker.setTextColor(Color.parseColor("#1E293B"));
         gradePicker.setOnClickListener(v ->
-                new android.app.AlertDialog.Builder(activity)
+                new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_OMRScanner_Dialog)
                         .setTitle("Select Grade Level")
                         .setItems(gradeOptions, (dlg, which) -> {
                             selectedGrade[0] = gradeOptions[which];
@@ -296,7 +298,7 @@ public class DashboardDialogs {
         TextView syPicker = ui.createDropdownField(curSY);
         syPicker.setTextColor(Color.parseColor("#1E293B"));
         syPicker.setOnClickListener(v ->
-                new android.app.AlertDialog.Builder(activity)
+                new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_OMRScanner_Dialog)
                         .setTitle("Select School Year")
                         .setItems(syOptions, (dlg, which) -> {
                             selectedSY[0] = syOptions[which];
@@ -1124,7 +1126,7 @@ public class DashboardDialogs {
         TextView syPicker = ui.createDropdownField(syOptions[defIdx]);
         syPicker.setTextColor(Color.parseColor("#1E293B"));
         syPicker.setOnClickListener(v ->
-                new android.app.AlertDialog.Builder(activity)
+                new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_OMRScanner_Dialog)
                         .setTitle("Select School Year")
                         .setItems(syOptions, (dlg, which) -> {
                             selectedSY[0] = syOptions[which];
@@ -1314,7 +1316,7 @@ public class DashboardDialogs {
         TextView syPicker = ui.createDropdownField(initSY);
         syPicker.setTextColor(Color.parseColor("#1E293B"));
         syPicker.setOnClickListener(v ->
-                new android.app.AlertDialog.Builder(activity)
+                new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_OMRScanner_Dialog)
                         .setTitle("Select School Year")
                         .setItems(syOptions, (dlg, which) -> {
                             selectedSY[0] = syOptions[which];
@@ -1634,7 +1636,7 @@ public class DashboardDialogs {
         grid.setColumnCount(4);
         container.addView(grid);
 
-        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(activity)
+        androidx.appcompat.app.AlertDialog dialog = new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_OMRScanner_Dialog)
                 .setTitle(baseTemplateId + " — how many items?")
                 .setMessage("Choose how many items this assessment actually uses.")
                 .setView(container)

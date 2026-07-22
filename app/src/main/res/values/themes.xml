@@ -10,4 +10,36 @@
     </style>
 
     <style name="Theme.OMRScanner" parent="Base.Theme.OMRScanner" />
+
+    <!-- Shared custom-styled dialog used everywhere instead of the default AlertDialog look -->
+    <style name="ThemeOverlay.OMRScanner.Dialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <item name="colorPrimary">@color/primary_blue</item>
+        <item name="colorOnSurface">@android:color/black</item>
+        <item name="colorSurface">@color/bg_surface</item>
+        <item name="colorSurfaceContainerHigh">@color/bg_surface</item>
+        <item name="shapeAppearanceOverlay">@style/ShapeAppearance.OMRScanner.Dialog</item>
+        <item name="materialAlertDialogTitleTextStyle">@style/TextAppearance.OMRScanner.DialogTitle</item>
+        <item name="materialAlertDialogBodyTextStyle">@style/TextAppearance.OMRScanner.DialogBody</item>
+        <item name="buttonBarPositiveButtonStyle">@style/Widget.OMRScanner.Dialog.Button</item>
+        <item name="buttonBarNegativeButtonStyle">@style/Widget.OMRScanner.Dialog.Button</item>
+        <item name="buttonBarNeutralButtonStyle">@style/Widget.OMRScanner.Dialog.Button</item>
+    </style>
+
+    <style name="ShapeAppearance.OMRScanner.Dialog" parent="ShapeAppearance.Material3.MediumComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">20dp</item>
+    </style>
+
+    <style name="TextAppearance.OMRScanner.DialogTitle" parent="MaterialAlertDialog.Material3.Title.Text">
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/primary_blue</item>
+    </style>
+
+    <style name="TextAppearance.OMRScanner.DialogBody" parent="MaterialAlertDialog.Material3.Body.Text">
+        <item name="android:textColor">@android:color/black</item>
+    </style>
+
+    <style name="Widget.OMRScanner.Dialog.Button" parent="Widget.Material3.Button.TextButton.Dialog">
+        <item name="android:textColor">@color/primary_blue</item>
+    </style>
 </resources>

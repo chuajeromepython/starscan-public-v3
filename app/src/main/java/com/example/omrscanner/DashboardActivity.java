@@ -73,7 +73,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
     private static final String TAG = "DashboardActivity";
     private static final String CAMERA_MODE_PREFS = "camera_mode_prefs";
-    private static final String PREF_FIXED_MOUNT_MODE = "fixed_mount_mode";
+    private static final String PREF_FIXED_MOUNT_MODE = "fixed_mount_mode"; // kept, no longer surfaced in UI
+    private static final String PREF_TILT_AGNOSTIC_MODE = "tilt_agnostic_mode";
 
     // ── Intent extras used by CameraActivity / PreviewActivity ──
     public static final String EXTRA_SHEET_TYPE = "sheet_type";
@@ -1396,55 +1397,33 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     @Override
     public void openCamera() {
         try {
-            showScanEntryDialog();
+            showCameraModeDialog();
         } catch (Exception e) {
             Log.e(TAG, "Error opening camera", e);
             Toast.makeText(this, "Error opening camera: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 
-    /**
-     * First dialog shown after tapping "Open Camera". Routes to either the
-     * existing guide-square scanner (unchanged) or the new free-detection
-     * Tilt Agnostic Mode.
-     */
-    private void showScanEntryDialog() {
-        final String[] entryOptions = {
-                "Continue to scan\nUse the current scanner with on-screen guide squares.",
-                "Tilt Agnostic Mode (Beta)\nAuto-detects the sheet's corners in any orientation — no need to line up guide squares or tilt the phone."
-        };
-
-        new androidx.appcompat.app.AlertDialog.Builder(this)
-                .setTitle("Open Camera")
-                .setItems(entryOptions, (dialog, which) -> {
-                    if (which == 0) {
-                        showCameraModeDialog();
-                    } else {
-                        launchCamera(false, true);
-                    }
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
-    }
-
     private void showCameraModeDialog() {
         final String[] cameraModes = {
                 "Handheld Scan\nUse this when holding the phone and moving it closer to the sheet.",
-                "Fixed Mount Scan\nUse this for elevated phone mounts where sheets slide underneath automatically."
+                "Tilt Agnostic Mode (Beta)\nAuto-detects the sheet's corners in any orientation — no need to line up guide squares or tilt the phone."
         };
 
         android.content.SharedPreferences prefs =
                 getSharedPreferences(CAMERA_MODE_PREFS, MODE_PRIVATE);
-        int defaultSelection = prefs.getBoolean(PREF_FIXED_MOUNT_MODE, false) ? 1 : 0;
+        // NOTE: PREF_FIXED_MOUNT_MODE / fixedMountMode logic below is intentionally kept
+        // intact — it's just no longer exposed as a selectable option in this dialog.
+        int defaultSelection = prefs.getBoolean(PREF_TILT_AGNOSTIC_MODE, false) ? 1 : 0;
         final int[] selectedMode = {defaultSelection};
 
-        new androidx.appcompat.app.AlertDialog.Builder(this)
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_OMRScanner_Dialog)
                 .setTitle("Choose Camera Mode")
                 .setSingleChoiceItems(cameraModes, defaultSelection, (dialog, which) -> selectedMode[0] = which)
                 .setPositiveButton("Open Camera", (dialog, which) -> {
-                    boolean fixedMountMode = selectedMode[0] == 1;
-                    prefs.edit().putBoolean(PREF_FIXED_MOUNT_MODE, fixedMountMode).apply();
-                    launchCamera(fixedMountMode);
+                    boolean tiltAgnosticMode = selectedMode[0] == 1;
+                    prefs.edit().putBoolean(PREF_TILT_AGNOSTIC_MODE, tiltAgnosticMode).apply();
+                    launchCamera(false, tiltAgnosticMode);
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
@@ -1811,7 +1790,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 }
             } catch (Exception e) {
                 android.util.Log.e("OMR_STUDENT_SYNC", "Sync failed: " + e.getClass().getSimpleName() + ": " + e.getMessage(), e);
-                mainHandler.post(() -> new android.app.AlertDialog.Builder(context)
+                mainHandler.post(() -> new com.google.android.material.dialog.MaterialAlertDialogBuilder(context, R.style.ThemeOverlay_OMRScanner_Dialog)
                         .setTitle("Sync failed")
                         .setMessage("Could not sync students: " + e.getMessage())
                         .setPositiveButton("OK", null)

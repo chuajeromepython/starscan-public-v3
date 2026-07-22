@@ -1,5 +1,7 @@
 package com.example.omrscanner.dashboard;
 
+import com.example.omrscanner.R;
+
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -57,7 +59,7 @@ public class HomeScreenRenderer {
         final String[] labels = {"Newest", "Oldest", "Grade A-Z", "Section A-Z"};
         final String[] keys   = {CLASS_SORT_NEWEST, CLASS_SORT_OLDEST, CLASS_SORT_GRADE_ASC, CLASS_SORT_SECTION_ASC};
         int checked = indexOfKey(keys, selectedClassSort);
-        new android.app.AlertDialog.Builder(activity)
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_OMRScanner_Dialog)
                 .setTitle("Sort Classes")
                 .setSingleChoiceItems(labels, checked, (dialog, which) -> {
                     onSelected.accept(keys[which]);
