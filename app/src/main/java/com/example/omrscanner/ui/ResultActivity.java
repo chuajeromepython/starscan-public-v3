@@ -38,6 +38,9 @@ import com.example.omrscanner.omr.TemplateManager;
 import com.example.omrscanner.utils.CsvHelper;
 
 import org.opencv.android.OpenCVLoader;
+import org.opencv.android.Utils;
+import org.opencv.core.Core;
+import org.opencv.core.Mat;
 import org.opencv.core.Point;
 
 import java.util.LinkedHashMap;
@@ -84,6 +87,7 @@ public class ResultActivity extends AppCompatActivity {
     private String imageSource;
     private boolean fixedMountMode;
     private boolean tiltAgnosticMode;
+    private int captureRotationBucket;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -142,6 +146,7 @@ public class ResultActivity extends AppCompatActivity {
         imageSource = getIntent().getStringExtra(PreviewActivity.IMAGE_SOURCE);
         fixedMountMode = getIntent().getBooleanExtra(CameraActivity.EXTRA_FIXED_MOUNT_MODE, false);
         tiltAgnosticMode = getIntent().getBooleanExtra(CameraActivity.EXTRA_TILT_AGNOSTIC_MODE, false);
+        captureRotationBucket = getIntent().getIntExtra(CameraActivity.EXTRA_CAPTURE_ROTATION_BUCKET, 0);
 
         Log.d(TAG, "Received sheet type: " + selectedSheetType + ", classId: " + classId + ", activityId: " + activityId);
 
@@ -256,21 +261,89 @@ public class ResultActivity extends AppCompatActivity {
         finish();
     }
 
+    /**
+     * Rotates a raw Tilt Agnostic Mode capture back to normal reading
+     * orientation, using the rotation bucket CameraActivity's orientation
+     * listener reported at the exact moment of capture (0 / -90 / 90 / 180
+     * -- see CameraActivity.EXTRA_CAPTURE_ROTATION_BUCKET).
+     *
+     * Verified empirically against real captures:
+     *   - tilted right (bucket -90) -> raw image needs ROTATE_90_CLOCKWISE
+     *   - tilted left  (bucket  90) -> raw image needs ROTATE_90_COUNTERCLOCKWISE
+     *   - upside-down  (bucket 180) -> raw image needs ROTATE_180
+     *   - bucket 0 (phone held upright/portrait against a landscape sheet)
+     *     isn't a physically sensible capture for this app -- left as a
+     *     no-op rather than guessing.
+     *
+     * Recycles the input bitmap when a new rotated bitmap is produced, so
+     * callers don't need to track/release the pre-rotation bitmap
+     * themselves.
+     */
+    private Bitmap rotateToNormalReadingOrientation(Bitmap raw, int rotationBucket) {
+        int rotateCode;
+        switch (rotationBucket) {
+            case -90:
+                rotateCode = Core.ROTATE_90_CLOCKWISE;
+                break;
+            case 90:
+                rotateCode = Core.ROTATE_90_COUNTERCLOCKWISE;
+                break;
+            case 180:
+                rotateCode = Core.ROTATE_180;
+                break;
+            default:
+                Log.d(TAG, "rotateToNormalReadingOrientation: bucket=" + rotationBucket + ", no correction applied");
+                return raw;
+        }
+
+        Mat src = new Mat();
+        Utils.bitmapToMat(raw, src);
+
+        Mat rotated = new Mat();
+        Core.rotate(src, rotated, rotateCode);
+        src.release();
+
+        Bitmap result = Bitmap.createBitmap(rotated.cols(), rotated.rows(), Bitmap.Config.ARGB_8888);
+        Utils.matToBitmap(rotated, result);
+        rotated.release();
+
+        raw.recycle();
+
+        Log.d(TAG, "rotateToNormalReadingOrientation: bucket=" + rotationBucket
+                + " -> applied " + rotateCode + " -> " + result.getWidth() + "x" + result.getHeight());
+        return result;
+    }
+
     private void processImage(String imagePath, Point[] anchors) {
         showLoading(true);
 
         new Thread(() -> {
             try {
                 // Load original bitmap
-                Bitmap original = BitmapFactory.decodeFile(imagePath);
+                Bitmap rawCapture = BitmapFactory.decodeFile(imagePath);
 
-                if (original == null) {
+                if (rawCapture == null) {
                     runOnUiThread(() -> {
                         Toast.makeText(this, "Failed to load image", Toast.LENGTH_SHORT).show();
                         finish();
                     });
                     return;
                 }
+
+                // Tilt Agnostic Mode has no gate forcing one physical
+                // orientation at capture time, so the raw JPEG can come in
+                // rotated depending on which way the phone was tilted.
+                // Undo that now, using the bucket CameraActivity snapshotted
+                // at the moment of takePhoto(), so everything below this
+                // point (AnchorDetector, PerspectiveAligner, etc.) sees the
+                // same normal-reading-orientation image handheld mode
+                // always produced. Assigned exactly once into a new
+                // variable (rather than reassigning rawCapture) so it stays
+                // effectively final and can still be captured by the
+                // runOnUiThread lambdas further down.
+                final Bitmap original = tiltAgnosticMode
+                        ? rotateToNormalReadingOrientation(rawCapture, captureRotationBucket)
+                        : rawCapture;
 
                 Point[] finalAnchors = anchors;
                 boolean resolvedViaArucoIdentity = false;

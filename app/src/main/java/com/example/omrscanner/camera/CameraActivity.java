@@ -82,6 +82,13 @@ public class CameraActivity extends AppCompatActivity {
     // the on-screen label reflects this same value, so this is what makes
     // the label swap more than cosmetic.
     public static final String EXTRA_GUIDE_CORNER_ROTATION_STEPS = "guide_corner_rotation_steps";
+    // The rotation bucket (0 / -90 / 90 / 180 -- same buckets computed in
+    // setupOrientationListener) that currentIconRotation held at the exact
+    // moment takePhoto() was called. Tilt Agnostic Mode has no gate to
+    // guarantee a single known orientation, so ResultActivity needs this
+    // to know how to rotate the raw capture back to normal reading
+    // orientation before running anchor detection on it.
+    public static final String EXTRA_CAPTURE_ROTATION_BUCKET = "capture_rotation_bucket";
     //private static final Size ANALYSIS_TARGET_RESOLUTION = new Size(1280, 720);
     private static final long FIXED_MOUNT_ZOOM_COOLDOWN_MS = 250L;
     private static final int FIXED_MOUNT_MISS_THRESHOLD = 6;
@@ -1378,7 +1385,14 @@ public class CameraActivity extends AppCompatActivity {
                     rotation = 90;    // rotated so the left edge is "up"
                 }
 
-                updateTiltGate(rotation);
+                // Tilt Agnostic Mode never blocks capture on orientation --
+                // it still needs currentIconRotation tracked below (that's
+                // the bucket takePhoto() snapshots into
+                // EXTRA_CAPTURE_ROTATION_BUCKET), it just must never disable
+                // btnCapture or show the "wrong tilt" warning over it.
+                if (!tiltAgnosticMode) {
+                    updateTiltGate(rotation);
+                }
 
                 if (rotation != currentIconRotation) {
                     currentIconRotation = rotation;
@@ -1569,6 +1583,11 @@ public class CameraActivity extends AppCompatActivity {
 
         File photoFile = new File(getExternalFilesDir(null), "omr_capture.jpg");
 
+        // Snapshot NOW, not inside the onImageSaved callback -- the phone
+        // can keep tilting during the capture/save round-trip, and we need
+        // the bucket that was true at the moment the shot was actually taken.
+        final int captureRotationBucket = currentIconRotation;
+
         ImageCapture.OutputFileOptions options =
                 new ImageCapture.OutputFileOptions.Builder(photoFile).build();
 
@@ -1583,6 +1602,7 @@ public class CameraActivity extends AppCompatActivity {
                             intent.putExtra(EXTRA_FIXED_MOUNT_MODE, fixedMountMode);
                             intent.putExtra(EXTRA_TILT_AGNOSTIC_MODE, tiltAgnosticMode);
                             intent.putExtra(EXTRA_GUIDE_CORNER_ROTATION_STEPS, currentLabelRotationSteps);
+                            intent.putExtra(EXTRA_CAPTURE_ROTATION_BUCKET, captureRotationBucket);
                             if (selectedSheetType != null)
                                 intent.putExtra(DashboardActivity.EXTRA_SHEET_TYPE, selectedSheetType);
                             if (classId != null)
@@ -1641,15 +1661,15 @@ public class CameraActivity extends AppCompatActivity {
             anchorOverlay.resetProgress();
         }
 
-        // Tilt Agnostic Mode doesn't gate on phone orientation at all, so
-        // there's no reason to run the sensor listener that drives the
-        // tilt warning / capture-blocking / icon-rotation behavior.
-        if (!tiltAgnosticMode) {
-            if (orientationEventListener == null) {
-                setupOrientationListener();
-            } else {
-                orientationEventListener.enable();
-            }
+        // Tilt Agnostic Mode doesn't gate capture on phone orientation, but
+        // it still needs the listener running to know currentIconRotation
+        // at capture time (see EXTRA_CAPTURE_ROTATION_BUCKET) -- the gating
+        // itself (tilt warning / capture-blocking) is skipped inside
+        // onOrientationChanged above, not by disabling the listener here.
+        if (orientationEventListener == null) {
+            setupOrientationListener();
+        } else {
+            orientationEventListener.enable();
         }
     }
 
