@@ -557,34 +557,7 @@ public class TemplateManager {
         //   - the rotation code (-1 = none)
         //   - whether we need to release the Mat afterwards
         int[][] rotations;
-        if (isPortrait && arucoResolved) {
-            // ArUco already established canonical paper-space orientation --
-            // no per-photo ambiguity left, so skip the guess entirely and
-            // apply the fixed content rotation. We still log what CW/CCW
-            // would have scored (below) purely for verification purposes.
-            rotations = new int[][] { { ARUCO_RESOLVED_CONTENT_ROTATION } };
-
-            Mat diagCW = new Mat();
-            Mat diagCCW = new Mat();
-            Core.rotate(srcGray, diagCW, Core.ROTATE_90_CLOCKWISE);
-            Core.rotate(srcGray, diagCCW, Core.ROTATE_90_COUNTERCLOCKWISE);
-            double diagScoreCW = -1.0, diagScoreCCW = -1.0;
-            GridAligner diagAligner = new GridAligner();
-            for (OmrTemplate tpl : templates.values()) {
-                double sxCW = (double) diagCW.cols() / tpl.width;
-                double syCW = (double) diagCW.rows() / tpl.height;
-                double sxCCW = (double) diagCCW.cols() / tpl.width;
-                double syCCW = (double) diagCCW.rows() / tpl.height;
-                diagScoreCW = Math.max(diagScoreCW, diagAligner.getAlignmentScore(diagCW, tpl, sxCW, syCW));
-                diagScoreCCW = Math.max(diagScoreCCW, diagAligner.getAlignmentScore(diagCCW, tpl, sxCCW, syCCW));
-            }
-            diagAligner.release();
-            diagCW.release();
-            diagCCW.release();
-            Log.i(TAG, String.format(
-                    "ARUCO_ORIENTATION_CANDIDATES: CW_score=%.3f CCW_score=%.3f applied=%s",
-                    diagScoreCW, diagScoreCCW, rotationName(ARUCO_RESOLVED_CONTENT_ROTATION)));
-        } else if (isPortrait) {
+        if (isPortrait) {
             // Portrait input from PerspectiveAligner is the normal scan path.
             // Sheet content is landscape per the template coordinate system,
             // so the warped output needs a quarter-turn — but WHICH quarter
@@ -596,6 +569,19 @@ public class TemplateManager {
             // flips the result upside-down/mirrored for the other — try
             // both and let the alignment score (with the tie-break bias
             // below) pick the one that actually matches the grid.
+            //
+            // This also covers the arucoResolved (Tilt Agnostic Mode) case.
+            // ArUco establishes canonical paper-space TL/TR/BL/BR, but we
+            // don't yet have an empirically-verified fixed content rotation
+            // for that reference frame the way REQUIRED_PORTRAIT_ROTATION
+            // was verified for the geometric/handheld path (see comment on
+            // ARUCO_RESOLVED_CONTENT_ROTATION -- it's still an unconfirmed
+            // placeholder). Trusting it blindly means every tilt-agnostic
+            // scan could be wrong the same way, so this copies handheld's
+            // proven score-and-pick scheme instead. Once logs from real
+            // ArUco captures confirm one direction always wins, this can
+            // be split back into its own branch with a fixed rotation, the
+            // same way REQUIRED_PORTRAIT_ROTATION was derived.
             rotations = new int[][] {
                     { Core.ROTATE_90_CLOCKWISE },
                     { Core.ROTATE_90_COUNTERCLOCKWISE }
@@ -806,22 +792,33 @@ public class TemplateManager {
                 }
             }
         } else if (isPortrait && arucoResolved) {
-            int rotCode = ARUCO_RESOLVED_CONTENT_ROTATION;
-            Mat candidate = new Mat();
-            Core.rotate(srcGray, candidate, rotCode);
+            // Same reasoning as detectAndOrient's arucoResolved branch:
+            // ARUCO_RESOLVED_CONTENT_ROTATION is still an unverified
+            // placeholder, so don't trust it blindly here either. Copy
+            // handheld's score-and-pick scheme instead of forcing a
+            // single fixed rotation.
+            int[][] rotations = {
+                    { Core.ROTATE_90_CLOCKWISE },
+                    { Core.ROTATE_90_COUNTERCLOCKWISE }
+            };
+            for (int[] rot : rotations) {
+                int rotCode = rot[0];
+                Mat candidate = new Mat();
+                Core.rotate(srcGray, candidate, rotCode);
 
-            int cw = candidate.cols();
-            int ch = candidate.rows();
-            double scaleX = (double) cw / tpl.width;
-            double scaleY = (double) ch / tpl.height;
+                int cw = candidate.cols();
+                int ch = candidate.rows();
+                double scaleX = (double) cw / tpl.width;
+                double scaleY = (double) ch / tpl.height;
 
-            double bubbleScore = aligner.getAlignmentScore(candidate, tpl, scaleX, scaleY);
+                double bubbleScore = aligner.getAlignmentScore(candidate, tpl, scaleX, scaleY);
 
-            Log.d(TAG, String.format(
-                    "  rot=%d (aruco-resolved, fixed), template=%s, score=%.3f", rotCode, templateId, bubbleScore));
+                Log.d(TAG, String.format(
+                        "  rot=%d (aruco-resolved, scored), template=%s, score=%.3f", rotCode, templateId, bubbleScore));
 
-            rotationCandidates.add(new RotationCandidate(rotCode, templateId, bubbleScore));
-            candidate.release();
+                rotationCandidates.add(new RotationCandidate(rotCode, templateId, bubbleScore));
+                candidate.release();
+            }
         } else if (isPortrait) {
             int rotCode = REQUIRED_PORTRAIT_ROTATION;
             Mat candidate = new Mat();

@@ -299,6 +299,56 @@ public class ResultActivity extends AppCompatActivity {
                     if (finalAnchors != null) {
                         resolvedViaArucoIdentity = true;
                         Log.d(TAG, "Tilt Agnostic Mode: full-res anchors resolved via ArUco identity detection");
+
+                        // ── ORIENTATION DIAGNOSTIC ──────────────────────────────────────
+                        // finalAnchors is [TL, TR, BL, BR] by MARKER IDENTITY (not by raw
+                        // frame position), straight from ArucoAnchorDetector, before any
+                        // warp. This tells us exactly how the phone was held relative to
+                        // the sheet for THIS capture -- no guessing from post-warp scores.
+                        Point idTL = finalAnchors[0];
+                        Point idTR = finalAnchors[1];
+                        Point idBL = finalAnchors[2];
+                        Point idBR = finalAnchors[3];
+
+                        Log.i(TAG, String.format(
+                                "ARUCO_RAW_ANCHORS: TL=(%.0f,%.0f) TR=(%.0f,%.0f) BL=(%.0f,%.0f) BR=(%.0f,%.0f) | image=%dx%d",
+                                idTL.x, idTL.y, idTR.x, idTR.y, idBL.x, idBL.y, idBR.x, idBR.y,
+                                original.getWidth(), original.getHeight()));
+
+                        // Angle of the TL->TR vector (the sheet's "reading top edge") in
+                        // raw image pixel space. atan2 with y-down image coords:
+                        //   ~0°       -> top edge runs left-to-right normally, no tilt
+                        //   ~-90°     -> sheet's top edge points toward image-top (rotated one way)
+                        //   ~90°      -> sheet's top edge points toward image-bottom (rotated other way)
+                        //   ~180/-180 -> sheet is upside-down in the raw frame
+                        double dx = idTR.x - idTL.x;
+                        double dy = idTR.y - idTL.y;
+                        double topEdgeAngleDeg = Math.toDegrees(Math.atan2(dy, dx));
+                        Log.i(TAG, String.format("ARUCO_TOP_EDGE_ANGLE: %.1f degrees (0=no tilt, -90/+90=quarter turn, ~180=upside-down)", topEdgeAngleDeg));
+
+                        // Which raw-image quadrant does the IDENTITY-labeled TL marker
+                        // actually land in? If it's not in the image's own top-left
+                        // quadrant, that alone tells you the physical rotation bucket.
+                        double cx = original.getWidth() / 2.0;
+                        double cy = original.getHeight() / 2.0;
+                        String tlQuadrant = (idTL.x < cx ? "LEFT" : "RIGHT") + "-" + (idTL.y < cy ? "TOP" : "BOTTOM");
+                        Log.i(TAG, "ARUCO_TL_LANDS_IN_QUADRANT: " + tlQuadrant + " (should be LEFT-TOP for an unrotated capture)");
+
+                        // Winding/chirality check: does the identity-anchor correspondence
+                        // encode a pure rotation, or a MIRROR? Walk TL->TR->BR->BL (the
+                        // same perimeter order PerspectiveAligner's dst rectangle uses)
+                        // and compute the signed area. A positive result matches the dst
+                        // rectangle's own winding (pure rotation-safe); negative means the
+                        // correspondence fed to getPerspectiveTransform bakes in a
+                        // reflection -- no post-warp rotation choice can undo that.
+                        double signedArea =
+                                (idTL.x * idTR.y - idTR.x * idTL.y) +
+                                        (idTR.x * idBR.y - idBR.x * idTR.y) +
+                                        (idBR.x * idBL.y - idBL.x * idBR.y) +
+                                        (idBL.x * idTL.y - idTL.x * idBL.y);
+                        String windingVerdict = signedArea > 0 ? "NORMAL (rotation-only, safe)" : "MIRRORED (no rotation can fix this)";
+                        Log.i(TAG, String.format("ARUCO_WINDING_CHECK: signedArea=%.0f -> %s", signedArea, windingVerdict));
+                        // ── END ORIENTATION DIAGNOSTIC ──────────────────────────────────
                     } else {
                         Log.w(TAG, "Tilt Agnostic Mode: ArUco identity detection found no markers on full-res capture, falling back to geometric detector");
                     }
