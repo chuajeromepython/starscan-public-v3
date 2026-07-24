@@ -27,7 +27,7 @@ public class BubbleScanner {
     private static final Scalar COLOUR_EMPTY  = new Scalar(0, 0, 255, 255);   // blue
     private static final Scalar COLOUR_RED    = new Scalar(255, 0, 0, 255);   // red (undetected/incorrect)
     private static final Scalar COLOUR_BLACK  = new Scalar(0, 0, 0, 255);     // black (no answer key)
-    private static final Scalar COLOUR_MULTI  = new Scalar(0, 255, 255, 255); // yellow (multiple marks)
+    private static final Scalar COLOUR_MULTI  = new Scalar(255, 255, 0, 255); // yellow (multiple marks)
 
     private static final char[] CHOICE_LABELS = {'A', 'B', 'C', 'D'};
 
@@ -122,7 +122,7 @@ public class BubbleScanner {
         return scanLnrBlock(block, scaleX, scaleY, scaledRadius, gray, overlay, offX, offY, result,
                 DEFAULT_LNR_PROFILE);
     }
-
+    // Color yellow multiple shaded LRN numbers
     private String scanLnrBlock(OmrBlock block, double scaleX, double scaleY,
                                 int scaledRadius, Mat gray, Mat overlay,
                                 int offX, int offY, ScanResult result,
@@ -140,11 +140,13 @@ public class BubbleScanner {
         }
 
         StringBuilder lnr = new StringBuilder();
+        boolean[] doubleShadedCols = new boolean[block.cols];
         for (int col = 0; col < block.cols; col++) {
             LnrColumnDecision decision = classifyLnrColumn(ratios[col], profile);
 
             if (decision.kind == LnrColumnDecision.Kind.DOUBLE_SHADED) {
                 lnr.append('X');
+                doubleShadedCols[col] = true;
                 result.doubleShadedLnrPositions.add(col);
                 Log.w(TAG, String.format("LNR col %d: DOUBLE-SHADED (%d bubbles filled)",
                         col, decision.filledCount));
@@ -168,7 +170,7 @@ public class BubbleScanner {
                 int cx = (int) Math.round((block.startX + col * block.dx) * scaleX) + offX;
                 int cy = (int) Math.round((block.startY + row * block.dy) * scaleY) + offY;
                 boolean filled = ratios[col][row] >= profile.fillThreshold;
-                drawBubble(overlay, cx, cy, scaledRadius, filled);
+                drawBubble(overlay, cx, cy, scaledRadius, filled, doubleShadedCols[col]);
             }
         }
 
@@ -213,13 +215,23 @@ public class BubbleScanner {
             questionCounter++;
             StringBuilder detected = new StringBuilder();
 
+            // Pass 1: measure every column in this row before drawing anything,
+            // so we know whether the row is multi-marked before we pick a colour.
+            int[] cxs = new int[block.cols];
+            int[] cys = new int[block.cols];
+            boolean[] filledFlags = new boolean[block.cols];
+            Boolean[] isCorrectFlags = new Boolean[block.cols];
+
             for (int col = 0; col < block.cols; col++) {
                 int cx = (int) Math.round((block.startX + col * block.dx) * scaleX) + offX;
                 int cy = (int) Math.round((block.startY + row * block.dy) * scaleY) + offY;
+                cxs[col] = cx;
+                cys[col] = cy;
 
                 double ratio = measureFillRatio(gray, cx, cy, scaledRadius,
                         DEFAULT_INNER_MASK_RADIUS_FACTOR);
                 boolean filled = ratio >= QUESTION_FILL_THRESHOLD;
+                filledFlags[col] = filled;
 
                 if (filled && col < CHOICE_LABELS.length) {
                     detected.append(CHOICE_LABELS[col]);
@@ -232,14 +244,21 @@ public class BubbleScanner {
                         isCorrect = String.valueOf(CHOICE_LABELS[col]).equals(key);
                     }
                 }
-
-                drawBubble(overlay, cx, cy, scaledRadius, filled, isCorrect);
+                isCorrectFlags[col] = isCorrect;
             }
 
             String answer = detected.toString();
+            boolean isMultiMark = answer.length() > 1;
+
+            // Pass 2: draw every column now that isMultiMark is known for the whole row.
+            for (int col = 0; col < block.cols; col++) {
+                drawBubble(overlay, cxs[col], cys[col], scaledRadius,
+                        filledFlags[col], isCorrectFlags[col], isMultiMark);
+            }
+
             result.answers.put(questionCounter, answer);
 
-            if (answer.length() > 1) {
+            if (isMultiMark) {
                 result.multiLetterAnswerPositions.add(questionCounter);
                 Log.w(TAG, String.format(
                         "Q%d: MULTI-LETTER answer detected (%s) — needs teacher correction before grading/upload",
@@ -398,6 +417,16 @@ public class BubbleScanner {
         org.opencv.core.Point centre = new org.opencv.core.Point(cx, cy);
         if (filled) {
             Scalar color = (isCorrect == null) ? COLOUR_BLACK : (isCorrect ? COLOUR_FILLED : COLOUR_RED);
+            Imgproc.circle(overlay, centre, radius, color, -1);
+        } else {
+            Imgproc.circle(overlay, centre, radius, COLOUR_EMPTY, 1);
+        }
+    }
+
+    private void drawBubble(Mat overlay, int cx, int cy, int radius, boolean filled, boolean isMultiMark) {
+        org.opencv.core.Point centre = new org.opencv.core.Point(cx, cy);
+        if (filled) {
+            Scalar color = isMultiMark ? COLOUR_MULTI : COLOUR_FILLED;
             Imgproc.circle(overlay, centre, radius, color, -1);
         } else {
             Imgproc.circle(overlay, centre, radius, COLOUR_EMPTY, 1);

@@ -574,7 +574,7 @@ public class ResultActivity extends AppCompatActivity {
                         String summary;
                         if (scanResult.hasDoubleShadedLrn()) {
                             summary = String.format(
-                                    "⚠ %s | LRN: DOUBLE-SHADED (%d column(s)) | %d / %d answers",
+                                    "⚠ %s | LRN: MULTI-SHADED (%d column(s)) | %d / %d answers",
                                     scanResult.templateId,
                                     scanResult.doubleShadedLnrPositions.size(),
                                     scanResult.getAnsweredCount(),
@@ -722,9 +722,9 @@ public class ResultActivity extends AppCompatActivity {
             }
             int count = scanResult.doubleShadedLnrPositions.size();
 
-            tvLrnStatus.setText("⚠ " + count + " double-shaded");
+            tvLrnStatus.setText("⚠ " + count + " multi-shaded");
             tvLrnStatus.setTextColor(0xFFDC2626);
-            tvLrnHelper.setText("⚠ DOUBLE-SHADED LRN DETECTED\n\n"
+            tvLrnHelper.setText("⚠ MULTI-SHADED LRN DETECTED\n\n"
                     + count + " LRN column(s) have two or more shaded bubbles "
                     + "at position(s): " + positions + ".\n\n"
                     + "Manually enter the correct 12-digit LRN below, "
