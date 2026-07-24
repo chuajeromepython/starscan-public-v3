@@ -28,6 +28,10 @@
         <activity android:name=".camera.CameraActivity"
             android:screenOrientation="portrait"/>
         <activity android:name=".DashboardActivity"/>
+        <activity android:name=".camera.BasicCameraActivity"
+            android:screenOrientation="portrait"/>
+        <activity android:name=".ui.BasicPreviewActivity"
+            android:screenOrientation="portrait"/>
 
         <!-- QR Scanner -->
         <activity android:name=".camera.QrScannerActivity"/>

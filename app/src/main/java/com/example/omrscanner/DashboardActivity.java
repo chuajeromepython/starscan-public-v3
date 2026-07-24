@@ -75,6 +75,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private static final String CAMERA_MODE_PREFS = "camera_mode_prefs";
     private static final String PREF_FIXED_MOUNT_MODE = "fixed_mount_mode"; // kept, no longer surfaced in UI
     private static final String PREF_TILT_AGNOSTIC_MODE = "tilt_agnostic_mode";
+    private static final String PREF_BASIC_MODE = "basic_mode";
 
     // ── Intent extras used by CameraActivity / PreviewActivity ──
     public static final String EXTRA_SHEET_TYPE = "sheet_type";
@@ -1407,14 +1408,20 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private void showCameraModeDialog() {
         final String[] cameraModes = {
                 "Handheld Scan\nUse this when holding the phone and moving it closer to the sheet.",
-                "Tilt Agnostic Mode (Beta)\nAuto-detects the sheet's corners in any orientation — no need to line up guide squares or tilt the phone."
+                "Tilt Agnostic Mode (Beta)\nAuto-detects the sheet's corners in any orientation — no need to line up guide squares or tilt the phone.",
+                "Basic Camera\nJust a plain camera — snap a photo of the sheet and preview it. No auto-detection."
         };
 
         android.content.SharedPreferences prefs =
                 getSharedPreferences(CAMERA_MODE_PREFS, MODE_PRIVATE);
-        // NOTE: PREF_FIXED_MOUNT_MODE / fixedMountMode logic below is intentionally kept
-        // intact — it's just no longer exposed as a selectable option in this dialog.
-        int defaultSelection = prefs.getBoolean(PREF_TILT_AGNOSTIC_MODE, false) ? 1 : 0;
+        int defaultSelection;
+        if (prefs.getBoolean(PREF_BASIC_MODE, false)) {
+            defaultSelection = 2;
+        } else if (prefs.getBoolean(PREF_TILT_AGNOSTIC_MODE, false)) {
+            defaultSelection = 1;
+        } else {
+            defaultSelection = 0;
+        }
         final int[] selectedMode = {defaultSelection};
 
         new com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_OMRScanner_Dialog)
@@ -1422,11 +1429,27 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 .setSingleChoiceItems(cameraModes, defaultSelection, (dialog, which) -> selectedMode[0] = which)
                 .setPositiveButton("Open Camera", (dialog, which) -> {
                     boolean tiltAgnosticMode = selectedMode[0] == 1;
-                    prefs.edit().putBoolean(PREF_TILT_AGNOSTIC_MODE, tiltAgnosticMode).apply();
-                    launchCamera(false, tiltAgnosticMode);
+                    boolean basicMode = selectedMode[0] == 2;
+                    prefs.edit()
+                            .putBoolean(PREF_TILT_AGNOSTIC_MODE, tiltAgnosticMode)
+                            .putBoolean(PREF_BASIC_MODE, basicMode)
+                            .apply();
+                    if (basicMode) {
+                        launchBasicCamera();
+                    } else {
+                        launchCamera(false, tiltAgnosticMode);
+                    }
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
+    }
+
+    private void launchBasicCamera() {
+        Intent intent = new Intent(this, com.example.omrscanner.camera.BasicCameraActivity.class);
+        if (selectedSheetType != null) intent.putExtra(EXTRA_SHEET_TYPE, selectedSheetType);
+        if (selectedClass != null) intent.putExtra(EXTRA_CLASS_ID, selectedClass.getId());
+        if (selectedActivity != null) intent.putExtra(EXTRA_ACTIVITY_ID, selectedActivity.getId());
+        startActivity(intent);
     }
 
     private void launchCamera(boolean fixedMountMode) {
