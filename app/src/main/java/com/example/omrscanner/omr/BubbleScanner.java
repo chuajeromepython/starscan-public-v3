@@ -27,6 +27,7 @@ public class BubbleScanner {
     private static final Scalar COLOUR_EMPTY  = new Scalar(0, 0, 255, 255);   // blue
     private static final Scalar COLOUR_RED    = new Scalar(255, 0, 0, 255);   // red (undetected/incorrect)
     private static final Scalar COLOUR_BLACK  = new Scalar(0, 0, 0, 255);     // black (no answer key)
+    private static final Scalar COLOUR_MULTI  = new Scalar(0, 255, 255, 255); // yellow (multiple marks)
 
     private static final char[] CHOICE_LABELS = {'A', 'B', 'C', 'D'};
 
@@ -397,6 +398,21 @@ public class BubbleScanner {
         org.opencv.core.Point centre = new org.opencv.core.Point(cx, cy);
         if (filled) {
             Scalar color = (isCorrect == null) ? COLOUR_BLACK : (isCorrect ? COLOUR_FILLED : COLOUR_RED);
+            Imgproc.circle(overlay, centre, radius, color, -1);
+        } else {
+            Imgproc.circle(overlay, centre, radius, COLOUR_EMPTY, 1);
+        }
+    }
+
+    private void drawBubble(Mat overlay, int cx, int cy, int radius, boolean filled, Boolean isCorrect, boolean isMultiMark) {
+        org.opencv.core.Point centre = new org.opencv.core.Point(cx, cy);
+        if (filled) {
+            Scalar color;
+            if (isMultiMark) {
+                color = COLOUR_MULTI;
+            } else {
+                color = (isCorrect == null) ? COLOUR_BLACK : (isCorrect ? COLOUR_FILLED : COLOUR_RED);
+            }
             Imgproc.circle(overlay, centre, radius, color, -1);
         } else {
             Imgproc.circle(overlay, centre, radius, COLOUR_EMPTY, 1);

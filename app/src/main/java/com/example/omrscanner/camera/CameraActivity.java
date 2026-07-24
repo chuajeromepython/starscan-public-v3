@@ -100,6 +100,7 @@ public class CameraActivity extends AppCompatActivity {
     //private static final int REQUIRED_CONSECUTIVE_DETECTIONS = 5;
     //private static final int REQUIRED_CONSECUTIVE_DETECTIONS = 8;
     private static final int REQUIRED_CONSECUTIVE_DETECTIONS = 1;
+    private static final int REQUIRED_CONSECUTIVE_DETECTIONS_TILT_AGNOSTIC = 15;
 
     // How long each hint stays visible before cycling (milliseconds)
     private static final long HINT_DISPLAY_DURATION_MS = 5000;
@@ -621,7 +622,7 @@ public class CameraActivity extends AppCompatActivity {
             onAnchorsDetected(viewPoints, false);
 
             boolean captureStarted = false;
-            if (consecutiveDetections >= REQUIRED_CONSECUTIVE_DETECTIONS) {
+            if (consecutiveDetections >= REQUIRED_CONSECUTIVE_DETECTIONS_TILT_AGNOSTIC) {
                 captureStarted = triggerAutoCapture();
                 if (captureStarted) {
                     updateStatusTextForCaptureStarted();

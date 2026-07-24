@@ -18,9 +18,12 @@ import com.example.omrscanner.DashboardActivity;
 import com.example.omrscanner.R;
 import com.example.omrscanner.camera.BasicCameraActivity;
 
+import android.util.Log;
+
 public class BasicPreviewActivity extends AppCompatActivity {
 
     public static final String EXTRA_IMAGE_PATH = "basic_preview_image_path";
+    private static final String TAG = "BasicPreviewActivity";
 
     private String imagePath;
     private String selectedSheetType;
@@ -72,6 +75,8 @@ public class BasicPreviewActivity extends AppCompatActivity {
     }
 
     private Bitmap rotateToNormalOrientation(Bitmap raw, int rotationBucket) {
+        Log.d(TAG, "ROTATE_DECISION: bucket=" + rotationBucket
+                + " rawSize=" + raw.getWidth() + "x" + raw.getHeight());
         float degrees;
         switch (rotationBucket) {
             case -90: degrees = 90f; break;
@@ -79,6 +84,7 @@ public class BasicPreviewActivity extends AppCompatActivity {
             case 180: degrees = 180f; break;
             default:  return raw;
         }
+        Log.d(TAG, "ROTATE_DECISION: applying degrees=" + degrees);
         Matrix matrix = new Matrix();
         matrix.postRotate(degrees);
         Bitmap rotated = Bitmap.createBitmap(raw, 0, 0, raw.getWidth(), raw.getHeight(), matrix, true);

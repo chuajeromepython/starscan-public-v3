@@ -261,6 +261,9 @@ public class BasicCameraActivity extends AppCompatActivity {
                 } else {
                     rotation = 90;
                 }
+                if (rotation != currentIconRotation) {
+                    Log.d(TAG, "ORIENTATION_BUCKET: raw=" + orientation + " -> bucket=" + rotation);
+                }
                 currentIconRotation = rotation;
             }
         };
@@ -274,6 +277,7 @@ public class BasicCameraActivity extends AppCompatActivity {
 
         File photoFile = new File(getExternalFilesDir(null), "basic_capture.jpg");
         final int captureRotationBucket = currentIconRotation;
+        Log.d(TAG, "CAPTURE: bucket=" + captureRotationBucket);
 
         ImageCapture.OutputFileOptions options =
                 new ImageCapture.OutputFileOptions.Builder(photoFile).build();
