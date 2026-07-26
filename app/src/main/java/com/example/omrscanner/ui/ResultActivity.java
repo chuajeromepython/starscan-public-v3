@@ -344,6 +344,9 @@ public class ResultActivity extends AppCompatActivity {
                 // variable (rather than reassigning rawCapture) so it stays
                 // effectively final and can still be captured by the
                 // runOnUiThread lambdas further down.
+                // Can now correctly orient the caputured image
+                // 90 degrees CW if the captured image is taken on the left tilt
+                // -90 degrees CCW if the captured image is taken in the right tilt
                 final Bitmap original = tiltAgnosticMode
                         ? rotateToNormalReadingOrientation(rawCapture, captureRotationBucket)
                         : rawCapture;
