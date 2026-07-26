@@ -311,10 +311,18 @@ public class OMRRepository {
   }
 
   public void queryAssessmentList(String classId, String sheetTypeFilter, String search, String sortKey,
-      Callback<List<AssessmentListRow>> callback) {
+                                  Callback<List<AssessmentListRow>> callback) {
     executor.execute(() -> {
       List<AssessmentListRow> list = db.assessmentDao().queryAssessmentList(classId, sheetTypeFilter,
-          search, sortKey);
+              search, sortKey);
+      if (callback != null)
+        callback.onResult(list);
+    });
+  }
+
+  public void queryAllAssessments(Callback<List<AssessmentListRow>> callback) {
+    executor.execute(() -> {
+      List<AssessmentListRow> list = db.assessmentDao().queryAllAssessments();
       if (callback != null)
         callback.onResult(list);
     });

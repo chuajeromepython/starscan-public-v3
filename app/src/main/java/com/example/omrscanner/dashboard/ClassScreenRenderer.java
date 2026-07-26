@@ -231,10 +231,11 @@ public class ClassScreenRenderer {
         meta.setLayoutParams(mlp);
         card.addView(meta);
 
-        // Answer key badge + needs-correction badge (shown only when applicable)
+        // Class badge + answer key badge + needs-correction badge (shown only when applicable)
+        boolean hasClassBadge = row.className != null && !row.className.trim().isEmpty();
         boolean hasKeyBadge = row.answerKeyName != null && !row.answerKeyName.isEmpty();
         boolean hasCorrectionBadge = row.needsCorrectionCount > 0;
-        if (hasKeyBadge || hasCorrectionBadge) {
+        if (hasClassBadge || hasKeyBadge || hasCorrectionBadge) {
             LinearLayout badgeRow = new LinearLayout(activity);
             badgeRow.setOrientation(LinearLayout.HORIZONTAL);
             badgeRow.setGravity(Gravity.CENTER_VERTICAL);
@@ -242,6 +243,21 @@ public class ClassScreenRenderer {
                     ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             badgeRowLp.topMargin = ui.dp(6);
             badgeRow.setLayoutParams(badgeRowLp);
+
+            if (hasClassBadge) {
+                TextView classBadge = new TextView(activity);
+                classBadge.setText("🏫 " + row.className);
+                classBadge.setTextColor(Color.parseColor("#3730A3"));
+                classBadge.setTextSize(11);
+                classBadge.setTypeface(null, Typeface.ITALIC);
+                GradientDrawable classBadgeBg = new GradientDrawable();
+                classBadgeBg.setColor(Color.parseColor("#EEF2FF"));
+                classBadgeBg.setCornerRadius(ui.dp(8));
+                classBadgeBg.setStroke(ui.dp(1), Color.parseColor("#C7D2FE"));
+                classBadge.setBackground(classBadgeBg);
+                classBadge.setPadding(ui.dp(8), ui.dp(3), ui.dp(8), ui.dp(3));
+                badgeRow.addView(classBadge);
+            }
 
             if (hasKeyBadge) {
                 TextView keyBadge = new TextView(activity);
@@ -255,6 +271,10 @@ public class ClassScreenRenderer {
                 badgeBg.setStroke(ui.dp(1), Color.parseColor("#A7F3D0"));
                 keyBadge.setBackground(badgeBg);
                 keyBadge.setPadding(ui.dp(8), ui.dp(3), ui.dp(8), ui.dp(3));
+                LinearLayout.LayoutParams keyBadgeLp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                if (hasClassBadge) keyBadgeLp.leftMargin = ui.dp(6);
+                keyBadge.setLayoutParams(keyBadgeLp);
                 badgeRow.addView(keyBadge);
             }
 

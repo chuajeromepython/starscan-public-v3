@@ -46,4 +46,9 @@ public class AssessmentListRow {
   /** Number of scans in this assessment with at least one ambiguous (multi-letter) answer. */
   @ColumnInfo(name = "needsCorrectionCount")
   public int needsCorrectionCount;
+
+  /** Nullable: display name of the owning class (e.g. "9 — Gumamela"). Only populated by
+   *  the cross-class "all assessments" query — null for the per-class query. */
+  @ColumnInfo(name = "className")
+  public String className;
 }

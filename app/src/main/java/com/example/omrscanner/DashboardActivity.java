@@ -89,6 +89,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private static final String SCREEN_CLASS = "class";
     private static final String SCREEN_ACTIVITY = "activity";
     private static final String SCREEN_USER = "user";
+    private static final String SCREEN_ASSESSMENTS = "assessments";
 
     // ── Sort constants (delegated to renderers, kept here for initialisation) ──
     private static final String CLASS_SORT_NEWEST = HomeScreenRenderer.CLASS_SORT_NEWEST;
@@ -103,6 +104,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
     private String currentScreen = SCREEN_HOME;
     private String screenBeforeUserTab = SCREEN_HOME;
+    private String screenBeforeAssessmentsTab = SCREEN_HOME;
+    private boolean activityOpenedFromAssessmentsTab = false;
     private List<ClassFolder> classFolders = new ArrayList<>();
     private ClassFolder selectedClass = null;
     private ActivityFolder selectedActivity = null;
@@ -148,13 +151,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private TextView tvTeacherName;
     private LinearLayout teacherNameRow;
 
-    private View screenHome;
+    private View screenHome, screenAssessments;
     private ScrollView screenClass, screenActivity, screenUser;
 
     private android.widget.FrameLayout bottomNav;
-    private LinearLayout navHomeTab, navUserTab;
-    private ImageView navHomeIcon, navUserIcon;
-    private TextView navHomeLabel, navUserLabel;
+    private LinearLayout navHomeTab, navUserTab, navAssessmentsTab;
+    private ImageView navHomeIcon, navUserIcon, navAssessmentsIcon;
+    private TextView navHomeLabel, navUserLabel, navAssessmentsLabel;
     private TextView userNameText, userSchoolText;
     private TextView userStatClasses, userStatAssessments, userStatScans, userStatAnswerKeys;
     private TextView userDetailFullName, userDetailUsername, userDetailUserId, userDetailSchool,
@@ -162,6 +165,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private LinearLayout userRescanRow;
 
     private LinearLayout homeEmpty, homeClassList;
+    private TextView homeSummaryClassCount, homeSummaryAssessmentCount;
     private EditText homeClassSearchInput;
     private TextView homeClassSortPicker;
     private LinearLayout homeGradeFilterChips, homeSchoolYearFilterChips;
@@ -174,6 +178,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private TextView classAssessmentCount;
     private EditText classAssessmentSearchInput;
     private TextView classAssessmentSortPicker;
+    private LinearLayout assessmentsAllList, assessmentsAllEmpty;
+    private TextView assessmentsAllCount;
+    private TextView assessmentsSummaryTeacher, assessmentsSummaryCount, assessmentsSummaryClassCount;
 
     private CardView scanCtaCard;
     private LinearLayout scansHeader, activityScanList, activityScansEmpty;
@@ -314,7 +321,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     selectHomeTab();
                 } else if (SCREEN_ACTIVITY.equals(currentScreen)) {
                     selectedActivity = null;
-                    showScreen(SCREEN_CLASS);
+                    showScreen(activityOpenedFromAssessmentsTab ? SCREEN_ASSESSMENTS : SCREEN_CLASS);
                 } else if (SCREEN_CLASS.equals(currentScreen)) {
                     selectedClass = null;
                     showScreen(SCREEN_HOME);
@@ -339,6 +346,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         teacherNameRow = findViewById(R.id.teacherNameRow);
 
         screenHome = findViewById(R.id.screenHome);
+        screenAssessments = findViewById(R.id.screenAssessments);
         screenClass = findViewById(R.id.screenClass);
         screenActivity = findViewById(R.id.screenActivity);
         screenUser = findViewById(R.id.screenUser);
@@ -346,10 +354,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         bottomNav = findViewById(R.id.bottomNav);
         navHomeTab = findViewById(R.id.navHomeTab);
         navUserTab = findViewById(R.id.navUserTab);
+        navAssessmentsTab = findViewById(R.id.navAssessmentsTab);
         navHomeIcon = findViewById(R.id.navHomeIcon);
         navUserIcon = findViewById(R.id.navUserIcon);
+        navAssessmentsIcon = findViewById(R.id.navAssessmentsIcon);
         navHomeLabel = findViewById(R.id.navHomeLabel);
         navUserLabel = findViewById(R.id.navUserLabel);
+        navAssessmentsLabel = findViewById(R.id.navAssessmentsLabel);
         userNameText = findViewById(R.id.userNameText);
         userSchoolText = findViewById(R.id.userSchoolText);
         userRescanRow = findViewById(R.id.userRescanRow);
@@ -374,6 +385,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         homeSchoolYearFilterChips = findViewById(R.id.homeSchoolYearFilterChips);
         homeFilterPanel = findViewById(R.id.homeFilterPanel);
         homeFilterToggle = findViewById(R.id.homeFilterToggle);
+        homeSummaryClassCount = findViewById(R.id.homeSummaryClassCount);
+        homeSummaryAssessmentCount = findViewById(R.id.homeSummaryAssessmentCount);
 
         classTeacherLabel = findViewById(R.id.classTeacherLabel);
         classNameLabel = findViewById(R.id.classNameLabel);
@@ -384,6 +397,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         classAssessmentCount = findViewById(R.id.classAssessmentCount);
         classAssessmentSearchInput = findViewById(R.id.classAssessmentSearchInput);
         classAssessmentSortPicker = findViewById(R.id.classAssessmentSortPicker);
+        assessmentsAllList = findViewById(R.id.assessmentsAllList);
+        assessmentsAllEmpty = findViewById(R.id.assessmentsAllEmpty);
+        assessmentsAllCount = findViewById(R.id.assessmentsAllCount);
+        assessmentsSummaryTeacher = findViewById(R.id.assessmentsSummaryTeacher);
+        assessmentsSummaryCount = findViewById(R.id.assessmentsSummaryCount);
+        assessmentsSummaryClassCount = findViewById(R.id.assessmentsSummaryClassCount);
 
         scanCtaCard = findViewById(R.id.scanCtaCard);
         scanCtaSub = findViewById(R.id.scanCtaSub);
@@ -414,6 +433,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
         navHomeTab.setOnClickListener(v -> selectHomeTab());
         navUserTab.setOnClickListener(v -> selectUserTab());
+        navAssessmentsTab.setOnClickListener(v -> selectAssessmentsTab());
 
         btnBack.setOnClickListener(v -> navigateBack());
         btnUpload.setOnClickListener(v -> dialogs.showGlobalUploadClassDialog());
@@ -442,6 +462,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         });
 
         findViewById(R.id.homeSyncClassRow).setOnClickListener(v -> onSyncClicked());
+        findViewById(R.id.classSyncStudentsRow).setOnClickListener(v -> onAssessmentSyncClicked());
 
         fabAssessmentSyncRow.setOnClickListener(v -> {
             closeFabMenu();
@@ -458,7 +479,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         breadcrumbClass.setOnClickListener(v -> {
             if (SCREEN_ACTIVITY.equals(currentScreen)) {
                 selectedActivity = null;
-                showScreen(SCREEN_CLASS);
+                showScreen(activityOpenedFromAssessmentsTab ? SCREEN_ASSESSMENTS : SCREEN_CLASS);
             }
         });
         // Go directly to camera — no scan method picker
@@ -1119,6 +1140,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         screenClass.setVisibility(View.GONE);
         screenActivity.setVisibility(View.GONE);
         screenUser.setVisibility(View.GONE);
+        screenAssessments.setVisibility(View.GONE);
 
         switch (screen) {
             case SCREEN_HOME:
@@ -1198,34 +1220,66 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 breadcrumbDivider.setVisibility(View.GONE);
                 refreshUserScreen();
                 break;
+
+            case SCREEN_ASSESSMENTS:
+                screenAssessments.setVisibility(View.VISIBLE);
+                btnBack.setVisibility(View.GONE);
+                fabMain.setVisibility(View.GONE);
+                topBarTitle.setText("Assessments");
+                topBarBadge.setVisibility(View.GONE);
+                breadcrumbBar.setVisibility(View.GONE);
+                breadcrumbDivider.setVisibility(View.GONE);
+                renderAssessmentsScreen();
+                break;
         }
 
-        updateBottomNavSelection(SCREEN_USER.equals(screen));
+        updateBottomNavSelection(screen);
     }
 
     /** Switches to the Home tab's remembered screen (called by the tab tap or back button). */
     private void selectHomeTab() {
         if (SCREEN_USER.equals(currentScreen)) {
             showScreen(screenBeforeUserTab != null ? screenBeforeUserTab : SCREEN_HOME);
+        } else if (SCREEN_ASSESSMENTS.equals(currentScreen)) {
+            showScreen(screenBeforeAssessmentsTab != null ? screenBeforeAssessmentsTab : SCREEN_HOME);
         }
     }
 
-    /** Switches to the User tab, remembering whatever screen was active before. */
+    /** Switches to the User tab, remembering whatever content screen was active before. */
     private void selectUserTab() {
         if (!SCREEN_USER.equals(currentScreen)) {
-            screenBeforeUserTab = currentScreen;
+            if (!SCREEN_ASSESSMENTS.equals(currentScreen)) {
+                screenBeforeUserTab = currentScreen;
+            }
             showScreen(SCREEN_USER);
         }
     }
 
+    /** Switches to the Assessments tab, remembering whatever content screen was active before. */
+    private void selectAssessmentsTab() {
+        if (!SCREEN_ASSESSMENTS.equals(currentScreen)) {
+            if (!SCREEN_USER.equals(currentScreen)) {
+                screenBeforeAssessmentsTab = currentScreen;
+            }
+            showScreen(SCREEN_ASSESSMENTS);
+        }
+    }
+
     /** Colors the active vs inactive tab icon/label. */
-    private void updateBottomNavSelection(boolean userTabActive) {
+    private void updateBottomNavSelection(String screen) {
         int activeColor = Color.parseColor("#FFFFFF");
         int inactiveColor = Color.parseColor("#CCFFFFFF");
-        navHomeIcon.setColorFilter(userTabActive ? inactiveColor : activeColor);
-        navHomeLabel.setTextColor(userTabActive ? inactiveColor : activeColor);
-        navUserIcon.setColorFilter(userTabActive ? activeColor : inactiveColor);
-        navUserLabel.setTextColor(userTabActive ? activeColor : inactiveColor);
+
+        boolean userActive = SCREEN_USER.equals(screen);
+        boolean assessmentsActive = SCREEN_ASSESSMENTS.equals(screen);
+        boolean homeActive = !userActive && !assessmentsActive;
+
+        navHomeIcon.setColorFilter(homeActive ? activeColor : inactiveColor);
+        navHomeLabel.setTextColor(homeActive ? activeColor : inactiveColor);
+        navAssessmentsIcon.setColorFilter(assessmentsActive ? activeColor : inactiveColor);
+        navAssessmentsLabel.setTextColor(assessmentsActive ? activeColor : inactiveColor);
+        navUserIcon.setColorFilter(userActive ? activeColor : inactiveColor);
+        navUserLabel.setTextColor(userActive ? activeColor : inactiveColor);
     }
 
     /** Populates the User tab with the currently active user's info, activity stats, and account details. */
@@ -1311,7 +1365,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 break;
             case SCREEN_ACTIVITY:
                 selectedActivity = null;
-                showScreen(SCREEN_CLASS);
+                showScreen(activityOpenedFromAssessmentsTab ? SCREEN_ASSESSMENTS : SCREEN_CLASS);
                 break;
         }
     }
@@ -1370,7 +1424,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private void renderHomeScreen() {
         homeClassList.removeAllViews();
 
-        TextView homeClassCount = findViewById(R.id.homeClassCount);
+        int totalAssessments = 0;
+        for (ClassFolder c : classFolders) {
+            totalAssessments += c.getActivityCount();
+        }
+        homeSummaryClassCount.setText(String.valueOf(classFolders.size()));
+        homeSummaryAssessmentCount.setText(String.valueOf(totalAssessments));
 
         homeRenderer.updateFilterToggleAppearance(homeFilterToggle, homeFilterPanelVisible,
                 selectedClassGradeFilter, selectedClassSchoolYearFilter, selectedClassSort);
@@ -1400,7 +1459,6 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     if (stale) return;
 
                     int rowCount = (rows != null) ? rows.size() : 0;
-                    if (homeClassCount != null) homeClassCount.setText(rowCount + " total");
 
                     if (rowCount == 0) {
                         homeEmpty.setVisibility(View.VISIBLE);
@@ -1503,10 +1561,75 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                         return;
                                     }
                                     selectedActivity = a;
+                                    activityOpenedFromAssessmentsTab = false;
                                     showScreen(SCREEN_ACTIVITY);
                                 }));
                     }
                 }));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // RENDER — ASSESSMENTS (all classes)
+    // ═══════════════════════════════════════════════════════════════
+
+    private void renderAssessmentsScreen() {
+        assessmentsAllList.removeAllViews();
+
+        String summaryTeacherName = (activeUserFirstName != null && !activeUserFirstName.isEmpty())
+                ? activeUserFirstName
+                : globalTeacherName;
+        assessmentsSummaryTeacher.setText(summaryTeacherName != null && !summaryTeacherName.isEmpty()
+                ? summaryTeacherName : "Scan your QR code to set your name");
+        assessmentsSummaryClassCount.setText(String.valueOf(classFolders.size()));
+
+        repo.queryAllAssessments(rows -> runOnUiThread(() -> {
+            if (!SCREEN_ASSESSMENTS.equals(currentScreen)) return;
+
+            int rowCount = (rows != null) ? rows.size() : 0;
+            if (assessmentsAllCount != null) assessmentsAllCount.setText(String.valueOf(rowCount));
+            assessmentsSummaryCount.setText(String.valueOf(rowCount));
+
+            if (rowCount == 0) {
+                assessmentsAllEmpty.setVisibility(View.VISIBLE);
+                assessmentsAllList.setVisibility(View.GONE);
+                return;
+            }
+            assessmentsAllEmpty.setVisibility(View.GONE);
+            assessmentsAllList.setVisibility(View.VISIBLE);
+            for (AssessmentListRow row : rows) {
+                ClassFolder ownerClass = findClassById(row.classId);
+                assessmentsAllList.addView(classRenderer.createActivityCard(
+                        row,
+                        () -> {
+                            ActivityFolder a = findActivityById(ownerClass, row.id);
+                            if (ownerClass != null && a != null) dialogs.showEditActivityDialog(a);
+                        },
+                        () -> {
+                            ActivityFolder a = findActivityById(ownerClass, row.id);
+                            if (ownerClass != null && a != null) dialogs.showAnswerKeyFolderDialog(a);
+                        },
+                        () -> {
+                            ActivityFolder a = findActivityById(ownerClass, row.id);
+                            if (ownerClass != null && a != null) dialogs.showDeleteActivityConfirmation(a);
+                        },
+                        () -> {
+                            ActivityFolder a = findActivityById(ownerClass, row.id);
+                            if (ownerClass != null && a != null) dialogs.showUploadAssessmentDialog(a, ownerClass);
+                        },
+                        () -> {
+                            ActivityFolder a = findActivityById(ownerClass, row.id);
+                            if (ownerClass == null || a == null) {
+                                ui.showErrorDialog("Assessment unavailable",
+                                        "The selected assessment could not be loaded. Please try again.");
+                                return;
+                            }
+                            selectedClass = ownerClass;
+                            selectedActivity = a;
+                            activityOpenedFromAssessmentsTab = true;
+                            showScreen(SCREEN_ACTIVITY);
+                        }));
+            }
+        }));
     }
 
     // ═══════════════════════════════════════════════════════════════

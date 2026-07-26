@@ -83,4 +83,22 @@ public interface AssessmentDao {
           + "a.created_at DESC")
   List<AssessmentListRow> queryAssessmentList(String classId, String sheetTypeFilter, String search,
                                               String sortKey);
+
+  @Query("SELECT a.id AS id, a.class_id AS classId, a.name AS name, "
+          + "a.sheet_type AS sheetType, a.exam_date AS examDate, "
+          + "a.exam_date_epoch AS examDateEpoch, a.created_at AS createdAt, "
+          + "a.answer_key_id AS answerKeyId, ak.name AS answerKeyName, "
+          + "(c.grade || ' \u2014 ' || c.section) AS className, "
+          + "COUNT(s.id) AS scanCount, "
+          + "(SELECT COUNT(DISTINCT sl.lrn) FROM student_lrn sl WHERE sl.className = a.class_id) AS syncedStudentCount, "
+          + "(SELECT COUNT(DISTINCT ans.scan_id) FROM answers ans "
+          + "  JOIN scans s2 ON s2.id = ans.scan_id "
+          + "  WHERE s2.assessment_id = a.id AND LENGTH(ans.answer) > 1) AS needsCorrectionCount "
+          + "FROM assessments a "
+          + "LEFT JOIN scans s ON s.assessment_id = a.id "
+          + "LEFT JOIN answer_keys ak ON ak.id = a.answer_key_id "
+          + "LEFT JOIN classes c ON c.id = a.class_id "
+          + "GROUP BY a.id "
+          + "ORDER BY a.created_at DESC")
+  List<AssessmentListRow> queryAllAssessments();
 }
