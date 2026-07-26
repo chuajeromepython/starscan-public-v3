@@ -46,6 +46,7 @@ import com.example.omrscanner.models.ActivityFolder;
 import com.example.omrscanner.models.ClassFolder;
 import com.example.omrscanner.models.ScanEntry;
 import com.example.omrscanner.ui.ScanDetailActivity;
+import android.widget.ImageView;
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 
 import java.text.SimpleDateFormat;
@@ -87,6 +88,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private static final String SCREEN_HOME = "home";
     private static final String SCREEN_CLASS = "class";
     private static final String SCREEN_ACTIVITY = "activity";
+    private static final String SCREEN_USER = "user";
 
     // ── Sort constants (delegated to renderers, kept here for initialisation) ──
     private static final String CLASS_SORT_NEWEST = HomeScreenRenderer.CLASS_SORT_NEWEST;
@@ -100,6 +102,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private int currentTeacherId = -1;
 
     private String currentScreen = SCREEN_HOME;
+    private String screenBeforeUserTab = SCREEN_HOME;
     private List<ClassFolder> classFolders = new ArrayList<>();
     private ClassFolder selectedClass = null;
     private ActivityFolder selectedActivity = null;
@@ -146,7 +149,14 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private LinearLayout teacherNameRow;
 
     private View screenHome;
-    private ScrollView screenClass, screenActivity;
+    private ScrollView screenClass, screenActivity, screenUser;
+
+    private android.widget.FrameLayout bottomNav;
+    private LinearLayout navHomeTab, navUserTab;
+    private ImageView navHomeIcon, navUserIcon;
+    private TextView navHomeLabel, navUserLabel;
+    private TextView userNameText, userSchoolText;
+    private LinearLayout userRescanRow;
 
     private LinearLayout homeEmpty, homeClassList;
     private EditText homeClassSearchInput;
@@ -297,7 +307,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
-                if (SCREEN_ACTIVITY.equals(currentScreen)) {
+                if (SCREEN_USER.equals(currentScreen)) {
+                    selectHomeTab();
+                } else if (SCREEN_ACTIVITY.equals(currentScreen)) {
                     selectedActivity = null;
                     showScreen(SCREEN_CLASS);
                 } else if (SCREEN_CLASS.equals(currentScreen)) {
@@ -326,6 +338,18 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         screenHome = findViewById(R.id.screenHome);
         screenClass = findViewById(R.id.screenClass);
         screenActivity = findViewById(R.id.screenActivity);
+        screenUser = findViewById(R.id.screenUser);
+
+        bottomNav = findViewById(R.id.bottomNav);
+        navHomeTab = findViewById(R.id.navHomeTab);
+        navUserTab = findViewById(R.id.navUserTab);
+        navHomeIcon = findViewById(R.id.navHomeIcon);
+        navUserIcon = findViewById(R.id.navUserIcon);
+        navHomeLabel = findViewById(R.id.navHomeLabel);
+        navUserLabel = findViewById(R.id.navUserLabel);
+        userNameText = findViewById(R.id.userNameText);
+        userSchoolText = findViewById(R.id.userSchoolText);
+        userRescanRow = findViewById(R.id.userRescanRow);
 
         homeEmpty = findViewById(R.id.homeEmpty);
         homeClassList = findViewById(R.id.homeClassList);
@@ -373,6 +397,11 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
         btnScanner = findViewById(R.id.btnScanner);
         btnScanner.setOnClickListener(v -> showQrGuide());
+
+        userRescanRow.setOnClickListener(v -> showQrGuide());
+
+        navHomeTab.setOnClickListener(v -> selectHomeTab());
+        navUserTab.setOnClickListener(v -> selectUserTab());
 
         btnBack.setOnClickListener(v -> navigateBack());
         btnUpload.setOnClickListener(v -> dialogs.showGlobalUploadClassDialog());
@@ -1075,6 +1104,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         screenHome.setVisibility(View.GONE);
         screenClass.setVisibility(View.GONE);
         screenActivity.setVisibility(View.GONE);
+        screenUser.setVisibility(View.GONE);
 
         switch (screen) {
             case SCREEN_HOME:
@@ -1143,7 +1173,60 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 breadcrumbActivity.setText(selectedActivity.getName());
                 renderActivityScreen();
                 break;
+
+            case SCREEN_USER:
+                screenUser.setVisibility(View.VISIBLE);
+                btnBack.setVisibility(View.GONE);
+                fabMain.setVisibility(View.GONE);
+                topBarTitle.setText("Profile");
+                topBarBadge.setVisibility(View.GONE);
+                breadcrumbBar.setVisibility(View.GONE);
+                breadcrumbDivider.setVisibility(View.GONE);
+                refreshUserScreen();
+                break;
         }
+
+        updateBottomNavSelection(SCREEN_USER.equals(screen));
+    }
+
+    /** Switches to the Home tab's remembered screen (called by the tab tap or back button). */
+    private void selectHomeTab() {
+        if (SCREEN_USER.equals(currentScreen)) {
+            showScreen(screenBeforeUserTab != null ? screenBeforeUserTab : SCREEN_HOME);
+        }
+    }
+
+    /** Switches to the User tab, remembering whatever screen was active before. */
+    private void selectUserTab() {
+        if (!SCREEN_USER.equals(currentScreen)) {
+            screenBeforeUserTab = currentScreen;
+            showScreen(SCREEN_USER);
+        }
+    }
+
+    /** Colors the active vs inactive tab icon/label. */
+    private void updateBottomNavSelection(boolean userTabActive) {
+        int activeColor = Color.parseColor("#FFFFFF");
+        int inactiveColor = Color.parseColor("#CCFFFFFF");
+        navHomeIcon.setColorFilter(userTabActive ? inactiveColor : activeColor);
+        navHomeLabel.setTextColor(userTabActive ? inactiveColor : activeColor);
+        navUserIcon.setColorFilter(userTabActive ? activeColor : inactiveColor);
+        navUserLabel.setTextColor(userTabActive ? activeColor : inactiveColor);
+    }
+
+    /** Populates the User tab with the currently active user's info. */
+    private void refreshUserScreen() {
+        String displayName = globalTeacherName != null ? globalTeacherName.trim() : "";
+        userNameText.setText(!displayName.isEmpty() ? displayName : "Scan your QR code to set your name");
+
+        repo.getActiveUser(user -> runOnUiThread(() -> {
+            if (user != null && user.school != null && !user.school.trim().isEmpty()) {
+                userSchoolText.setText(user.school);
+                userSchoolText.setVisibility(View.VISIBLE);
+            } else {
+                userSchoolText.setVisibility(View.GONE);
+            }
+        }));
     }
 
     private void navigateBack() {

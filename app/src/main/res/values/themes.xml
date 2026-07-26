@@ -11,6 +11,10 @@
 
     <style name="Theme.OMRScanner" parent="Base.Theme.OMRScanner" />
 
+    <style name="BottomNavLabel">
+        <item name="android:textSize">10sp</item>
+    </style>
+
     <!-- Shared custom-styled dialog used everywhere instead of the default AlertDialog look -->
     <style name="ThemeOverlay.OMRScanner.Dialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
         <item name="colorPrimary">@color/primary_blue</item>
