@@ -143,7 +143,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     // VIEWS
     // ═══════════════════════════════════════════════════════════════
 
-    private ImageButton btnBack, btnUpload, btnScanner; // btnScanner for qr scan
+    private ImageButton btnBack, btnUpload;
     private TextView topBarTitle, topBarBadge;
     private TextView tvTeacherName;
     private LinearLayout teacherNameRow;
@@ -156,6 +156,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private ImageView navHomeIcon, navUserIcon;
     private TextView navHomeLabel, navUserLabel;
     private TextView userNameText, userSchoolText;
+    private LinearLayout userSyncClassRow;
+    private TextView userStatClasses, userStatAssessments, userStatScans, userStatAnswerKeys;
+    private TextView userDetailFullName, userDetailUsername, userDetailUserId, userDetailSchool,
+            userDetailServerIp, userDetailStatus, userDetailMemberSince, userDetailLastUpdated;
     private LinearLayout userRescanRow;
 
     private LinearLayout homeEmpty, homeClassList;
@@ -350,6 +354,20 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         userNameText = findViewById(R.id.userNameText);
         userSchoolText = findViewById(R.id.userSchoolText);
         userRescanRow = findViewById(R.id.userRescanRow);
+        userSyncClassRow = findViewById(R.id.userSyncClassRow);
+        userSyncClassRow.setOnClickListener(v -> onSyncClicked());
+        userStatClasses = findViewById(R.id.userStatClasses);
+        userStatAssessments = findViewById(R.id.userStatAssessments);
+        userStatScans = findViewById(R.id.userStatScans);
+        userStatAnswerKeys = findViewById(R.id.userStatAnswerKeys);
+        userDetailFullName = findViewById(R.id.userDetailFullName);
+        userDetailUsername = findViewById(R.id.userDetailUsername);
+        userDetailUserId = findViewById(R.id.userDetailUserId);
+        userDetailSchool = findViewById(R.id.userDetailSchool);
+        userDetailServerIp = findViewById(R.id.userDetailServerIp);
+        userDetailStatus = findViewById(R.id.userDetailStatus);
+        userDetailMemberSince = findViewById(R.id.userDetailMemberSince);
+        userDetailLastUpdated = findViewById(R.id.userDetailLastUpdated);
 
         homeEmpty = findViewById(R.id.homeEmpty);
         homeClassList = findViewById(R.id.homeClassList);
@@ -395,9 +413,6 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         breadcrumbSep2 = findViewById(R.id.breadcrumbSep2);
         breadcrumbActivity = findViewById(R.id.breadcrumbActivity);
 
-        btnScanner = findViewById(R.id.btnScanner);
-        btnScanner.setOnClickListener(v -> showQrGuide());
-
         userRescanRow.setOnClickListener(v -> showQrGuide());
 
         navHomeTab.setOnClickListener(v -> selectHomeTab());
@@ -428,6 +443,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             closeFabMenu();
             onSyncClicked();
         });
+
+        findViewById(R.id.homeSyncClassRow).setOnClickListener(v -> onSyncClicked());
 
         fabAssessmentSyncRow.setOnClickListener(v -> {
             closeFabMenu();
@@ -1214,17 +1231,77 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         navUserLabel.setTextColor(userTabActive ? activeColor : inactiveColor);
     }
 
-    /** Populates the User tab with the currently active user's info. */
+    /** Populates the User tab with the currently active user's info, activity stats, and account details. */
     private void refreshUserScreen() {
         String displayName = globalTeacherName != null ? globalTeacherName.trim() : "";
         userNameText.setText(!displayName.isEmpty() ? displayName : "Scan your QR code to set your name");
 
-        repo.getActiveUser(user -> runOnUiThread(() -> {
-            if (user != null && user.school != null && !user.school.trim().isEmpty()) {
-                userSchoolText.setText(user.school);
-                userSchoolText.setVisibility(View.VISIBLE);
+        SimpleDateFormat sdf = new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault());
+
+        // Activity stats
+        repo.countClasses(count -> runOnUiThread(() ->
+                userStatClasses.setText(String.valueOf(count))));
+        repo.countAssessments(count -> runOnUiThread(() ->
+                userStatAssessments.setText(String.valueOf(count))));
+        repo.countScans(count -> runOnUiThread(() ->
+                userStatScans.setText(String.valueOf(count))));
+        repo.getAllAnswerKeys(keys -> runOnUiThread(() ->
+                userStatAnswerKeys.setText(String.valueOf(keys != null ? keys.size() : 0))));
+
+        // Local teacher profile timestamps
+        repo.getFirstTeacher(teacher -> runOnUiThread(() -> {
+            if (teacher != null) {
+                userDetailMemberSince.setText(sdf.format(new java.util.Date(teacher.createdAt)));
+                userDetailLastUpdated.setText(sdf.format(new java.util.Date(teacher.updatedAt)));
             } else {
+                userDetailMemberSince.setText("—");
+                userDetailLastUpdated.setText("—");
+            }
+        }));
+
+        // Linked backend account details
+        repo.getActiveUser(user -> runOnUiThread(() -> {
+            if (user != null) {
+                StringBuilder fullName = new StringBuilder();
+                if (user.firstName != null && !user.firstName.trim().isEmpty())
+                    fullName.append(user.firstName.trim());
+                if (user.middleName != null && !user.middleName.trim().isEmpty())
+                    fullName.append(" ").append(user.middleName.trim());
+                if (user.lastName != null && !user.lastName.trim().isEmpty())
+                    fullName.append(" ").append(user.lastName.trim());
+                if (user.suffix != null && !user.suffix.trim().isEmpty())
+                    fullName.append(" ").append(user.suffix.trim());
+                userDetailFullName.setText(fullName.length() > 0 ? fullName.toString() : "—");
+
+                userDetailUsername.setText(user.username != null && !user.username.trim().isEmpty()
+                        ? user.username : "—");
+                userDetailUserId.setText(user.userId != null ? String.valueOf(user.userId) : "—");
+                userDetailServerIp.setText(user.serverIp != null && !user.serverIp.trim().isEmpty()
+                        ? user.serverIp : "—");
+
+                if (user.school != null && !user.school.trim().isEmpty()) {
+                    userSchoolText.setText(user.school);
+                    userSchoolText.setVisibility(View.VISIBLE);
+                    userDetailSchool.setText(user.school);
+                } else {
+                    userSchoolText.setVisibility(View.GONE);
+                    userDetailSchool.setText("—");
+                }
+
+                boolean active = user.isActive == 1;
+                userDetailStatus.setText(active ? "Active" : "Inactive");
+                userDetailStatus.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                        Color.parseColor(active ? "#16A34A" : "#94A3B8")));
+            } else {
+                userDetailFullName.setText("—");
+                userDetailUsername.setText("—");
+                userDetailUserId.setText("—");
+                userDetailServerIp.setText("—");
+                userDetailSchool.setText("—");
                 userSchoolText.setVisibility(View.GONE);
+                userDetailStatus.setText("Not linked");
+                userDetailStatus.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                        Color.parseColor("#94A3B8")));
             }
         }));
     }
@@ -1296,22 +1373,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private void renderHomeScreen() {
         homeClassList.removeAllViews();
 
-        TextView statClasses = findViewById(R.id.statClasses);
-        TextView statActivities = findViewById(R.id.statActivities);
-        TextView statScans = findViewById(R.id.statScans);
         TextView homeClassCount = findViewById(R.id.homeClassCount);
-
-        int totalActivities = 0, totalScans = 0;
-        for (ClassFolder cls : classFolders) {
-            if (cls.getActivities() != null) {
-                totalActivities += cls.getActivities().size();
-                for (ActivityFolder act : cls.getActivities())
-                    totalScans += act.getScanCount();
-            }
-        }
-        if (statClasses != null) statClasses.setText(String.valueOf(classFolders.size()));
-        if (statActivities != null) statActivities.setText(String.valueOf(totalActivities));
-        if (statScans != null) statScans.setText(String.valueOf(totalScans));
 
         homeRenderer.updateFilterToggleAppearance(homeFilterToggle, homeFilterPanelVisible,
                 selectedClassGradeFilter, selectedClassSchoolYearFilter, selectedClassSort);
