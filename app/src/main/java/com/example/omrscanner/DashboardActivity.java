@@ -156,7 +156,6 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private ImageView navHomeIcon, navUserIcon;
     private TextView navHomeLabel, navUserLabel;
     private TextView userNameText, userSchoolText;
-    private LinearLayout userSyncClassRow;
     private TextView userStatClasses, userStatAssessments, userStatScans, userStatAnswerKeys;
     private TextView userDetailFullName, userDetailUsername, userDetailUserId, userDetailSchool,
             userDetailServerIp, userDetailStatus, userDetailMemberSince, userDetailLastUpdated;
@@ -354,8 +353,6 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         userNameText = findViewById(R.id.userNameText);
         userSchoolText = findViewById(R.id.userSchoolText);
         userRescanRow = findViewById(R.id.userRescanRow);
-        userSyncClassRow = findViewById(R.id.userSyncClassRow);
-        userSyncClassRow.setOnClickListener(v -> onSyncClicked());
         userStatClasses = findViewById(R.id.userStatClasses);
         userStatAssessments = findViewById(R.id.userStatAssessments);
         userStatScans = findViewById(R.id.userStatScans);
