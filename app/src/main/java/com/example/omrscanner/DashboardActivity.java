@@ -173,7 +173,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private android.widget.ImageView homeFilterToggle;
     private boolean homeFilterPanelVisible = false;
 
-    private TextView classTeacherLabel, classNameLabel, classActivityCount;
+    private TextView classTeacherLabel, classNameLabel, classActivityCount, homeTeacherLabel;
     private LinearLayout classEmpty, classActivityList, classSheetTabs;
     private TextView classAssessmentCount;
     private EditText classAssessmentSearchInput;
@@ -389,6 +389,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         homeSummaryAssessmentCount = findViewById(R.id.homeSummaryAssessmentCount);
 
         classTeacherLabel = findViewById(R.id.classTeacherLabel);
+        homeTeacherLabel = findViewById(R.id.homeTeacherLabel);
         classNameLabel = findViewById(R.id.classNameLabel);
         classActivityCount = findViewById(R.id.classActivityCount);
         classEmpty = findViewById(R.id.classEmpty);
@@ -1885,6 +1886,14 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             tvTeacherName.setText("Scan your QR code\nto set your name");
             tvTeacherName.setTextColor(Color.parseColor("#BFDBFE"));
             tvTeacherName.setTypeface(null, Typeface.NORMAL);
+        }
+
+        String fullTeacherName = (globalTeacherName != null && !globalTeacherName.isEmpty())
+                ? globalTeacherName
+                : displayName;
+        if (homeTeacherLabel != null) {
+            homeTeacherLabel.setText(fullTeacherName != null && !fullTeacherName.isEmpty()
+                    ? "Teacher: " + fullTeacherName : "Teacher: Unknown");
         }
     }
 
