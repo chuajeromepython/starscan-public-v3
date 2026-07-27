@@ -90,6 +90,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private static final String SCREEN_ACTIVITY = "activity";
     private static final String SCREEN_USER = "user";
     private static final String SCREEN_ASSESSMENTS = "assessments";
+    private static final String SCREEN_ANSWERKEYS = "answerkeys";
 
     // ── Sort constants (delegated to renderers, kept here for initialisation) ──
     private static final String CLASS_SORT_NEWEST = HomeScreenRenderer.CLASS_SORT_NEWEST;
@@ -103,8 +104,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private int currentTeacherId = -1;
 
     private String currentScreen = SCREEN_HOME;
-    private String screenBeforeUserTab = SCREEN_HOME;
-    private String screenBeforeAssessmentsTab = SCREEN_HOME;
+    private String screenBeforeChromeTab = SCREEN_HOME;
     private boolean activityOpenedFromAssessmentsTab = false;
     private List<ClassFolder> classFolders = new ArrayList<>();
     private ClassFolder selectedClass = null;
@@ -151,13 +151,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private TextView tvTeacherName;
     private LinearLayout teacherNameRow;
 
-    private View screenHome, screenAssessments;
+    private View screenHome, screenAssessments, screenAnswerKeys;
     private ScrollView screenClass, screenActivity, screenUser;
 
     private android.widget.FrameLayout bottomNav;
-    private LinearLayout navHomeTab, navUserTab, navAssessmentsTab;
-    private ImageView navHomeIcon, navUserIcon, navAssessmentsIcon;
-    private TextView navHomeLabel, navUserLabel, navAssessmentsLabel;
+    private LinearLayout navHomeTab, navUserTab, navAssessmentsTab, navAnswerKeysTab;
+    private ImageView navHomeIcon, navUserIcon, navAssessmentsIcon, navAnswerKeysIcon;
+    private TextView navHomeLabel, navUserLabel, navAssessmentsLabel, navAnswerKeysLabel;
     private TextView userNameText, userSchoolText;
     private TextView userStatClasses, userStatAssessments, userStatScans, userStatAnswerKeys;
     private TextView userDetailFullName, userDetailUsername, userDetailUserId, userDetailSchool,
@@ -181,6 +181,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private LinearLayout assessmentsAllList, assessmentsAllEmpty;
     private TextView assessmentsAllCount;
     private TextView assessmentsSummaryTeacher, assessmentsSummaryCount, assessmentsSummaryClassCount;
+
+    private LinearLayout answerKeysAllList, answerKeysAllEmpty;
+    private TextView answerKeysAllCount;
+    private TextView answerKeysSummaryCount, answerKeysSummarySheetTypes;
 
     private CardView scanCtaCard;
     private LinearLayout scansHeader, activityScanList, activityScansEmpty;
@@ -347,6 +351,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
         screenHome = findViewById(R.id.screenHome);
         screenAssessments = findViewById(R.id.screenAssessments);
+        screenAnswerKeys = findViewById(R.id.screenAnswerKeys);
         screenClass = findViewById(R.id.screenClass);
         screenActivity = findViewById(R.id.screenActivity);
         screenUser = findViewById(R.id.screenUser);
@@ -355,12 +360,15 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         navHomeTab = findViewById(R.id.navHomeTab);
         navUserTab = findViewById(R.id.navUserTab);
         navAssessmentsTab = findViewById(R.id.navAssessmentsTab);
+        navAnswerKeysTab = findViewById(R.id.navAnswerKeysTab);
         navHomeIcon = findViewById(R.id.navHomeIcon);
         navUserIcon = findViewById(R.id.navUserIcon);
         navAssessmentsIcon = findViewById(R.id.navAssessmentsIcon);
+        navAnswerKeysIcon = findViewById(R.id.navAnswerKeysIcon);
         navHomeLabel = findViewById(R.id.navHomeLabel);
         navUserLabel = findViewById(R.id.navUserLabel);
         navAssessmentsLabel = findViewById(R.id.navAssessmentsLabel);
+        navAnswerKeysLabel = findViewById(R.id.navAnswerKeysLabel);
         userNameText = findViewById(R.id.userNameText);
         userSchoolText = findViewById(R.id.userSchoolText);
         userRescanRow = findViewById(R.id.userRescanRow);
@@ -405,6 +413,11 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         assessmentsSummaryCount = findViewById(R.id.assessmentsSummaryCount);
         assessmentsSummaryClassCount = findViewById(R.id.assessmentsSummaryClassCount);
 
+        answerKeysAllList = findViewById(R.id.answerKeysAllList);
+        answerKeysAllEmpty = findViewById(R.id.answerKeysAllEmpty);
+        answerKeysAllCount = findViewById(R.id.answerKeysAllCount);
+        answerKeysSummaryCount = findViewById(R.id.answerKeysSummaryCount);
+        answerKeysSummarySheetTypes = findViewById(R.id.answerKeysSummarySheetTypes);
         scanCtaCard = findViewById(R.id.scanCtaCard);
         scanCtaSub = findViewById(R.id.scanCtaSub);
         scansHeader = findViewById(R.id.scansHeader);
@@ -435,6 +448,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         navHomeTab.setOnClickListener(v -> selectHomeTab());
         navUserTab.setOnClickListener(v -> selectUserTab());
         navAssessmentsTab.setOnClickListener(v -> selectAssessmentsTab());
+        navAnswerKeysTab.setOnClickListener(v -> selectAnswerKeysTab());
 
         btnBack.setOnClickListener(v -> navigateBack());
         btnUpload.setOnClickListener(v -> dialogs.showGlobalUploadClassDialog());
@@ -1142,6 +1156,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         screenActivity.setVisibility(View.GONE);
         screenUser.setVisibility(View.GONE);
         screenAssessments.setVisibility(View.GONE);
+        screenAnswerKeys.setVisibility(View.GONE);
 
         switch (screen) {
             case SCREEN_HOME:
@@ -1232,25 +1247,39 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 breadcrumbDivider.setVisibility(View.GONE);
                 renderAssessmentsScreen();
                 break;
+
+            case SCREEN_ANSWERKEYS:
+                screenAnswerKeys.setVisibility(View.VISIBLE);
+                btnBack.setVisibility(View.GONE);
+                fabMain.setVisibility(View.GONE);
+                topBarTitle.setText("Answer Keys");
+                topBarBadge.setVisibility(View.GONE);
+                breadcrumbBar.setVisibility(View.GONE);
+                breadcrumbDivider.setVisibility(View.GONE);
+                renderAnswerKeysScreen();
+                break;
         }
 
         updateBottomNavSelection(screen);
     }
 
+    /** True for the "chrome" tabs that sit alongside Home in the bottom nav. */
+    private boolean isChromeTab(String screen) {
+        return SCREEN_USER.equals(screen) || SCREEN_ASSESSMENTS.equals(screen) || SCREEN_ANSWERKEYS.equals(screen);
+    }
+
     /** Switches to the Home tab's remembered screen (called by the tab tap or back button). */
     private void selectHomeTab() {
-        if (SCREEN_USER.equals(currentScreen)) {
-            showScreen(screenBeforeUserTab != null ? screenBeforeUserTab : SCREEN_HOME);
-        } else if (SCREEN_ASSESSMENTS.equals(currentScreen)) {
-            showScreen(screenBeforeAssessmentsTab != null ? screenBeforeAssessmentsTab : SCREEN_HOME);
+        if (isChromeTab(currentScreen)) {
+            showScreen(screenBeforeChromeTab != null ? screenBeforeChromeTab : SCREEN_HOME);
         }
     }
 
     /** Switches to the User tab, remembering whatever content screen was active before. */
     private void selectUserTab() {
         if (!SCREEN_USER.equals(currentScreen)) {
-            if (!SCREEN_ASSESSMENTS.equals(currentScreen)) {
-                screenBeforeUserTab = currentScreen;
+            if (!isChromeTab(currentScreen)) {
+                screenBeforeChromeTab = currentScreen;
             }
             showScreen(SCREEN_USER);
         }
@@ -1259,10 +1288,20 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     /** Switches to the Assessments tab, remembering whatever content screen was active before. */
     private void selectAssessmentsTab() {
         if (!SCREEN_ASSESSMENTS.equals(currentScreen)) {
-            if (!SCREEN_USER.equals(currentScreen)) {
-                screenBeforeAssessmentsTab = currentScreen;
+            if (!isChromeTab(currentScreen)) {
+                screenBeforeChromeTab = currentScreen;
             }
             showScreen(SCREEN_ASSESSMENTS);
+        }
+    }
+
+    /** Switches to the Answer Keys tab, remembering whatever content screen was active before. */
+    private void selectAnswerKeysTab() {
+        if (!SCREEN_ANSWERKEYS.equals(currentScreen)) {
+            if (!isChromeTab(currentScreen)) {
+                screenBeforeChromeTab = currentScreen;
+            }
+            showScreen(SCREEN_ANSWERKEYS);
         }
     }
 
@@ -1273,12 +1312,15 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
         boolean userActive = SCREEN_USER.equals(screen);
         boolean assessmentsActive = SCREEN_ASSESSMENTS.equals(screen);
-        boolean homeActive = !userActive && !assessmentsActive;
+        boolean answerKeysActive = SCREEN_ANSWERKEYS.equals(screen);
+        boolean homeActive = !userActive && !assessmentsActive && !answerKeysActive;
 
         navHomeIcon.setColorFilter(homeActive ? activeColor : inactiveColor);
         navHomeLabel.setTextColor(homeActive ? activeColor : inactiveColor);
         navAssessmentsIcon.setColorFilter(assessmentsActive ? activeColor : inactiveColor);
         navAssessmentsLabel.setTextColor(assessmentsActive ? activeColor : inactiveColor);
+        navAnswerKeysIcon.setColorFilter(answerKeysActive ? activeColor : inactiveColor);
+        navAnswerKeysLabel.setTextColor(answerKeysActive ? activeColor : inactiveColor);
         navUserIcon.setColorFilter(userActive ? activeColor : inactiveColor);
         navUserLabel.setTextColor(userActive ? activeColor : inactiveColor);
     }
@@ -1631,6 +1673,38 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                         }));
             }
         }));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // RENDER — ANSWER KEYS (all)
+    // ═══════════════════════════════════════════════════════════════
+
+    private void renderAnswerKeysScreen() {
+        answerKeysAllList.removeAllViews();
+
+        List<AnswerKeyEntity> keys = (answerKeys != null) ? answerKeys : new ArrayList<>();
+
+        java.util.Set<String> sheetTypes = new java.util.HashSet<>();
+        for (AnswerKeyEntity k : keys) {
+            if (k.sheetType != null && !k.sheetType.trim().isEmpty()) sheetTypes.add(k.sheetType);
+        }
+        answerKeysSummaryCount.setText(String.valueOf(keys.size()));
+        answerKeysSummarySheetTypes.setText(String.valueOf(sheetTypes.size()));
+        if (answerKeysAllCount != null) answerKeysAllCount.setText(String.valueOf(keys.size()));
+
+        if (keys.isEmpty()) {
+            answerKeysAllEmpty.setVisibility(View.VISIBLE);
+            answerKeysAllList.setVisibility(View.GONE);
+            return;
+        }
+        answerKeysAllEmpty.setVisibility(View.GONE);
+        answerKeysAllList.setVisibility(View.VISIBLE);
+        for (AnswerKeyEntity key : keys) {
+            answerKeysAllList.addView(classRenderer.createAnswerKeyCard(
+                    key,
+                    () -> dialogs.showEditAnswerKeyDialog(key),
+                    () -> dialogs.showDeleteAnswerKeyConfirmation(key)));
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -2164,7 +2238,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
     @Override
     public void reloadAnswerKeys() {
-        repo.getAllAnswerKeys(keys -> runOnUiThread(() ->
-                answerKeys = (keys != null) ? keys : new ArrayList<>()));
+        repo.getAllAnswerKeys(keys -> runOnUiThread(() -> {
+            answerKeys = (keys != null) ? keys : new ArrayList<>();
+            if (SCREEN_ANSWERKEYS.equals(currentScreen)) renderAnswerKeysScreen();
+        }));
     }
 }
