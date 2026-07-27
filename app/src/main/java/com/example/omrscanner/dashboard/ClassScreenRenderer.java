@@ -15,6 +15,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.omrscanner.database.entities.AnswerKeyEntity;
 import com.example.omrscanner.database.projections.AssessmentListRow;
+import com.example.omrscanner.database.projections.AnswerKeyLinkInfo;
 import com.example.omrscanner.models.ActivityFolder;
 import java.text.SimpleDateFormat;
 import java.util.List;
@@ -345,7 +346,7 @@ public class ClassScreenRenderer {
     /**
      * Creates a card for a single answer key, for the "Answer Keys" tab list.
      */
-    public View createAnswerKeyCard(AnswerKeyEntity key, Runnable onEdit, Runnable onDelete) {
+    public View createAnswerKeyCard(AnswerKeyEntity key, AnswerKeyLinkInfo link, Runnable onEdit, Runnable onDelete) {
 
         LinearLayout card = new LinearLayout(activity);
         card.setOrientation(LinearLayout.VERTICAL);
@@ -398,6 +399,34 @@ public class ClassScreenRenderer {
         arrow.setTextSize(18);
         header.addView(arrow);
         card.addView(header);
+
+        // Link status badge
+        TextView linkBadge = new TextView(activity);
+        GradientDrawable linkBadgeBg = new GradientDrawable();
+        linkBadgeBg.setCornerRadius(ui.dp(8));
+        boolean isLinked = link != null && link.linkedAssessmentName != null;
+        if (isLinked) {
+            String extra = link.linkedCount > 1 ? " (+" + (link.linkedCount - 1) + " more)" : "";
+            linkBadge.setText("🔗 Linked to " + link.linkedAssessmentName
+                    + (link.linkedSheetType != null ? " · " + link.linkedSheetType : "") + extra);
+            linkBadge.setTextColor(Color.parseColor("#1D4ED8"));
+            linkBadgeBg.setColor(Color.parseColor("#EFF6FF"));
+            linkBadgeBg.setStroke(ui.dp(1), Color.parseColor("#BFDBFE"));
+        } else {
+            linkBadge.setText("◌ Not linked to an assessment");
+            linkBadge.setTextColor(Color.parseColor("#64748B"));
+            linkBadgeBg.setColor(Color.parseColor("#F1F5F9"));
+            linkBadgeBg.setStroke(ui.dp(1), Color.parseColor("#E2E8F0"));
+        }
+        linkBadge.setTextSize(11);
+        linkBadge.setTypeface(null, Typeface.ITALIC);
+        linkBadge.setBackground(linkBadgeBg);
+        linkBadge.setPadding(ui.dp(8), ui.dp(3), ui.dp(8), ui.dp(3));
+        LinearLayout.LayoutParams linkBadgeLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        linkBadgeLp.topMargin = ui.dp(8);
+        linkBadge.setLayoutParams(linkBadgeLp);
+        card.addView(linkBadge);
 
         // Meta
         TextView meta = new TextView(activity);

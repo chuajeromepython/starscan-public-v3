@@ -48,6 +48,7 @@ import com.example.omrscanner.models.ScanEntry;
 import com.example.omrscanner.ui.ScanDetailActivity;
 import android.widget.ImageView;
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
+import com.example.omrscanner.database.projections.AnswerKeyLinkInfo;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -119,6 +120,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
      * Cached list of all answer keys — refreshed on load and after CRUD operations.
      */
     private List<AnswerKeyEntity> answerKeys = new ArrayList<>();
+    private Map<String, AnswerKeyLinkInfo> answerKeyLinkInfo = new java.util.HashMap<>();
 
     private String classSearchQuery = "";
     private String selectedClassGradeFilter = null;
@@ -185,6 +187,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private LinearLayout answerKeysAllList, answerKeysAllEmpty;
     private TextView answerKeysAllCount;
     private TextView answerKeysSummaryCount, answerKeysSummarySheetTypes;
+    private View answerKeysHeaderAddBtn;
+    private View classAssessmentsHeaderAddBtn;
 
     private CardView scanCtaCard;
     private LinearLayout scansHeader, activityScanList, activityScansEmpty;
@@ -418,6 +422,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         answerKeysAllCount = findViewById(R.id.answerKeysAllCount);
         answerKeysSummaryCount = findViewById(R.id.answerKeysSummaryCount);
         answerKeysSummarySheetTypes = findViewById(R.id.answerKeysSummarySheetTypes);
+        answerKeysHeaderAddBtn = findViewById(R.id.answerKeysHeaderAddBtn);
+        classAssessmentsHeaderAddBtn = findViewById(R.id.classAssessmentsHeaderAddBtn);
         scanCtaCard = findViewById(R.id.scanCtaCard);
         scanCtaSub = findViewById(R.id.scanCtaSub);
         scansHeader = findViewById(R.id.scansHeader);
@@ -464,6 +470,11 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             closeFabMenu();
             showDisclaimerThen(() -> dialogs.showNewAnswerKeyDialog(null));
         });
+
+        answerKeysHeaderAddBtn.setOnClickListener(v ->
+                showDisclaimerThen(() -> dialogs.showNewAnswerKeyDialog(null)));
+
+        classAssessmentsHeaderAddBtn.setOnClickListener(v -> dialogs.showNewActivityDialog());
 
         fabTestRow.setOnClickListener(v -> {
             closeFabMenu();
@@ -791,8 +802,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 fabAssessmentSyncRow.setVisibility(View.GONE);
                 break;
             case SCREEN_CLASS:
-                fabClassLabel.setText("New assessment");
-                fabClassRow.setVisibility(View.VISIBLE);
+                fabClassRow.setVisibility(View.GONE);
                 fabAnswerKeyRow.setVisibility(View.GONE);
                 fabTestRow.setVisibility(View.GONE);
                 fabSyncRow.setVisibility(View.GONE);
@@ -1162,7 +1172,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             case SCREEN_HOME:
                 screenHome.setVisibility(View.VISIBLE);
                 btnBack.setVisibility(View.GONE);
-                fabMain.setVisibility(View.VISIBLE);
+                fabMain.setVisibility(View.GONE);
                 topBarTitle.setText("SagotSuri");
                 topBarBadge.setVisibility(View.GONE);
                 if (!classSearchQuery.equals(homeClassSearchInput.getText().toString())) {
@@ -1183,7 +1193,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 }
                 screenClass.setVisibility(View.VISIBLE);
                 btnBack.setVisibility(View.VISIBLE);
-                fabMain.setVisibility(View.VISIBLE);
+                fabMain.setVisibility(View.GONE);
                 topBarTitle.setText(selectedClass.getDisplayName());
                 topBarBadge.setVisibility(View.VISIBLE);
                 topBarBadge.setText("📁 " + selectedClass.getActivityCount());
@@ -1702,6 +1712,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         for (AnswerKeyEntity key : keys) {
             answerKeysAllList.addView(classRenderer.createAnswerKeyCard(
                     key,
+                    answerKeyLinkInfo.get(key.id),
                     () -> dialogs.showEditAnswerKeyDialog(key),
                     () -> dialogs.showDeleteAnswerKeyConfirmation(key)));
         }
@@ -2240,7 +2251,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     public void reloadAnswerKeys() {
         repo.getAllAnswerKeys(keys -> runOnUiThread(() -> {
             answerKeys = (keys != null) ? keys : new ArrayList<>();
-            if (SCREEN_ANSWERKEYS.equals(currentScreen)) renderAnswerKeysScreen();
+            repo.getAnswerKeyLinkInfo(links -> runOnUiThread(() -> {
+                answerKeyLinkInfo.clear();
+                if (links != null) {
+                    for (AnswerKeyLinkInfo l : links) answerKeyLinkInfo.put(l.id, l);
+                }
+                if (SCREEN_ANSWERKEYS.equals(currentScreen)) renderAnswerKeysScreen();
+            }));
         }));
     }
 }

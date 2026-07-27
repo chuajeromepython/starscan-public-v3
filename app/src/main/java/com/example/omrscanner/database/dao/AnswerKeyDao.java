@@ -1,5 +1,7 @@
 package com.example.omrscanner.database.dao;
 
+import com.example.omrscanner.database.projections.AnswerKeyLinkInfo;
+
 import androidx.room.Dao;
 import androidx.room.Delete;
 import androidx.room.Insert;
@@ -36,4 +38,12 @@ public interface AnswerKeyDao {
     /** Filter by sheet type — useful when assigning a key to a specific assessment. */
     @Query("SELECT * FROM answer_keys WHERE sheet_type = :sheetType ORDER BY created_at DESC")
     List<AnswerKeyEntity> getBySheetType(String sheetType);
+
+    /** For each key: is it linked to an assessment, and if so which one (most recent) + its sheet type. */
+    @Query("SELECT ak.id AS id, " +
+            "(SELECT a.name FROM assessments a WHERE a.answer_key_id = ak.id ORDER BY a.created_at DESC LIMIT 1) AS linkedAssessmentName, " +
+            "(SELECT a.sheet_type FROM assessments a WHERE a.answer_key_id = ak.id ORDER BY a.created_at DESC LIMIT 1) AS linkedSheetType, " +
+            "(SELECT COUNT(*) FROM assessments a WHERE a.answer_key_id = ak.id) AS linkedCount " +
+            "FROM answer_keys ak")
+    List<AnswerKeyLinkInfo> getLinkInfo();
 }

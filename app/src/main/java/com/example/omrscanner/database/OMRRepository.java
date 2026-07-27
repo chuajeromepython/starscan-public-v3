@@ -13,6 +13,7 @@ import com.example.omrscanner.database.entities.TeacherEntity;
 import com.example.omrscanner.database.projections.AssessmentListRow;
 import com.example.omrscanner.database.projections.ClassListRow;
 import com.example.omrscanner.database.entities.UserEntity;
+import com.example.omrscanner.database.projections.AnswerKeyLinkInfo;
 
 import java.util.List;
 import java.util.Map;
@@ -568,6 +569,15 @@ public class OMRRepository {
   public void getAllAnswerKeys(Callback<List<AnswerKeyEntity>> callback) {
     executor.execute(() -> {
       List<AnswerKeyEntity> list = db.answerKeyDao().getAll();
+      if (callback != null)
+        callback.onResult(list);
+    });
+  }
+
+  /** Load link status (linked assessment name + sheet type, if any) for every answer key. */
+  public void getAnswerKeyLinkInfo(Callback<List<AnswerKeyLinkInfo>> callback) {
+    executor.execute(() -> {
+      List<AnswerKeyLinkInfo> list = db.answerKeyDao().getLinkInfo();
       if (callback != null)
         callback.onResult(list);
     });
