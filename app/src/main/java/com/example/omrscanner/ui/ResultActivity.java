@@ -240,7 +240,7 @@ public class ResultActivity extends AppCompatActivity {
             et.setOnFocusChangeListener((v, hasFocus) -> {
                 if (hasFocus) {
                     scrollView.postDelayed(() ->
-                        scrollView.smoothScrollTo(0, lrnCard.getTop()), 300);
+                            scrollView.smoothScrollTo(0, lrnCard.getTop()), 300);
                 }
             });
 
@@ -691,12 +691,12 @@ public class ResultActivity extends AppCompatActivity {
             lrnCard.setVisibility(View.VISIBLE);
             lrnInputContainer.setVisibility(View.VISIBLE);
             btnConfirmLrn.setVisibility(View.GONE);
-            
+
             isLrnConfirmed = true;
             for (int i = 0; i < 12; i++) {
                 digitBoxes[i].setEnabled(false);
             }
-            
+
             tvLrnCardTitle.setText("STUDENT LRN");
             tvLrnCardTitle.setTextColor(0xFF1E293B);
             tvLrnStatus.setText("✓ Detected");
@@ -924,10 +924,10 @@ public class ResultActivity extends AppCompatActivity {
 
         com.google.android.material.dialog.MaterialAlertDialogBuilder builder =
                 new com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_OMRScanner_Dialog)
-                .setTitle("LRN Not Recognized")
-                .setMessage("LRN " + scanResult.lnr
-                        + " was not found in the student LRN list. "
-                        + "This scan was not saved.");
+                        .setTitle("LRN Not Recognized")
+                        .setMessage("LRN " + scanResult.lnr
+                                + " was not found in the student LRN list. "
+                                + "This scan was not saved.");
 
         if (recentlySynced) {
             // Roster was synced recently — a missing LRN likely means the LRN itself is incorrect.
