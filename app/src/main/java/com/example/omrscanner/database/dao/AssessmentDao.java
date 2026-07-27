@@ -68,6 +68,7 @@ public interface AssessmentDao {
           + "LEFT JOIN answer_keys ak ON ak.id = a.answer_key_id "
           + "WHERE a.class_id = :classId "
           + "AND (:sheetTypeFilter IS NULL OR :sheetTypeFilter = '' OR a.sheet_type = :sheetTypeFilter) "
+          + "AND (:assessmentTypeFilter IS NULL OR :assessmentTypeFilter = '' OR a.assessment_type = :assessmentTypeFilter) "
           + "AND (:search IS NULL OR :search = '' "
           + "OR a.name LIKE '%' || :search || '%' "
           + "OR a.sheet_type LIKE '%' || :search || '%' "
@@ -81,8 +82,8 @@ public interface AssessmentDao {
           + "CASE WHEN :sortKey = 'EXAM_DATE_NEWEST' THEN a.exam_date_epoch END DESC, "
           + "CASE WHEN :sortKey = 'EXAM_DATE_OLDEST' THEN a.exam_date_epoch END ASC, "
           + "a.created_at DESC")
-  List<AssessmentListRow> queryAssessmentList(String classId, String sheetTypeFilter, String search,
-                                              String sortKey);
+  List<AssessmentListRow> queryAssessmentList(String classId, String sheetTypeFilter, String assessmentTypeFilter,
+                                              String search, String sortKey);
 
   @Query("SELECT a.id AS id, a.class_id AS classId, a.name AS name, "
           + "a.sheet_type AS sheetType, a.exam_date AS examDate, "
@@ -98,7 +99,22 @@ public interface AssessmentDao {
           + "LEFT JOIN scans s ON s.assessment_id = a.id "
           + "LEFT JOIN answer_keys ak ON ak.id = a.answer_key_id "
           + "LEFT JOIN classes c ON c.id = a.class_id "
+          + "WHERE (:sheetTypeFilter IS NULL OR :sheetTypeFilter = '' OR a.sheet_type = :sheetTypeFilter) "
+          + "AND (:assessmentTypeFilter IS NULL OR :assessmentTypeFilter = '' OR a.assessment_type = :assessmentTypeFilter) "
+          + "AND (:classIdFilter IS NULL OR :classIdFilter = '' OR a.class_id = :classIdFilter) "
+          + "AND (:search IS NULL OR :search = '' "
+          + "OR a.name LIKE '%' || :search || '%' "
+          + "OR a.sheet_type LIKE '%' || :search || '%' "
+          + "OR a.exam_date LIKE '%' || :search || '%') "
           + "GROUP BY a.id "
-          + "ORDER BY a.created_at DESC")
-  List<AssessmentListRow> queryAllAssessments();
+          + "ORDER BY "
+          + "CASE WHEN :sortKey = 'NEWEST' THEN a.created_at END DESC, "
+          + "CASE WHEN :sortKey = 'OLDEST' THEN a.created_at END ASC, "
+          + "CASE WHEN :sortKey = 'NAME_ASC' THEN a.name END COLLATE NOCASE ASC, "
+          + "CASE WHEN :sortKey = 'NAME_DESC' THEN a.name END COLLATE NOCASE DESC, "
+          + "CASE WHEN :sortKey = 'EXAM_DATE_NEWEST' THEN a.exam_date_epoch END DESC, "
+          + "CASE WHEN :sortKey = 'EXAM_DATE_OLDEST' THEN a.exam_date_epoch END ASC, "
+          + "a.created_at DESC")
+  List<AssessmentListRow> queryAllAssessments(String sheetTypeFilter, String assessmentTypeFilter,
+                                              String classIdFilter, String search, String sortKey);
 }

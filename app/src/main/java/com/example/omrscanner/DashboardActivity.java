@@ -129,6 +129,15 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
     private String assessmentSearchQuery = "";
     private String selectedAssessmentSort = ASSESSMENT_SORT_NEWEST;
+    private String classGroupBy = "SHEET"; // SHEET or TYPE
+    private String selectedClassTypeFilter = null;
+
+    private String myAssessmentsSearchQuery = "";
+    private String selectedMyAssessmentsSort = ASSESSMENT_SORT_NEWEST;
+    private String myAssessmentsGroupBy = "SHEET"; // SHEET, TYPE, or CLASS
+    private String selectedMyAssessmentsSheetFilter = null;
+    private String selectedMyAssessmentsTypeFilter = null;
+    private String selectedMyAssessmentsClassFilter = null;
 
     private int homeQueryGeneration = 0;
     private int assessmentQueryGeneration = 0;
@@ -136,6 +145,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private final Handler searchDebounceHandler = new Handler(Looper.getMainLooper());
     private Runnable pendingHomeSearchRunnable;
     private Runnable pendingAssessmentSearchRunnable;
+    private Runnable pendingMyAssessmentsSearchRunnable;
 
     // ── Helpers ──
     private DashboardUiHelper ui;
@@ -176,13 +186,16 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private boolean homeFilterPanelVisible = false;
 
     private TextView classTeacherLabel, classNameLabel, classActivityCount, homeTeacherLabel;
-    private LinearLayout classEmpty, classActivityList, classSheetTabs;
+    private LinearLayout classEmpty, classActivityList, classSheetTabs, classGroupSwitcher;
     private TextView classAssessmentCount;
     private EditText classAssessmentSearchInput;
     private TextView classAssessmentSortPicker;
     private LinearLayout assessmentsAllList, assessmentsAllEmpty;
     private TextView assessmentsAllCount;
     private TextView assessmentsSummaryTeacher, assessmentsSummaryCount, assessmentsSummaryClassCount;
+    private LinearLayout myAssessmentsGroupSwitcher, myAssessmentsSheetTabs;
+    private EditText myAssessmentsSearchInput;
+    private TextView myAssessmentsSortPicker;
 
     private LinearLayout answerKeysAllList, answerKeysAllEmpty;
     private TextView answerKeysAllCount;
@@ -408,6 +421,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         classEmpty = findViewById(R.id.classEmpty);
         classActivityList = findViewById(R.id.classActivityList);
         classSheetTabs = findViewById(R.id.classSheetTabs);
+        classGroupSwitcher = findViewById(R.id.classGroupSwitcher);
         classAssessmentCount = findViewById(R.id.classAssessmentCount);
         classAssessmentSearchInput = findViewById(R.id.classAssessmentSearchInput);
         classAssessmentSortPicker = findViewById(R.id.classAssessmentSortPicker);
@@ -417,6 +431,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         assessmentsSummaryTeacher = findViewById(R.id.assessmentsSummaryTeacher);
         assessmentsSummaryCount = findViewById(R.id.assessmentsSummaryCount);
         assessmentsSummaryClassCount = findViewById(R.id.assessmentsSummaryClassCount);
+        myAssessmentsGroupSwitcher = findViewById(R.id.myAssessmentsGroupSwitcher);
+        myAssessmentsSheetTabs = findViewById(R.id.myAssessmentsSheetTabs);
+        myAssessmentsSearchInput = findViewById(R.id.myAssessmentsSearchInput);
+        myAssessmentsSortPicker = findViewById(R.id.myAssessmentsSortPicker);
 
         answerKeysAllList = findViewById(R.id.answerKeysAllList);
         answerKeysAllEmpty = findViewById(R.id.answerKeysAllEmpty);
@@ -550,6 +568,22 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             }
         });
 
+        myAssessmentsSearchInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int st, int c, int a) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int st, int b, int c) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                myAssessmentsSearchQuery = s != null ? s.toString().trim() : "";
+                scheduleMyAssessmentsSearchRefresh();
+            }
+        });
+
         homeClassSortPicker.setOnClickListener(v ->
                 homeRenderer.showClassSortDialog(selectedClassSort, key -> {
                     selectedClassSort = key;
@@ -561,6 +595,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     selectedAssessmentSort = key;
                     updateSortPickers();
                     if (SCREEN_CLASS.equals(currentScreen)) renderClassScreen();
+                }));
+        myAssessmentsSortPicker.setOnClickListener(v ->
+                classRenderer.showAssessmentSortDialog(selectedMyAssessmentsSort, key -> {
+                    selectedMyAssessmentsSort = key;
+                    updateSortPickers();
+                    if (SCREEN_ASSESSMENTS.equals(currentScreen)) renderAssessmentsScreen();
                 }));
 
         updateSortPickers();
@@ -869,6 +909,15 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             if (SCREEN_CLASS.equals(currentScreen)) renderClassScreen();
         };
         searchDebounceHandler.postDelayed(pendingAssessmentSearchRunnable, 220);
+    }
+
+    private void scheduleMyAssessmentsSearchRefresh() {
+        if (pendingMyAssessmentsSearchRunnable != null)
+            searchDebounceHandler.removeCallbacks(pendingMyAssessmentsSearchRunnable);
+        pendingMyAssessmentsSearchRunnable = () -> {
+            if (SCREEN_ASSESSMENTS.equals(currentScreen)) renderAssessmentsScreen();
+        };
+        searchDebounceHandler.postDelayed(pendingMyAssessmentsSearchRunnable, 220);
     }
 
     // Disclaimer Template
@@ -1599,14 +1648,33 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         int activityCount = selectedClass.getActivityCount();
         classActivityCount.setText(activityCount + " assessment" + (activityCount == 1 ? "" : "s"));
 
-        classRenderer.buildClassSheetTabs(classSheetTabs, selectedClass.getActivities(),
-                selectedSheetFilter, filterVal -> {
-                    selectedSheetFilter = filterVal;
-                    renderClassScreen();
-                });
+        classRenderer.buildGroupBySwitcher(classGroupSwitcher, new String[][]{
+                {"Sheet Type", "SHEET"},
+                {"Assessment Type", "TYPE"},
+        }, classGroupBy, key -> {
+            classGroupBy = key;
+            renderClassScreen();
+        });
+
+        if ("TYPE".equals(classGroupBy)) {
+            classRenderer.buildAssessmentTypeTabs(classSheetTabs, selectedClass.getActivities(),
+                    selectedClassTypeFilter, filterVal -> {
+                        selectedClassTypeFilter = filterVal;
+                        renderClassScreen();
+                    });
+        } else {
+            classRenderer.buildClassSheetTabs(classSheetTabs, selectedClass.getActivities(),
+                    selectedSheetFilter, filterVal -> {
+                        selectedSheetFilter = filterVal;
+                        renderClassScreen();
+                    });
+        }
+
+        String activeSheetFilter = "SHEET".equals(classGroupBy) ? selectedSheetFilter : null;
+        String activeTypeFilter = "TYPE".equals(classGroupBy) ? selectedClassTypeFilter : null;
 
         final int requestId = ++assessmentQueryGeneration;
-        repo.queryAssessmentList(selectedClass.getId(), selectedSheetFilter,
+        repo.queryAssessmentList(selectedClass.getId(), activeSheetFilter, activeTypeFilter,
                 assessmentSearchQuery, selectedAssessmentSort, rows -> runOnUiThread(() -> {
                     if (requestId != assessmentQueryGeneration || !SCREEN_CLASS.equals(currentScreen))
                         return;
@@ -1670,8 +1738,43 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 ? "Teacher: " + summaryTeacherName : "Teacher: Unknown");
         assessmentsSummaryClassCount.setText(String.valueOf(classFolders.size()));
 
-        repo.queryAllAssessments(rows -> runOnUiThread(() -> {
-            if (!SCREEN_ASSESSMENTS.equals(currentScreen)) return;
+        List<ActivityFolder> allActivitiesAcrossClasses = new ArrayList<>();
+        for (ClassFolder cf : classFolders) {
+            if (cf.getActivities() != null) allActivitiesAcrossClasses.addAll(cf.getActivities());
+        }
+
+        classRenderer.buildGroupBySwitcher(myAssessmentsGroupSwitcher, myAssessmentsGroupBy, key -> {
+            myAssessmentsGroupBy = key;
+            renderAssessmentsScreen();
+        });
+
+        if ("TYPE".equals(myAssessmentsGroupBy)) {
+            classRenderer.buildAssessmentTypeTabs(myAssessmentsSheetTabs, allActivitiesAcrossClasses,
+                    selectedMyAssessmentsTypeFilter, filterVal -> {
+                        selectedMyAssessmentsTypeFilter = filterVal;
+                        renderAssessmentsScreen();
+                    });
+        } else if ("CLASS".equals(myAssessmentsGroupBy)) {
+            classRenderer.buildClassGroupTabs(myAssessmentsSheetTabs, classFolders,
+                    selectedMyAssessmentsClassFilter, filterVal -> {
+                        selectedMyAssessmentsClassFilter = filterVal;
+                        renderAssessmentsScreen();
+                    });
+        } else {
+            classRenderer.buildClassSheetTabs(myAssessmentsSheetTabs, allActivitiesAcrossClasses,
+                    selectedMyAssessmentsSheetFilter, filterVal -> {
+                        selectedMyAssessmentsSheetFilter = filterVal;
+                        renderAssessmentsScreen();
+                    });
+        }
+
+        String activeSheetFilter = "SHEET".equals(myAssessmentsGroupBy) ? selectedMyAssessmentsSheetFilter : null;
+        String activeTypeFilter = "TYPE".equals(myAssessmentsGroupBy) ? selectedMyAssessmentsTypeFilter : null;
+        String activeClassFilter = "CLASS".equals(myAssessmentsGroupBy) ? selectedMyAssessmentsClassFilter : null;
+
+        repo.queryAllAssessments(activeSheetFilter, activeTypeFilter, activeClassFilter,
+                myAssessmentsSearchQuery, selectedMyAssessmentsSort, rows -> runOnUiThread(() -> {
+                    if (!SCREEN_ASSESSMENTS.equals(currentScreen)) return;
 
             int rowCount = (rows != null) ? rows.size() : 0;
             if (assessmentsAllCount != null) assessmentsAllCount.setText(String.valueOf(rowCount));
@@ -1783,6 +1886,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             homeClassSortPicker.setText(homeRenderer.getClassSortLabel(selectedClassSort) + " \u25be");
         if (classAssessmentSortPicker != null)
             classAssessmentSortPicker.setText(classRenderer.getAssessmentSortLabel(selectedAssessmentSort) + " \u25be");
+        if (myAssessmentsSortPicker != null)
+            myAssessmentsSortPicker.setText(classRenderer.getAssessmentSortLabel(selectedMyAssessmentsSort) + " \u25be");
     }
 
     // ═══════════════════════════════════════════════════════════════

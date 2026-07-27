@@ -17,6 +17,7 @@ import com.example.omrscanner.database.entities.AnswerKeyEntity;
 import com.example.omrscanner.database.projections.AssessmentListRow;
 import com.example.omrscanner.database.projections.AnswerKeyLinkInfo;
 import com.example.omrscanner.models.ActivityFolder;
+import com.example.omrscanner.models.ClassFolder;
 import java.text.SimpleDateFormat;
 import java.util.List;
 import java.util.Locale;
@@ -88,10 +89,8 @@ public class ClassScreenRenderer {
      * @param onTabSelected called with the selected filterValue (null = All)
      */
     public void buildClassSheetTabs(LinearLayout tabContainer,
-            List<ActivityFolder> activities, String selectedSheetFilter,
-            java.util.function.Consumer<String> onTabSelected) {
-
-        tabContainer.removeAllViews();
+                                    List<ActivityFolder> activities, String selectedSheetFilter,
+                                    java.util.function.Consumer<String> onTabSelected) {
 
         int countZPH30 = 0, countZPH40 = 0, countZPH50 = 0, countZPH60 = 0;
         if (activities != null) {
@@ -114,6 +113,126 @@ public class ClassScreenRenderer {
                 {"ZPH60", "ZPH60", countZPH60},
         };
 
+        renderPillRow(tabContainer, tabs, selectedSheetFilter, onTabSelected);
+    }
+
+    /**
+     * Populates a tab row grouping assessments by assessment type (Diagnostic/Summative/ECD).
+     * @param onTabSelected called with the selected filterValue (null = All)
+     */
+    public void buildAssessmentTypeTabs(LinearLayout tabContainer,
+                                        List<ActivityFolder> activities, String selectedTypeFilter,
+                                        java.util.function.Consumer<String> onTabSelected) {
+
+        int countDiagnostic = 0, countSummative = 0, countEcd = 0;
+        if (activities != null) {
+            for (ActivityFolder act : activities) {
+                String type = act.getAssessmentType();
+                if ("Diagnostic".equals(type)) countDiagnostic++;
+                else if ("Summative".equals(type)) countSummative++;
+                else if ("ECD".equals(type)) countEcd++;
+            }
+        }
+        int totalCount = (activities != null) ? activities.size() : 0;
+
+        Object[][] tabs = {
+                {"All",        null,         totalCount},
+                {"Diagnostic", "Diagnostic", countDiagnostic},
+                {"Summative",  "Summative",  countSummative},
+                {"ECD",        "ECD",        countEcd},
+        };
+
+        renderPillRow(tabContainer, tabs, selectedTypeFilter, onTabSelected);
+    }
+
+    /**
+     * Populates a tab row grouping assessments by owning class.
+     * @param onTabSelected called with the selected filterValue (classId, null = All)
+     */
+    public void buildClassGroupTabs(LinearLayout tabContainer,
+                                    List<ClassFolder> classes, String selectedClassFilter,
+                                    java.util.function.Consumer<String> onTabSelected) {
+
+        int totalCount = 0;
+        List<Object[]> tabList = new java.util.ArrayList<>();
+        tabList.add(new Object[]{"All", null, 0});
+
+        if (classes != null) {
+            for (ClassFolder cf : classes) {
+                int count = (cf.getActivities() != null) ? cf.getActivities().size() : 0;
+                totalCount += count;
+                if (count > 0) {
+                    tabList.add(new Object[]{cf.getDisplayName(), cf.getId(), count});
+                }
+            }
+        }
+        tabList.set(0, new Object[]{"All", null, totalCount});
+
+        renderPillRow(tabContainer, tabList.toArray(new Object[0][]), selectedClassFilter, onTabSelected);
+    }
+
+    /**
+     * Populates a small segmented-control row for choosing what the pill row below groups by.
+     * @param onSelected called with "SHEET", "TYPE", or "CLASS"
+     */
+    public void buildGroupBySwitcher(LinearLayout container, String selectedGroupBy,
+                                     java.util.function.Consumer<String> onSelected) {
+        buildGroupBySwitcher(container, new String[][]{
+                {"Sheet Type", "SHEET"},
+                {"Assessment Type", "TYPE"},
+                {"Class", "CLASS"},
+        }, selectedGroupBy, onSelected);
+    }
+
+    /**
+     * Overload allowing a custom set of grouping options (e.g. the Class screen omits
+     * "Class" since the list is already scoped to one class).
+     */
+    public void buildGroupBySwitcher(LinearLayout container, String[][] options, String selectedGroupBy,
+                                     java.util.function.Consumer<String> onSelected) {
+
+        container.removeAllViews();
+
+        for (String[] opt : options) {
+            final String label = opt[0];
+            final String key = opt[1];
+            boolean isActive = key.equals(selectedGroupBy);
+
+            TextView btn = new TextView(activity);
+            btn.setText(label);
+            btn.setTextSize(11);
+            btn.setTypeface(null, isActive ? Typeface.BOLD : Typeface.NORMAL);
+            btn.setGravity(Gravity.CENTER);
+            btn.setPadding(ui.dp(12), ui.dp(7), ui.dp(12), ui.dp(7));
+
+            GradientDrawable bg = new GradientDrawable();
+            bg.setCornerRadius(ui.dp(16));
+            if (isActive) {
+                bg.setColor(Color.parseColor("#0038A8"));
+                btn.setTextColor(Color.WHITE);
+            } else {
+                bg.setColor(Color.parseColor("#F1F5F9"));
+                bg.setStroke(ui.dp(1), Color.parseColor("#E2E8F0"));
+                btn.setTextColor(Color.parseColor("#64748B"));
+            }
+            btn.setBackground(bg);
+
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.rightMargin = ui.dp(8);
+            btn.setLayoutParams(lp);
+
+            btn.setOnClickListener(v -> onSelected.accept(key));
+            container.addView(btn);
+        }
+    }
+
+    /** Shared pill-row renderer used by all group-tab builders above. */
+    private void renderPillRow(LinearLayout tabContainer, Object[][] tabs,
+                               String selectedFilter, java.util.function.Consumer<String> onTabSelected) {
+
+        tabContainer.removeAllViews();
+
         for (Object[] tab : tabs) {
             final String label     = (String) tab[0];
             final String filterVal = (String) tab[1];
@@ -121,8 +240,8 @@ public class ClassScreenRenderer {
 
             if (filterVal != null && count == 0) continue;
 
-            boolean isActive = (selectedSheetFilter == null && filterVal == null)
-                    || (selectedSheetFilter != null && selectedSheetFilter.equals(filterVal));
+            boolean isActive = (selectedFilter == null && filterVal == null)
+                    || (selectedFilter != null && selectedFilter.equals(filterVal));
 
             TextView tabView = new TextView(activity);
             tabView.setText(label + " (" + count + ")");
