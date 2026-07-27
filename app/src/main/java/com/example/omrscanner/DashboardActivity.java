@@ -186,9 +186,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
     private LinearLayout answerKeysAllList, answerKeysAllEmpty;
     private TextView answerKeysAllCount;
-    private TextView answerKeysSummaryCount, answerKeysSummarySheetTypes;
+    private TextView answerKeysSummaryCount, answerKeysSummarySheetTypes, answerKeysSummaryTeacher;
     private View answerKeysHeaderAddBtn;
     private View classAssessmentsHeaderAddBtn;
+    private View assessmentsHeaderAddBtn;
 
     private CardView scanCtaCard;
     private LinearLayout scansHeader, activityScanList, activityScansEmpty;
@@ -422,8 +423,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         answerKeysAllCount = findViewById(R.id.answerKeysAllCount);
         answerKeysSummaryCount = findViewById(R.id.answerKeysSummaryCount);
         answerKeysSummarySheetTypes = findViewById(R.id.answerKeysSummarySheetTypes);
+        answerKeysSummaryTeacher = findViewById(R.id.answerKeysSummaryTeacher);
         answerKeysHeaderAddBtn = findViewById(R.id.answerKeysHeaderAddBtn);
         classAssessmentsHeaderAddBtn = findViewById(R.id.classAssessmentsHeaderAddBtn);
+        assessmentsHeaderAddBtn = findViewById(R.id.assessmentsHeaderAddBtn);
         scanCtaCard = findViewById(R.id.scanCtaCard);
         scanCtaSub = findViewById(R.id.scanCtaSub);
         scansHeader = findViewById(R.id.scansHeader);
@@ -475,6 +478,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 showDisclaimerThen(() -> dialogs.showNewAnswerKeyDialog(null)));
 
         classAssessmentsHeaderAddBtn.setOnClickListener(v -> dialogs.showNewActivityDialog());
+
+        assessmentsHeaderAddBtn.setOnClickListener(v -> showAssessmentClassPickerDialog());
 
         fabTestRow.setOnClickListener(v -> {
             closeFabMenu();
@@ -566,6 +571,36 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             homeRenderer.updateFilterToggleAppearance(homeFilterToggle, homeFilterPanelVisible,
                     selectedClassGradeFilter, selectedClassSchoolYearFilter, selectedClassSort);
         });
+    }
+
+
+
+    /**
+     * Entry point for creating a new assessment from the All Assessments tab, where
+     * there's no class already in context. Shows a simple class picker first, then
+     * reuses the normal new-assessment flow for whichever class was chosen.
+     */
+    private void showAssessmentClassPickerDialog() {
+        if (classFolders == null || classFolders.isEmpty()) {
+            ui.showErrorDialog("No classes yet",
+                    "Create a class first before adding an assessment.");
+            return;
+        }
+
+        String[] classNames = new String[classFolders.size()];
+        for (int i = 0; i < classFolders.size(); i++) {
+            classNames[i] = classFolders.get(i).getDisplayName();
+        }
+
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(
+                this, R.style.ThemeOverlay_OMRScanner_Dialog)
+                .setTitle("Select a class")
+                .setItems(classNames, (dialog, which) -> {
+                    selectedClass = classFolders.get(which);
+                    dialogs.showNewActivityDialog();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private void onAssessmentSyncClicked() {
@@ -1629,10 +1664,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         assessmentsAllList.removeAllViews();
 
         String summaryTeacherName = (activeUserFirstName != null && !activeUserFirstName.isEmpty())
-                ? activeUserFirstName
+                ? (activeUserFirstName + (activeUserLastName != null && !activeUserLastName.isEmpty() ? " " + activeUserLastName : ""))
                 : globalTeacherName;
         assessmentsSummaryTeacher.setText(summaryTeacherName != null && !summaryTeacherName.isEmpty()
-                ? summaryTeacherName : "Scan your QR code to set your name");
+                ? "Teacher: " + summaryTeacherName : "Teacher: Unknown");
         assessmentsSummaryClassCount.setText(String.valueOf(classFolders.size()));
 
         repo.queryAllAssessments(rows -> runOnUiThread(() -> {
@@ -1701,6 +1736,14 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         answerKeysSummaryCount.setText(String.valueOf(keys.size()));
         answerKeysSummarySheetTypes.setText(String.valueOf(sheetTypes.size()));
         if (answerKeysAllCount != null) answerKeysAllCount.setText(String.valueOf(keys.size()));
+
+        String answerKeysTeacherName = (activeUserFirstName != null && !activeUserFirstName.isEmpty())
+                ? (activeUserFirstName + (activeUserLastName != null && !activeUserLastName.isEmpty() ? " " + activeUserLastName : ""))
+                : globalTeacherName;
+        if (answerKeysSummaryTeacher != null) {
+            answerKeysSummaryTeacher.setText(answerKeysTeacherName != null && !answerKeysTeacherName.isEmpty()
+                    ? "Teacher: " + answerKeysTeacherName : "Teacher: Unknown");
+        }
 
         if (keys.isEmpty()) {
             answerKeysAllEmpty.setVisibility(View.VISIBLE);
