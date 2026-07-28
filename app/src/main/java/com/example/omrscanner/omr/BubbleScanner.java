@@ -173,7 +173,9 @@ public class BubbleScanner {
             for (int col = 0; col < block.cols; col++) {
                 int cx = (int) Math.round((block.startX + col * block.dx) * scaleX) + offX;
                 int cy = (int) Math.round((block.startY + row * block.dy) * scaleY) + offY;
-                boolean filled = ratios[col][row] >= profile.fillThreshold;
+                boolean filled = doubleShadedCols[col]
+                        ? ratios[col][row] >= profile.fillThreshold
+                        : (hasGuessPerCol[col] && row == bestRowPerCol[col]);
                 drawBubble(overlay, cx, cy, scaledRadius, filled, doubleShadedCols[col]);
             }
         }
@@ -366,7 +368,7 @@ public class BubbleScanner {
         double margin = bestRatio - secondBestRatio;
         boolean closeStrongTie = secondBestRatio >= profile.doubleShadeStrongThreshold
                 && margin <= profile.doubleShadeTieMargin;
-        if (filledCount >= 2 || closeStrongTie) {
+        if (closeStrongTie) {
             return new LnrColumnDecision(LnrColumnDecision.Kind.DOUBLE_SHADED,
                     bestRow, secondBestRow, bestRatio, secondBestRatio, filledCount);
         }
