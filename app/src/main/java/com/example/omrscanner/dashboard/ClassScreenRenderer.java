@@ -324,6 +324,69 @@ public class ClassScreenRenderer {
         leftCol.addView(sub);
         header.addView(leftCol);
 
+        android.util.TypedValue menuBgValue = new android.util.TypedValue();
+        activity.getTheme().resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, menuBgValue, true);
+
+        android.widget.ImageView menuBtn = new android.widget.ImageView(activity);
+        menuBtn.setImageResource(R.drawable.ic_more_vert);
+        menuBtn.setColorFilter(Color.parseColor("#94A3B8"));
+        menuBtn.setPadding(ui.dp(8), ui.dp(6), ui.dp(8), ui.dp(6));
+        menuBtn.setLayoutParams(new LinearLayout.LayoutParams(ui.dp(32), ui.dp(32)));
+        menuBtn.setClickable(true);
+        menuBtn.setFocusable(true);
+        menuBtn.setBackgroundResource(menuBgValue.resourceId);
+        menuBtn.setOnClickListener(v -> {
+            android.widget.PopupMenu popup = new android.widget.PopupMenu(
+                    activity, menuBtn, Gravity.END, 0, R.style.PopupMenu_RoundedCard);
+
+            android.graphics.drawable.Drawable editIcon =
+                    androidx.core.content.ContextCompat.getDrawable(activity, R.drawable.ic_edit_pencil).mutate();
+            editIcon.setTint(Color.parseColor("#64748B"));
+            android.graphics.drawable.Drawable keyIcon =
+                    androidx.core.content.ContextCompat.getDrawable(activity, R.drawable.ic_key).mutate();
+            keyIcon.setTint(Color.parseColor("#0038A8"));
+            android.graphics.drawable.Drawable uploadIcon =
+                    androidx.core.content.ContextCompat.getDrawable(activity, R.drawable.ic_upload).mutate();
+            uploadIcon.setTint(Color.parseColor("#059669"));
+            android.graphics.drawable.Drawable deleteIcon =
+                    androidx.core.content.ContextCompat.getDrawable(activity, R.drawable.ic_trash_outline).mutate();
+            deleteIcon.setTint(Color.parseColor("#EF4444"));
+
+            android.text.SpannableString editTitle = new android.text.SpannableString("Edit");
+            editTitle.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#1E293B")), 0, editTitle.length(), 0);
+            android.text.SpannableString keyTitle = new android.text.SpannableString("Answer Key");
+            keyTitle.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#1E293B")), 0, keyTitle.length(), 0);
+            android.text.SpannableString uploadTitle = new android.text.SpannableString("Upload");
+            uploadTitle.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#1E293B")), 0, uploadTitle.length(), 0);
+            android.text.SpannableString deleteTitle = new android.text.SpannableString("Delete");
+            deleteTitle.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#1E293B")), 0, deleteTitle.length(), 0);
+
+            popup.getMenu().add(0, 1, 0, editTitle).setIcon(editIcon);
+            popup.getMenu().add(0, 2, 1, keyTitle).setIcon(keyIcon);
+            popup.getMenu().add(0, 3, 2, uploadTitle).setIcon(uploadIcon);
+            popup.getMenu().add(0, 4, 3, deleteTitle).setIcon(deleteIcon);
+
+            try {
+                java.lang.reflect.Field field = popup.getClass().getDeclaredField("mPopup");
+                field.setAccessible(true);
+                Object menuPopupHelper = field.get(popup);
+                Class<?> helperClass = Class.forName(menuPopupHelper.getClass().getName());
+                java.lang.reflect.Method setForceIcons = helperClass.getMethod("setForceShowIcon", boolean.class);
+                setForceIcons.invoke(menuPopupHelper, true);
+            } catch (Exception ignored) { }
+
+            popup.setOnMenuItemClickListener(item -> {
+                int id = item.getItemId();
+                if (id == 1) { onEdit.run(); return true; }
+                if (id == 2) { onSelectAnswerKey.run(); return true; }
+                if (id == 3) { onUpload.run(); return true; }
+                if (id == 4) { onDelete.run(); return true; }
+                return false;
+            });
+            popup.show();
+        });
+        header.addView(menuBtn);
+
         TextView arrow = new TextView(activity);
         arrow.setText("›");
         arrow.setTextColor(Color.parseColor("#94A3B8"));
@@ -416,43 +479,6 @@ public class ClassScreenRenderer {
 
             card.addView(badgeRow);
         }
-
-        View divider = new View(activity);
-        LinearLayout.LayoutParams divLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ui.dp(1));
-        divLp.topMargin = ui.dp(14);
-        divLp.bottomMargin = ui.dp(4);
-        divider.setLayoutParams(divLp);
-        divider.setBackgroundColor(Color.parseColor("#F1F5F9"));
-        card.addView(divider);
-
-        // Actions row
-        LinearLayout actionsRow = new LinearLayout(activity);
-        actionsRow.setOrientation(LinearLayout.HORIZONTAL);
-        actionsRow.setLayoutParams(new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        actionsRow.setWeightSum(4f);
-
-        android.util.TypedValue outValue = new android.util.TypedValue();
-        activity.getTheme().resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, outValue, true);
-
-        TextView btnEdit = makeActionBtn("✏️ Edit", "#64748B", outValue.resourceId);
-        btnEdit.setOnClickListener(v -> onEdit.run());
-
-        TextView btnSelectAnswerKey = makeActionBtn("🗝️ Answer Key", "#0038A8", outValue.resourceId);
-        btnSelectAnswerKey.setOnClickListener(v -> onSelectAnswerKey.run());
-
-        TextView btnDelete = makeActionBtn("🗑️ Delete", "#EF4444", outValue.resourceId);
-        btnDelete.setOnClickListener(v -> onDelete.run());
-
-        TextView btnUpload = makeActionBtn("⬆️ Upload", "#059669", outValue.resourceId);
-        btnUpload.setOnClickListener(v -> onUpload.run());
-
-        actionsRow.addView(btnEdit);
-        actionsRow.addView(btnSelectAnswerKey);
-        actionsRow.addView(btnDelete);
-        actionsRow.addView(btnUpload);
-        card.addView(actionsRow);
 
         card.setOnClickListener(v -> onOpen.run());
         return card;

@@ -24,7 +24,15 @@ public class ClassListRow {
   @ColumnInfo(name = "assessmentCount")
   public int assessmentCount;
 
+  @ColumnInfo(name = "scanCount")
+  public int scanCount;
+
   public String getDisplayName() {
     return (grade != null ? grade : "") + " \u2014 " + (section != null ? section : "");
+  }
+
+  /** Active = the class has at least one assessment, and at least one scan among them. */
+  public boolean isActive() {
+    return assessmentCount > 0 && scanCount > 0;
   }
 }

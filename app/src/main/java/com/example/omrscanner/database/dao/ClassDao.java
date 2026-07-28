@@ -46,11 +46,13 @@ public interface ClassDao {
   int countAll();
 
   @Query("SELECT c.id AS id, c.grade AS grade, c.section AS section, "
-      + "c.school_year AS schoolYear, c.created_at AS createdAt, "
-      + "COUNT(a.id) AS assessmentCount "
-      + "FROM classes c "
-      + "LEFT JOIN assessments a ON a.class_id = c.id "
-      + "WHERE (:search IS NULL OR :search = '' "
+          + "c.school_year AS schoolYear, c.created_at AS createdAt, "
+          + "COUNT(DISTINCT a.id) AS assessmentCount, "
+          + "COUNT(DISTINCT s.id) AS scanCount "
+          + "FROM classes c "
+          + "LEFT JOIN assessments a ON a.class_id = c.id "
+          + "LEFT JOIN scans s ON s.assessment_id = a.id "
+          + "WHERE (:search IS NULL OR :search = '' "
       + "OR c.grade LIKE '%' || :search || '%' "
       + "OR c.section LIKE '%' || :search || '%' "
       + "OR c.school_year LIKE '%' || :search || '%') "

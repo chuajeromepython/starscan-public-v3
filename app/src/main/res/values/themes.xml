@@ -11,6 +11,11 @@
 
     <style name="Theme.OMRScanner" parent="Base.Theme.OMRScanner" />
 
+    <!-- Rounded white card look for the class-card overflow menu -->
+    <style name="PopupMenu.RoundedCard" parent="Widget.Material3.PopupMenu">
+        <item name="android:popupBackground">@drawable/bg_popup_menu_card</item>
+    </style>
+
     <style name="BottomNavLabel">
         <item name="android:textSize">10sp</item>
     </style>
