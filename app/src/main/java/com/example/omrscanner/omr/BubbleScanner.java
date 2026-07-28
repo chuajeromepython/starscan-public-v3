@@ -141,8 +141,12 @@ public class BubbleScanner {
 
         StringBuilder lnr = new StringBuilder();
         boolean[] doubleShadedCols = new boolean[block.cols];
+        int[] bestRowPerCol = new int[block.cols];
+        boolean[] hasGuessPerCol = new boolean[block.cols];
         for (int col = 0; col < block.cols; col++) {
             LnrColumnDecision decision = classifyLnrColumn(ratios[col], profile);
+            bestRowPerCol[col] = decision.bestRow;
+            hasGuessPerCol[col] = decision.kind != LnrColumnDecision.Kind.UNDETECTED;
 
             if (decision.kind == LnrColumnDecision.Kind.DOUBLE_SHADED) {
                 lnr.append('X');
@@ -362,7 +366,7 @@ public class BubbleScanner {
         double margin = bestRatio - secondBestRatio;
         boolean closeStrongTie = secondBestRatio >= profile.doubleShadeStrongThreshold
                 && margin <= profile.doubleShadeTieMargin;
-        if (closeStrongTie) {
+        if (filledCount >= 2 || closeStrongTie) {
             return new LnrColumnDecision(LnrColumnDecision.Kind.DOUBLE_SHADED,
                     bestRow, secondBestRow, bestRatio, secondBestRatio, filledCount);
         }
