@@ -1968,21 +1968,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
     private void showCameraModeDialog() {
         final String[] cameraModes = {
-                "Handheld Scan\nUse this when holding the phone and moving it closer to the sheet.",
-                "Tilt Agnostic Mode (Beta)\nAuto-detects the sheet's corners in any orientation — no need to line up guide squares or tilt the phone.",
-                "Basic Camera\nJust a plain camera — snap a photo of the sheet and preview it. No auto-detection."
+                "Fixed Mount — Use this for elevated phone mounts where sheets slide underneath automatically.",
+                "Handheld — Auto-detects the sheet's corners in any orientation — no need to line up guide squares or tilt the phone."
         };
 
         android.content.SharedPreferences prefs =
                 getSharedPreferences(CAMERA_MODE_PREFS, MODE_PRIVATE);
-        int defaultSelection;
-        if (prefs.getBoolean(PREF_BASIC_MODE, false)) {
-            defaultSelection = 2;
-        } else if (prefs.getBoolean(PREF_TILT_AGNOSTIC_MODE, false)) {
-            defaultSelection = 1;
-        } else {
-            defaultSelection = 0;
-        }
+        int defaultSelection = prefs.getBoolean(PREF_TILT_AGNOSTIC_MODE, false) ? 1 : 0;
         final int[] selectedMode = {defaultSelection};
 
         CharSequence[] cameraModeItems = new CharSequence[cameraModes.length];
@@ -1997,16 +1989,11 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 .setSingleChoiceItems(cameraModeItems, defaultSelection, (dialog, which) -> selectedMode[0] = which)
                 .setPositiveButton("Open Camera", (dialog, which) -> {
                     boolean tiltAgnosticMode = selectedMode[0] == 1;
-                    boolean basicMode = selectedMode[0] == 2;
                     prefs.edit()
                             .putBoolean(PREF_TILT_AGNOSTIC_MODE, tiltAgnosticMode)
-                            .putBoolean(PREF_BASIC_MODE, basicMode)
+                            .putBoolean(PREF_BASIC_MODE, false)
                             .apply();
-                    if (basicMode) {
-                        launchBasicCamera();
-                    } else {
-                        launchCamera(false, tiltAgnosticMode);
-                    }
+                    launchCamera(false, tiltAgnosticMode);
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
