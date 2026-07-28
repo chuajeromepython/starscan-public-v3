@@ -95,7 +95,7 @@ public class ClassScreenRenderer {
         int countZPH40 = 0, countZPH60 = 0;
         if (activities != null) {
             for (ActivityFolder act : activities) {
-                switch (act.getSheetType()) {
+                switch (ActivityFolder.parseBaseTemplateId(act.getSheetType())) {
                     case "ZPH40": countZPH40++; break;
                     case "ZPH60": countZPH60++; break;
                 }

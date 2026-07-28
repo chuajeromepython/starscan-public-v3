@@ -1366,6 +1366,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private void selectHomeTab() {
         if (isChromeTab(currentScreen)) {
             showScreen(screenBeforeChromeTab != null ? screenBeforeChromeTab : SCREEN_HOME);
+        } else if (!SCREEN_HOME.equals(currentScreen)) {
+            // Already in the Home tab's own stack (Class or Activity screen) — a second
+            // tap on Home jumps straight back to the root instead of doing nothing.
+            showScreen(SCREEN_HOME);
         }
     }
 
