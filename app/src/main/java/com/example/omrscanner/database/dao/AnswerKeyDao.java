@@ -1,6 +1,7 @@
 package com.example.omrscanner.database.dao;
 
 import com.example.omrscanner.database.projections.AnswerKeyLinkInfo;
+import com.example.omrscanner.database.projections.AnswerKeyLinkedAssessment;
 
 import androidx.room.Dao;
 import androidx.room.Delete;
@@ -46,4 +47,12 @@ public interface AnswerKeyDao {
             "(SELECT COUNT(*) FROM assessments a WHERE a.answer_key_id = ak.id) AS linkedCount " +
             "FROM answer_keys ak")
     List<AnswerKeyLinkInfo> getLinkInfo();
+
+    /** Every assessment currently linked to any answer key, newest-first — grouped
+     *  client-side by answerKeyId to populate the "Linked to" dropdown per card. */
+    @Query("SELECT a.answer_key_id AS answerKeyId, a.id AS id, a.name AS name, a.sheet_type AS sheetType " +
+            "FROM assessments a " +
+            "WHERE a.answer_key_id IS NOT NULL " +
+            "ORDER BY a.created_at DESC")
+    List<AnswerKeyLinkedAssessment> getLinkedAssessments();
 }

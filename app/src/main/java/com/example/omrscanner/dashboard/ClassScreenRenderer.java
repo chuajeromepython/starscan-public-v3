@@ -16,9 +16,11 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.example.omrscanner.database.entities.AnswerKeyEntity;
 import com.example.omrscanner.database.projections.AssessmentListRow;
 import com.example.omrscanner.database.projections.AnswerKeyLinkInfo;
+import com.example.omrscanner.database.projections.AnswerKeyLinkedAssessment;
 import com.example.omrscanner.models.ActivityFolder;
 import com.example.omrscanner.models.ClassFolder;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -550,7 +552,8 @@ public class ClassScreenRenderer {
     /**
      * Creates a card for a single answer key, for the "Answer Keys" tab list.
      */
-    public View createAnswerKeyCard(AnswerKeyEntity key, AnswerKeyLinkInfo link, Runnable onEdit, Runnable onDelete) {
+    public View createAnswerKeyCard(AnswerKeyEntity key, AnswerKeyLinkInfo link,
+                                    List<AnswerKeyLinkedAssessment> linkedAssessments, Runnable onView, Runnable onEdit, Runnable onDelete) {
 
         LinearLayout card = new LinearLayout(activity);
         card.setOrientation(LinearLayout.VERTICAL);
@@ -597,6 +600,62 @@ public class ClassScreenRenderer {
         leftCol.addView(sub);
         header.addView(leftCol);
 
+        android.util.TypedValue menuBgValue = new android.util.TypedValue();
+        activity.getTheme().resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, menuBgValue, true);
+
+        android.widget.ImageView menuBtn = new android.widget.ImageView(activity);
+        menuBtn.setImageResource(R.drawable.ic_more_vert);
+        menuBtn.setColorFilter(Color.parseColor("#94A3B8"));
+        menuBtn.setPadding(ui.dp(8), ui.dp(6), ui.dp(8), ui.dp(6));
+        menuBtn.setLayoutParams(new LinearLayout.LayoutParams(ui.dp(32), ui.dp(32)));
+        menuBtn.setClickable(true);
+        menuBtn.setFocusable(true);
+        menuBtn.setBackgroundResource(menuBgValue.resourceId);
+        menuBtn.setOnClickListener(v -> {
+            android.widget.PopupMenu popup = new android.widget.PopupMenu(
+                    activity, menuBtn, Gravity.END, 0, R.style.PopupMenu_RoundedCard);
+
+            android.graphics.drawable.Drawable viewIcon =
+                    androidx.core.content.ContextCompat.getDrawable(activity, R.drawable.ic_eye_outline).mutate();
+            viewIcon.setTint(Color.parseColor("#64748B"));
+            android.graphics.drawable.Drawable editIcon =
+                    androidx.core.content.ContextCompat.getDrawable(activity, R.drawable.ic_edit_pencil).mutate();
+            editIcon.setTint(Color.parseColor("#64748B"));
+            android.graphics.drawable.Drawable deleteIcon =
+                    androidx.core.content.ContextCompat.getDrawable(activity, R.drawable.ic_trash_outline).mutate();
+            deleteIcon.setTint(Color.parseColor("#EF4444"));
+
+            android.text.SpannableString viewTitle = new android.text.SpannableString("View");
+            viewTitle.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#1E293B")), 0, viewTitle.length(), 0);
+            android.text.SpannableString editTitle = new android.text.SpannableString("Edit");
+            editTitle.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#1E293B")), 0, editTitle.length(), 0);
+            android.text.SpannableString deleteTitle = new android.text.SpannableString("Delete");
+            deleteTitle.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#1E293B")), 0, deleteTitle.length(), 0);
+
+            popup.getMenu().add(0, 1, 0, viewTitle).setIcon(viewIcon);
+            popup.getMenu().add(0, 2, 1, editTitle).setIcon(editIcon);
+            popup.getMenu().add(0, 3, 2, deleteTitle).setIcon(deleteIcon);
+
+            try {
+                java.lang.reflect.Field field = popup.getClass().getDeclaredField("mPopup");
+                field.setAccessible(true);
+                Object menuPopupHelper = field.get(popup);
+                Class<?> helperClass = Class.forName(menuPopupHelper.getClass().getName());
+                java.lang.reflect.Method setForceIcons = helperClass.getMethod("setForceShowIcon", boolean.class);
+                setForceIcons.invoke(menuPopupHelper, true);
+            } catch (Exception ignored) { }
+
+            popup.setOnMenuItemClickListener(item -> {
+                int id = item.getItemId();
+                if (id == 1) { onView.run(); return true; }
+                if (id == 2) { onEdit.run(); return true; }
+                if (id == 3) { onDelete.run(); return true; }
+                return false;
+            });
+            popup.show();
+        });
+        header.addView(menuBtn);
+
         TextView arrow = new TextView(activity);
         arrow.setText("›");
         arrow.setTextColor(Color.parseColor("#94A3B8"));
@@ -604,33 +663,87 @@ public class ClassScreenRenderer {
         header.addView(arrow);
         card.addView(header);
 
-        // Link status badge
-        TextView linkBadge = new TextView(activity);
-        GradientDrawable linkBadgeBg = new GradientDrawable();
-        linkBadgeBg.setCornerRadius(ui.dp(8));
+        // Link status: tappable "Linked to" dropdown + sheet-type badge, or a single "not linked" badge
+        LinearLayout linkBadgeRow = new LinearLayout(activity);
+        linkBadgeRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams linkBadgeRowLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        linkBadgeRowLp.topMargin = ui.dp(8);
+        linkBadgeRow.setLayoutParams(linkBadgeRowLp);
+
         boolean isLinked = link != null && link.linkedAssessmentName != null;
         if (isLinked) {
             String extra = link.linkedCount > 1 ? " (+" + (link.linkedCount - 1) + " more)" : "";
-            linkBadge.setText("🔗 Linked to " + link.linkedAssessmentName
-                    + (link.linkedSheetType != null ? " · " + link.linkedSheetType : "") + extra);
-            linkBadge.setTextColor(Color.parseColor("#1D4ED8"));
-            linkBadgeBg.setColor(Color.parseColor("#EFF6FF"));
-            linkBadgeBg.setStroke(ui.dp(1), Color.parseColor("#BFDBFE"));
+
+            TextView nameBadge = new TextView(activity);
+            nameBadge.setText("🔗 Linked to " + link.linkedAssessmentName + extra + "  ▾");
+            nameBadge.setTextColor(Color.parseColor("#1D4ED8"));
+            nameBadge.setTextSize(11);
+            nameBadge.setTypeface(null, Typeface.ITALIC);
+            GradientDrawable nameBadgeBg = new GradientDrawable();
+            nameBadgeBg.setCornerRadius(ui.dp(8));
+            nameBadgeBg.setColor(Color.parseColor("#EFF6FF"));
+            nameBadgeBg.setStroke(ui.dp(1), Color.parseColor("#BFDBFE"));
+            nameBadge.setBackground(nameBadgeBg);
+            nameBadge.setPadding(ui.dp(8), ui.dp(3), ui.dp(8), ui.dp(3));
+            nameBadge.setClickable(true);
+            nameBadge.setFocusable(true);
+            nameBadge.setOnClickListener(v -> {
+                List<AnswerKeyLinkedAssessment> rows = linkedAssessments != null
+                        ? linkedAssessments : new ArrayList<>();
+                String[] labels;
+                if (rows.isEmpty()) {
+                    // Fallback in case the grouped list hasn't loaded yet — show what we already know.
+                    labels = new String[]{ link.linkedAssessmentName
+                            + (link.linkedSheetType != null ? "  ·  " + link.linkedSheetType : "") };
+                } else {
+                    labels = new String[rows.size()];
+                    for (int i = 0; i < rows.size(); i++) {
+                        AnswerKeyLinkedAssessment r = rows.get(i);
+                        labels[i] = r.name + (r.sheetType != null ? "  ·  " + r.sheetType : "");
+                    }
+                }
+                new com.google.android.material.dialog.MaterialAlertDialogBuilder(
+                        activity, R.style.ThemeOverlay_OMRScanner_Dialog)
+                        .setTitle("Linked Assessments")
+                        .setItems(labels, null)
+                        .show();
+            });
+            linkBadgeRow.addView(nameBadge);
+
+            if (link.linkedSheetType != null) {
+                TextView typeBadge = new TextView(activity);
+                typeBadge.setText(link.linkedSheetType + " (" + key.getNumItems() + " items)");
+                typeBadge.setTextColor(Color.parseColor("#1D4ED8"));
+                typeBadge.setTextSize(11);
+                typeBadge.setTypeface(null, Typeface.ITALIC);
+                GradientDrawable typeBadgeBg = new GradientDrawable();
+                typeBadgeBg.setCornerRadius(ui.dp(8));
+                typeBadgeBg.setColor(Color.parseColor("#EFF6FF"));
+                typeBadgeBg.setStroke(ui.dp(1), Color.parseColor("#BFDBFE"));
+                typeBadge.setBackground(typeBadgeBg);
+                typeBadge.setPadding(ui.dp(8), ui.dp(3), ui.dp(8), ui.dp(3));
+                LinearLayout.LayoutParams typeBadgeLp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                typeBadgeLp.leftMargin = ui.dp(6);
+                typeBadge.setLayoutParams(typeBadgeLp);
+                linkBadgeRow.addView(typeBadge);
+            }
         } else {
-            linkBadge.setText("◌ Not linked to an assessment");
-            linkBadge.setTextColor(Color.parseColor("#64748B"));
-            linkBadgeBg.setColor(Color.parseColor("#F1F5F9"));
-            linkBadgeBg.setStroke(ui.dp(1), Color.parseColor("#E2E8F0"));
+            TextView notLinkedBadge = new TextView(activity);
+            notLinkedBadge.setText("◌ Not linked to an assessment");
+            notLinkedBadge.setTextColor(Color.parseColor("#64748B"));
+            notLinkedBadge.setTextSize(11);
+            notLinkedBadge.setTypeface(null, Typeface.ITALIC);
+            GradientDrawable notLinkedBg = new GradientDrawable();
+            notLinkedBg.setCornerRadius(ui.dp(8));
+            notLinkedBg.setColor(Color.parseColor("#F1F5F9"));
+            notLinkedBg.setStroke(ui.dp(1), Color.parseColor("#E2E8F0"));
+            notLinkedBadge.setBackground(notLinkedBg);
+            notLinkedBadge.setPadding(ui.dp(8), ui.dp(3), ui.dp(8), ui.dp(3));
+            linkBadgeRow.addView(notLinkedBadge);
         }
-        linkBadge.setTextSize(11);
-        linkBadge.setTypeface(null, Typeface.ITALIC);
-        linkBadge.setBackground(linkBadgeBg);
-        linkBadge.setPadding(ui.dp(8), ui.dp(3), ui.dp(8), ui.dp(3));
-        LinearLayout.LayoutParams linkBadgeLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        linkBadgeLp.topMargin = ui.dp(8);
-        linkBadge.setLayoutParams(linkBadgeLp);
-        card.addView(linkBadge);
+        card.addView(linkBadgeRow);
 
         // Meta
         TextView meta = new TextView(activity);
@@ -646,36 +759,7 @@ public class ClassScreenRenderer {
         meta.setLayoutParams(mlp);
         card.addView(meta);
 
-        View divider = new View(activity);
-        LinearLayout.LayoutParams divLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ui.dp(1));
-        divLp.topMargin = ui.dp(14);
-        divLp.bottomMargin = ui.dp(4);
-        divider.setLayoutParams(divLp);
-        divider.setBackgroundColor(Color.parseColor("#F1F5F9"));
-        card.addView(divider);
-
-        // Actions row
-        LinearLayout actionsRow = new LinearLayout(activity);
-        actionsRow.setOrientation(LinearLayout.HORIZONTAL);
-        actionsRow.setLayoutParams(new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        actionsRow.setWeightSum(2f);
-
-        android.util.TypedValue outValue = new android.util.TypedValue();
-        activity.getTheme().resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, outValue, true);
-
-        TextView btnEdit = makeActionBtn("✏️ Edit", "#64748B", outValue.resourceId);
-        btnEdit.setOnClickListener(v -> onEdit.run());
-
-        TextView btnDelete = makeActionBtn("🗑️ Delete", "#EF4444", outValue.resourceId);
-        btnDelete.setOnClickListener(v -> onDelete.run());
-
-        actionsRow.addView(btnEdit);
-        actionsRow.addView(btnDelete);
-        card.addView(actionsRow);
-
-        card.setOnClickListener(v -> onEdit.run());
+        card.setOnClickListener(v -> onView.run());
         return card;
     }
 

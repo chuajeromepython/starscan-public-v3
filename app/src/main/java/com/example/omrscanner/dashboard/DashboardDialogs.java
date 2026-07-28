@@ -1196,7 +1196,7 @@ public class DashboardDialogs {
                     btn.setText(baseId + "\n" + plainLabel);
                     updateSheetTypeSelection(typeButtons, -1);
                     currentItemCount[0] = 30;
-                    renderAnswerGrid(gridContainer, answerSelections, currentItemCount[0]);
+                    renderAnswerGrid(gridContainer, answerSelections, currentItemCount[0], false);
                     return;
                 }
                 promptItemCount(baseId, rangeStart, maxItems, chosenCount -> {
@@ -1205,7 +1205,7 @@ public class DashboardDialogs {
                     selectedTypeIdx[0] = idx;
                     updateSheetTypeSelection(typeButtons, idx);
                     currentItemCount[0] = chosenCount;
-                    renderAnswerGrid(gridContainer, answerSelections, currentItemCount[0]);
+                    renderAnswerGrid(gridContainer, answerSelections, currentItemCount[0], false);
                 });
             });
             typeRow.addView(btn);
@@ -1231,7 +1231,7 @@ public class DashboardDialogs {
 
         root.addView(ui.createFieldLabel("ANSWER KEY"));
         root.addView(answersScroll);
-        renderAnswerGrid(gridContainer, answerSelections, currentItemCount[0]);
+        renderAnswerGrid(gridContainer, answerSelections, currentItemCount[0], false);
 
         LinearLayout actions = ui.buildActionsRow(ui.dp(20));
         TextView btnCancel = ui.createDialogButton("Cancel", false);
@@ -1291,21 +1291,31 @@ public class DashboardDialogs {
     }
 
     // ─────────────────────────────────────────────────────────────
-    // Edit Answer Key
+    // View / Edit Answer Key
     // ─────────────────────────────────────────────────────────────
 
     public void showEditAnswerKeyDialog(AnswerKeyEntity key) {
+        showAnswerKeyDetailDialog(key, false);
+    }
+
+    public void showViewAnswerKeyDialog(AnswerKeyEntity key) {
+        showAnswerKeyDetailDialog(key, true);
+    }
+
+    private void showAnswerKeyDetailDialog(AnswerKeyEntity key, boolean readOnly) {
         Dialog dialog = new Dialog(activity);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setCancelable(true);
 
         LinearLayout root = ui.buildSheet();
         root.addView(ui.createDialogHandle());
-        root.addView(ui.buildSheetTitle("✏️ Edit Answer Key", "#059669", Gravity.START, 20));
+        String keyTitle = (key.name != null && !key.name.trim().isEmpty()) ? key.name : "Untitled answer key";
+        root.addView(ui.buildSheetTitle((readOnly ? "👁 " : "✏️ ") + keyTitle, "#059669", Gravity.START, 20));
 
         root.addView(ui.createFieldLabel("ASSESSMENT NAME *"));
         EditText nameInput = ui.createLightInput("e.g. Midterm Exam");
         if (key.name != null) nameInput.setText(key.name);
+        nameInput.setEnabled(!readOnly);
         root.addView(nameInput);
 
         root.addView(ui.createFieldLabel("YEAR / SCHOOL YEAR *"));
@@ -1315,17 +1325,22 @@ public class DashboardDialogs {
         final String[] selectedSY = {initSY};
         TextView syPicker = ui.createDropdownField(initSY);
         syPicker.setTextColor(Color.parseColor("#1E293B"));
-        syPicker.setOnClickListener(v ->
-                new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_OMRScanner_Dialog)
-                        .setTitle("Select School Year")
-                        .setItems(syOptions, (dlg, which) -> {
-                            selectedSY[0] = syOptions[which];
-                            syPicker.setText(syOptions[which] + "  ▾");
-                            syPicker.setTextColor(Color.parseColor("#1E293B"));
-                        }).show());
+        if (readOnly) {
+            syPicker.setClickable(false);
+            syPicker.setFocusable(false);
+        } else {
+            syPicker.setOnClickListener(v ->
+                    new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_OMRScanner_Dialog)
+                            .setTitle("Select School Year")
+                            .setItems(syOptions, (dlg, which) -> {
+                                selectedSY[0] = syOptions[which];
+                                syPicker.setText(syOptions[which] + "  ▾");
+                                syPicker.setTextColor(Color.parseColor("#1E293B"));
+                            }).show());
+        }
         root.addView(syPicker);
 
-        // Sheet type is read-only on edit (changing it invalidates existing answers)
+        // Sheet type is always read-only here (changing it invalidates existing answers)
         root.addView(ui.createFieldLabel("OMR SHEET TYPE (locked)"));
         TextView sheetInfo = new TextView(activity);
         String st = key.sheetType != null ? key.sheetType : "ZPH30";
@@ -1364,55 +1379,62 @@ public class DashboardDialogs {
         gridContainer.setOrientation(LinearLayout.VERTICAL);
         answersScroll.addView(gridContainer);
         root.addView(answersScroll);
-        renderAnswerGrid(gridContainer, answerSelections, numItems);
+        renderAnswerGrid(gridContainer, answerSelections, numItems, readOnly);
 
         LinearLayout actions = ui.buildActionsRow(ui.dp(20));
-        TextView btnCancel = ui.createDialogButton("Cancel", false);
-        TextView btnSave = ui.createDialogButton("Save", true);
-        actions.addView(btnCancel);
-        actions.addView(ui.spacer(ui.dp(10)));
-        actions.addView(btnSave);
-        root.addView(actions);
+        if (readOnly) {
+            TextView btnClose = ui.createDialogButton("Close", true);
+            actions.addView(btnClose);
+            root.addView(actions);
+            btnClose.setOnClickListener(v -> dialog.dismiss());
+        } else {
+            TextView btnCancel = ui.createDialogButton("Cancel", false);
+            TextView btnSave = ui.createDialogButton("Save", true);
+            actions.addView(btnCancel);
+            actions.addView(ui.spacer(ui.dp(10)));
+            actions.addView(btnSave);
+            root.addView(actions);
 
-        btnCancel.setOnClickListener(v -> dialog.dismiss());
-        btnSave.setOnClickListener(v -> {
-            String name = nameInput.getText().toString().trim();
-            if (name.isEmpty()) {
-                ui.showErrorDialog("Missing Name", "Please enter the assessment name for this answer key.");
-                return;
-            }
-
-            // Validate that every item has an answer selected
-            List<Integer> missingItems = new ArrayList<>();
-            for (int i = 0; i < numItems; i++) {
-                if (answerSelections[i] == null || answerSelections[i].isEmpty()) {
-                    missingItems.add(i + 1); // 1-based item number
+            btnCancel.setOnClickListener(v -> dialog.dismiss());
+            btnSave.setOnClickListener(v -> {
+                String name = nameInput.getText().toString().trim();
+                if (name.isEmpty()) {
+                    ui.showErrorDialog("Missing Name", "Please enter the assessment name for this answer key.");
+                    return;
                 }
-            }
-            if (!missingItems.isEmpty()) {
-                ui.showErrorDialog("Incomplete Answer Key",
-                        "Please select an answer for all " + numItems + " items before saving.\n\n"
-                                + missingItems.size() + " item(s) still unanswered: "
-                                + formatMissingItems(missingItems));
-                return;
-            }
 
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < numItems; i++) {
-                String ans = answerSelections[i];
-                sb.append(ans.isEmpty() ? "?" : ans);
-                if (i < numItems - 1) sb.append(",");
-            }
-            key.name = name;
-            key.schoolYear = selectedSY[0];
-            key.answers = sb.toString();
-            repo.updateAnswerKey(key, ignored -> activity.runOnUiThread(() -> {
-                dialog.dismiss();
-                ui.showToast("Answer Key updated ✓");
-                host.reloadAnswerKeys();
-                host.loadDataFromDb();
-            }));
-        });
+                // Validate that every item has an answer selected
+                List<Integer> missingItems = new ArrayList<>();
+                for (int i = 0; i < numItems; i++) {
+                    if (answerSelections[i] == null || answerSelections[i].isEmpty()) {
+                        missingItems.add(i + 1); // 1-based item number
+                    }
+                }
+                if (!missingItems.isEmpty()) {
+                    ui.showErrorDialog("Incomplete Answer Key",
+                            "Please select an answer for all " + numItems + " items before saving.\n\n"
+                                    + missingItems.size() + " item(s) still unanswered: "
+                                    + formatMissingItems(missingItems));
+                    return;
+                }
+
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < numItems; i++) {
+                    String ans = answerSelections[i];
+                    sb.append(ans.isEmpty() ? "?" : ans);
+                    if (i < numItems - 1) sb.append(",");
+                }
+                key.name = name;
+                key.schoolYear = selectedSY[0];
+                key.answers = sb.toString();
+                repo.updateAnswerKey(key, ignored -> activity.runOnUiThread(() -> {
+                    dialog.dismiss();
+                    ui.showToast("Answer Key updated ✓");
+                    host.reloadAnswerKeys();
+                    host.loadDataFromDb();
+                }));
+            });
+        }
 
         dialog.setContentView(root);
         ui.configureBottomDialog(dialog);
@@ -1709,7 +1731,7 @@ public class DashboardDialogs {
         return fallback;
     }
 
-    private void renderAnswerGrid(LinearLayout gridContainer, String[] answerSelections, int itemCount) {
+    private void renderAnswerGrid(LinearLayout gridContainer, String[] answerSelections, int itemCount, boolean readOnly) {
         gridContainer.removeAllViews();
 
         // Header Row
@@ -1757,13 +1779,13 @@ public class DashboardDialogs {
             tNum.setLayoutParams(new LinearLayout.LayoutParams(ui.dp(40), ViewGroup.LayoutParams.WRAP_CONTENT));
             row.addView(tNum);
 
-            row.addView(buildOptionGroup(r, answerSelections));
+            row.addView(buildOptionGroup(r, answerSelections, readOnly));
 
             gridContainer.addView(row);
         }
     }
 
-    private View buildOptionGroup(int itemIndex, String[] answerSelections) {
+    private View buildOptionGroup(int itemIndex, String[] answerSelections, boolean readOnly) {
         LinearLayout group = new LinearLayout(activity);
         group.setOrientation(LinearLayout.HORIZONTAL);
         group.setGravity(Gravity.CENTER_VERTICAL);
@@ -1787,16 +1809,18 @@ public class DashboardDialogs {
             btn.setLayoutParams(lp);
             btns[i] = btn;
 
-            btn.setOnClickListener(v -> {
-                // Radio logic: selecting the current letter replaces any previous selection;
-                // tapping the already-selected letter deselects it.
-                if (opt.equals(answerSelections[itemIndex])) {
-                    answerSelections[itemIndex] = ""; // deselect
-                } else {
-                    answerSelections[itemIndex] = opt; // select exclusively
-                }
-                if (refreshAll[0] != null) refreshAll[0].run();
-            });
+            if (!readOnly) {
+                btn.setOnClickListener(v -> {
+                    // Radio logic: selecting the current letter replaces any previous selection;
+                    // tapping the already-selected letter deselects it.
+                    if (opt.equals(answerSelections[itemIndex])) {
+                        answerSelections[itemIndex] = ""; // deselect
+                    } else {
+                        answerSelections[itemIndex] = opt; // select exclusively
+                    }
+                    if (refreshAll[0] != null) refreshAll[0].run();
+                });
+            }
 
             group.addView(btn);
         }

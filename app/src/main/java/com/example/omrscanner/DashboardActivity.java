@@ -49,6 +49,7 @@ import com.example.omrscanner.ui.ScanDetailActivity;
 import android.widget.ImageView;
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 import com.example.omrscanner.database.projections.AnswerKeyLinkInfo;
+import com.example.omrscanner.database.projections.AnswerKeyLinkedAssessment;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -121,6 +122,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
      */
     private List<AnswerKeyEntity> answerKeys = new ArrayList<>();
     private Map<String, AnswerKeyLinkInfo> answerKeyLinkInfo = new java.util.HashMap<>();
+    private Map<String, List<AnswerKeyLinkedAssessment>> answerKeyLinkedAssessments = new java.util.HashMap<>();
 
     private String classSearchQuery = "";
     private String selectedClassGradeFilter = null;
@@ -345,7 +347,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
-                if (SCREEN_USER.equals(currentScreen)) {
+                if (SCREEN_USER.equals(currentScreen)
+                        || SCREEN_ASSESSMENTS.equals(currentScreen)
+                        || SCREEN_ANSWERKEYS.equals(currentScreen)) {
                     selectHomeTab();
                 } else if (SCREEN_ACTIVITY.equals(currentScreen)) {
                     selectedActivity = null;
@@ -1435,19 +1439,31 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private void updateBottomNavSelection(String screen) {
         int activeColor = Color.parseColor("#FFFFFF");
         int inactiveColor = Color.parseColor("#CCFFFFFF");
+        // Icons use real alpha (setImageAlpha), not a color-filter blend — a colorFilter's
+        // alpha has no visible effect on an already-white icon (white blended atop white
+        // via SRC_ATOP is still white), so the icon must be dimmed by true transparency instead.
+        int activeAlpha = 255;
+        int inactiveAlpha = 130;
 
         boolean userActive = SCREEN_USER.equals(screen);
         boolean assessmentsActive = SCREEN_ASSESSMENTS.equals(screen);
         boolean answerKeysActive = SCREEN_ANSWERKEYS.equals(screen);
         boolean homeActive = !userActive && !assessmentsActive && !answerKeysActive;
 
-        navHomeIcon.setColorFilter(homeActive ? activeColor : inactiveColor);
+        navHomeIcon.setColorFilter(activeColor);
+        navHomeIcon.setImageAlpha(homeActive ? activeAlpha : inactiveAlpha);
         navHomeLabel.setTextColor(homeActive ? activeColor : inactiveColor);
-        navAssessmentsIcon.setColorFilter(assessmentsActive ? activeColor : inactiveColor);
+
+        navAssessmentsIcon.setColorFilter(activeColor);
+        navAssessmentsIcon.setImageAlpha(assessmentsActive ? activeAlpha : inactiveAlpha);
         navAssessmentsLabel.setTextColor(assessmentsActive ? activeColor : inactiveColor);
-        navAnswerKeysIcon.setColorFilter(answerKeysActive ? activeColor : inactiveColor);
+
+        navAnswerKeysIcon.setColorFilter(activeColor);
+        navAnswerKeysIcon.setImageAlpha(answerKeysActive ? activeAlpha : inactiveAlpha);
         navAnswerKeysLabel.setTextColor(answerKeysActive ? activeColor : inactiveColor);
-        navUserIcon.setColorFilter(userActive ? activeColor : inactiveColor);
+
+        navUserIcon.setColorFilter(activeColor);
+        navUserIcon.setImageAlpha(userActive ? activeAlpha : inactiveAlpha);
         navUserLabel.setTextColor(userActive ? activeColor : inactiveColor);
     }
 
@@ -1903,6 +1919,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             answerKeysAllList.addView(classRenderer.createAnswerKeyCard(
                     key,
                     answerKeyLinkInfo.get(key.id),
+                    answerKeyLinkedAssessments.get(key.id),
+                    () -> dialogs.showViewAnswerKeyDialog(key),
                     () -> dialogs.showEditAnswerKeyDialog(key),
                     () -> dialogs.showDeleteAnswerKeyConfirmation(key)));
         }
@@ -2455,7 +2473,17 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 if (links != null) {
                     for (AnswerKeyLinkInfo l : links) answerKeyLinkInfo.put(l.id, l);
                 }
-                if (SCREEN_ANSWERKEYS.equals(currentScreen)) renderAnswerKeysScreen();
+                repo.getAnswerKeyLinkedAssessments(rows -> runOnUiThread(() -> {
+                    answerKeyLinkedAssessments.clear();
+                    if (rows != null) {
+                        for (AnswerKeyLinkedAssessment r : rows) {
+                            answerKeyLinkedAssessments
+                                    .computeIfAbsent(r.answerKeyId, k -> new ArrayList<>())
+                                    .add(r);
+                        }
+                    }
+                    if (SCREEN_ANSWERKEYS.equals(currentScreen)) renderAnswerKeysScreen();
+                }));
             }));
         }));
     }
