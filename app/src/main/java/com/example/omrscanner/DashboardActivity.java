@@ -190,12 +190,18 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private TextView classAssessmentCount;
     private EditText classAssessmentSearchInput;
     private TextView classAssessmentSortPicker;
+    private LinearLayout classAssessmentFilterPanel;
+    private android.widget.ImageView classAssessmentFilterToggle;
+    private boolean classAssessmentFilterPanelVisible = false;
     private LinearLayout assessmentsAllList, assessmentsAllEmpty;
     private TextView assessmentsAllCount;
     private TextView assessmentsSummaryTeacher, assessmentsSummaryCount, assessmentsSummaryClassCount;
     private LinearLayout myAssessmentsGroupSwitcher, myAssessmentsSheetTabs;
     private EditText myAssessmentsSearchInput;
     private TextView myAssessmentsSortPicker;
+    private LinearLayout myAssessmentsFilterPanel;
+    private android.widget.ImageView myAssessmentsFilterToggle;
+    private boolean myAssessmentsFilterPanelVisible = false;
 
     private LinearLayout answerKeysAllList, answerKeysAllEmpty;
     private TextView answerKeysAllCount;
@@ -425,6 +431,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         classAssessmentCount = findViewById(R.id.classAssessmentCount);
         classAssessmentSearchInput = findViewById(R.id.classAssessmentSearchInput);
         classAssessmentSortPicker = findViewById(R.id.classAssessmentSortPicker);
+        classAssessmentFilterPanel = findViewById(R.id.classAssessmentFilterPanel);
+        classAssessmentFilterToggle = findViewById(R.id.classAssessmentFilterToggle);
         assessmentsAllList = findViewById(R.id.assessmentsAllList);
         assessmentsAllEmpty = findViewById(R.id.assessmentsAllEmpty);
         assessmentsAllCount = findViewById(R.id.assessmentsAllCount);
@@ -435,6 +443,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         myAssessmentsSheetTabs = findViewById(R.id.myAssessmentsSheetTabs);
         myAssessmentsSearchInput = findViewById(R.id.myAssessmentsSearchInput);
         myAssessmentsSortPicker = findViewById(R.id.myAssessmentsSortPicker);
+        myAssessmentsFilterPanel = findViewById(R.id.myAssessmentsFilterPanel);
+        myAssessmentsFilterToggle = findViewById(R.id.myAssessmentsFilterToggle);
 
         answerKeysAllList = findViewById(R.id.answerKeysAllList);
         answerKeysAllEmpty = findViewById(R.id.answerKeysAllEmpty);
@@ -611,9 +621,27 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             homeRenderer.updateFilterToggleAppearance(homeFilterToggle, homeFilterPanelVisible,
                     selectedClassGradeFilter, selectedClassSchoolYearFilter, selectedClassSort);
         });
+
+        classAssessmentFilterToggle.setOnClickListener(v -> {
+            classAssessmentFilterPanelVisible = !classAssessmentFilterPanelVisible;
+            classAssessmentFilterPanel.setVisibility(classAssessmentFilterPanelVisible ? View.VISIBLE : View.GONE);
+            classRenderer.updateAssessmentFilterToggleAppearance(classAssessmentFilterToggle,
+                    classAssessmentFilterPanelVisible,
+                    !ASSESSMENT_SORT_NEWEST.equals(selectedAssessmentSort)
+                            || selectedSheetFilter != null || selectedClassTypeFilter != null);
+        });
+
+        myAssessmentsFilterToggle.setOnClickListener(v -> {
+            myAssessmentsFilterPanelVisible = !myAssessmentsFilterPanelVisible;
+            myAssessmentsFilterPanel.setVisibility(myAssessmentsFilterPanelVisible ? View.VISIBLE : View.GONE);
+            classRenderer.updateAssessmentFilterToggleAppearance(myAssessmentsFilterToggle,
+                    myAssessmentsFilterPanelVisible,
+                    !ASSESSMENT_SORT_NEWEST.equals(selectedMyAssessmentsSort)
+                            || selectedMyAssessmentsSheetFilter != null
+                            || selectedMyAssessmentsTypeFilter != null
+                            || selectedMyAssessmentsClassFilter != null);
+        });
     }
-
-
 
     /**
      * Entry point for creating a new assessment from the All Assessments tab, where
@@ -1652,6 +1680,11 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         int activityCount = selectedClass.getActivityCount();
         classActivityCount.setText(activityCount + " assessment" + (activityCount == 1 ? "" : "s"));
 
+        classRenderer.updateAssessmentFilterToggleAppearance(classAssessmentFilterToggle,
+                classAssessmentFilterPanelVisible,
+                !ASSESSMENT_SORT_NEWEST.equals(selectedAssessmentSort)
+                        || selectedSheetFilter != null || selectedClassTypeFilter != null);
+
         classRenderer.buildGroupBySwitcher(classGroupSwitcher, new String[][]{
                 {"Sheet Type", "SHEET"},
                 {"Assessment Type", "TYPE"},
@@ -1746,6 +1779,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         for (ClassFolder cf : classFolders) {
             if (cf.getActivities() != null) allActivitiesAcrossClasses.addAll(cf.getActivities());
         }
+
+        classRenderer.updateAssessmentFilterToggleAppearance(myAssessmentsFilterToggle,
+                myAssessmentsFilterPanelVisible,
+                !ASSESSMENT_SORT_NEWEST.equals(selectedMyAssessmentsSort)
+                        || selectedMyAssessmentsSheetFilter != null
+                        || selectedMyAssessmentsTypeFilter != null
+                        || selectedMyAssessmentsClassFilter != null);
 
         classRenderer.buildGroupBySwitcher(myAssessmentsGroupSwitcher, myAssessmentsGroupBy, key -> {
             myAssessmentsGroupBy = key;
@@ -1927,9 +1967,16 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         }
         final int[] selectedMode = {defaultSelection};
 
+        CharSequence[] cameraModeItems = new CharSequence[cameraModes.length];
+        for (int i = 0; i < cameraModes.length; i++) {
+            android.text.SpannableString s = new android.text.SpannableString(cameraModes[i]);
+            s.setSpan(new android.text.style.ForegroundColorSpan(Color.BLACK), 0, s.length(), 0);
+            cameraModeItems[i] = s;
+        }
+
         new com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_OMRScanner_Dialog)
                 .setTitle("Choose Camera Mode")
-                .setSingleChoiceItems(cameraModes, defaultSelection, (dialog, which) -> selectedMode[0] = which)
+                .setSingleChoiceItems(cameraModeItems, defaultSelection, (dialog, which) -> selectedMode[0] = which)
                 .setPositiveButton("Open Camera", (dialog, which) -> {
                     boolean tiltAgnosticMode = selectedMode[0] == 1;
                     boolean basicMode = selectedMode[0] == 2;

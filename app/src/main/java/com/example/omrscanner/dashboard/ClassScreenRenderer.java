@@ -56,7 +56,7 @@ public class ClassScreenRenderer {
     }
 
     public void showAssessmentSortDialog(String selectedAssessmentSort,
-            java.util.function.Consumer<String> onSelected) {
+                                         java.util.function.Consumer<String> onSelected) {
         final String[] labels = {"Newest", "Oldest", "Name A-Z", "Name Z-A",
                 "Exam Date (Newest)", "Exam Date (Oldest)"};
         final String[] keys = {ASSESSMENT_SORT_NEWEST, ASSESSMENT_SORT_OLDEST,
@@ -65,11 +65,23 @@ public class ClassScreenRenderer {
         int checked = indexOfKey(keys, selectedAssessmentSort);
         new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_OMRScanner_Dialog)
                 .setTitle("Sort Assessments")
-                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                .setSingleChoiceItems(blackItems(labels), checked, (dialog, which) -> {
                     onSelected.accept(keys[which]);
                     dialog.dismiss();
                 })
                 .show();
+    }
+
+    /** Forces dialog list-item text to render solid black — the Material3 single-choice
+     *  dialog list otherwise renders item text in gray regardless of theme overrides. */
+    private CharSequence[] blackItems(String[] labels) {
+        CharSequence[] out = new CharSequence[labels.length];
+        for (int i = 0; i < labels.length; i++) {
+            android.text.SpannableString s = new android.text.SpannableString(labels[i]);
+            s.setSpan(new android.text.style.ForegroundColorSpan(Color.BLACK), 0, s.length(), 0);
+            out[i] = s;
+        }
+        return out;
     }
 
     private int indexOfKey(String[] keys, String selected) {
@@ -78,6 +90,38 @@ public class ClassScreenRenderer {
             if (selected.equals(keys[i])) return i;
         }
         return 0;
+    }
+
+    /**
+     * Updates a search-bar filter-toggle button's appearance — identical styling to
+     * HomeScreenRenderer.updateFilterToggleAppearance(), used by MY CLASSES: filled blue
+     * while the panel is open, outlined blue when a non-default filter/sort is active,
+     * neutral gray otherwise.
+     */
+    public void updateAssessmentFilterToggleAppearance(
+            android.widget.ImageView filterToggle,
+            boolean filterPanelVisible,
+            boolean hasActiveFilter) {
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(ui.dp(8));
+
+        if (filterPanelVisible) {
+            bg.setColor(Color.parseColor("#0038A8"));
+            bg.setStroke(ui.dp(1), Color.parseColor("#0038A8"));
+            filterToggle.setColorFilter(Color.WHITE, android.graphics.PorterDuff.Mode.SRC_IN);
+        } else if (hasActiveFilter) {
+            bg.setColor(Color.parseColor("#EFF6FF"));
+            bg.setStroke(ui.dp(1), Color.parseColor("#2563EB"));
+            filterToggle.setColorFilter(Color.parseColor("#2563EB"), android.graphics.PorterDuff.Mode.SRC_IN);
+        } else {
+            bg.setColor(Color.parseColor("#F1F5F9"));
+            bg.setStroke(ui.dp(1), Color.parseColor("#E2E8F0"));
+            filterToggle.setColorFilter(Color.parseColor("#64748B"), android.graphics.PorterDuff.Mode.SRC_IN);
+        }
+
+        filterToggle.setBackground(bg);
+        filterToggle.setPadding(ui.dp(6), ui.dp(6), ui.dp(6), ui.dp(6));
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -410,11 +454,12 @@ public class ClassScreenRenderer {
         meta.setLayoutParams(mlp);
         card.addView(meta);
 
-        // Class badge + answer key badge + needs-correction badge (shown only when applicable)
+        // Scan count badge + class badge + answer key badge + needs-correction badge
+        // (scan count badge always shown; the rest only when applicable)
         boolean hasClassBadge = row.className != null && !row.className.trim().isEmpty();
         boolean hasKeyBadge = row.answerKeyName != null && !row.answerKeyName.isEmpty();
         boolean hasCorrectionBadge = row.needsCorrectionCount > 0;
-        if (hasClassBadge || hasKeyBadge || hasCorrectionBadge) {
+        {
             LinearLayout badgeRow = new LinearLayout(activity);
             badgeRow.setOrientation(LinearLayout.HORIZONTAL);
             badgeRow.setGravity(Gravity.CENTER_VERTICAL);
@@ -422,6 +467,20 @@ public class ClassScreenRenderer {
                     ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             badgeRowLp.topMargin = ui.dp(6);
             badgeRow.setLayoutParams(badgeRowLp);
+
+            // Scan count badge — always shown, first in the row.
+            TextView scanCountBadge = new TextView(activity);
+            scanCountBadge.setText("\uD83D\uDCC4 " + row.scanCount + (row.scanCount == 1 ? " scan" : " scans"));
+            scanCountBadge.setTextColor(Color.parseColor("#0038A8"));
+            scanCountBadge.setTextSize(11);
+            scanCountBadge.setTypeface(null, Typeface.ITALIC);
+            GradientDrawable scanCountBadgeBg = new GradientDrawable();
+            scanCountBadgeBg.setColor(Color.parseColor("#EFF6FF"));
+            scanCountBadgeBg.setCornerRadius(ui.dp(8));
+            scanCountBadgeBg.setStroke(ui.dp(1), Color.parseColor("#BFDBFE"));
+            scanCountBadge.setBackground(scanCountBadgeBg);
+            scanCountBadge.setPadding(ui.dp(8), ui.dp(3), ui.dp(8), ui.dp(3));
+            badgeRow.addView(scanCountBadge);
 
             if (hasClassBadge) {
                 TextView classBadge = new TextView(activity);
@@ -435,6 +494,10 @@ public class ClassScreenRenderer {
                 classBadgeBg.setStroke(ui.dp(1), Color.parseColor("#C7D2FE"));
                 classBadge.setBackground(classBadgeBg);
                 classBadge.setPadding(ui.dp(8), ui.dp(3), ui.dp(8), ui.dp(3));
+                LinearLayout.LayoutParams classBadgeLp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                classBadgeLp.leftMargin = ui.dp(6);
+                classBadge.setLayoutParams(classBadgeLp);
                 badgeRow.addView(classBadge);
             }
 
@@ -452,7 +515,7 @@ public class ClassScreenRenderer {
                 keyBadge.setPadding(ui.dp(8), ui.dp(3), ui.dp(8), ui.dp(3));
                 LinearLayout.LayoutParams keyBadgeLp = new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                if (hasClassBadge) keyBadgeLp.leftMargin = ui.dp(6);
+                keyBadgeLp.leftMargin = ui.dp(6);
                 keyBadge.setLayoutParams(keyBadgeLp);
                 badgeRow.addView(keyBadge);
             }
@@ -472,7 +535,7 @@ public class ClassScreenRenderer {
                 correctionBadge.setPadding(ui.dp(8), ui.dp(3), ui.dp(8), ui.dp(3));
                 LinearLayout.LayoutParams cblp = new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                if (hasKeyBadge) cblp.leftMargin = ui.dp(6);
+                cblp.leftMargin = ui.dp(6);
                 correctionBadge.setLayoutParams(cblp);
                 badgeRow.addView(correctionBadge);
             }

@@ -61,11 +61,23 @@ public class HomeScreenRenderer {
         int checked = indexOfKey(keys, selectedClassSort);
         new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_OMRScanner_Dialog)
                 .setTitle("Sort Classes")
-                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                .setSingleChoiceItems(blackItems(labels), checked, (dialog, which) -> {
                     onSelected.accept(keys[which]);
                     dialog.dismiss();
                 })
                 .show();
+    }
+
+    /** Forces dialog list-item text to render solid black — the Material3 single-choice
+     *  dialog list otherwise renders item text in gray regardless of theme overrides. */
+    private CharSequence[] blackItems(String[] labels) {
+        CharSequence[] out = new CharSequence[labels.length];
+        for (int i = 0; i < labels.length; i++) {
+            android.text.SpannableString s = new android.text.SpannableString(labels[i]);
+            s.setSpan(new android.text.style.ForegroundColorSpan(Color.BLACK), 0, s.length(), 0);
+            out[i] = s;
+        }
+        return out;
     }
 
     private int indexOfKey(String[] keys, String selected) {
