@@ -92,13 +92,11 @@ public class ClassScreenRenderer {
                                     List<ActivityFolder> activities, String selectedSheetFilter,
                                     java.util.function.Consumer<String> onTabSelected) {
 
-        int countZPH30 = 0, countZPH40 = 0, countZPH50 = 0, countZPH60 = 0;
+        int countZPH40 = 0, countZPH60 = 0;
         if (activities != null) {
             for (ActivityFolder act : activities) {
                 switch (act.getSheetType()) {
-                    case "ZPH30": countZPH30++; break;
                     case "ZPH40": countZPH40++; break;
-                    case "ZPH50": countZPH50++; break;
                     case "ZPH60": countZPH60++; break;
                 }
             }
@@ -107,9 +105,7 @@ public class ClassScreenRenderer {
 
         Object[][] tabs = {
                 {"All",   null,    totalCount},
-                {"ZPH30", "ZPH30", countZPH30},
                 {"ZPH40", "ZPH40", countZPH40},
-                {"ZPH50", "ZPH50", countZPH50},
                 {"ZPH60", "ZPH60", countZPH60},
         };
 
