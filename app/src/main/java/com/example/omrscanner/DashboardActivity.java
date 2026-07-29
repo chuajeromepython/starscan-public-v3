@@ -3,6 +3,7 @@ package com.example.omrscanner;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Bundle;
 import android.os.Looper;
@@ -10,6 +11,7 @@ import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
@@ -337,6 +339,18 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         controller.setSystemBarsBehavior(
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
         controller.hide(WindowInsetsCompat.Type.systemBars());
+
+        // Let content draw under the display cutout (punch-hole camera)
+        // instead of leaving a reserved black bar there. The theme sets
+        // shortEdges for API 28-29; on API 30+ we explicitly request
+        // ALWAYS so the cutout area stays available even in this
+        // hidden-status-bar / immersive state.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            WindowManager.LayoutParams lp = getWindow().getAttributes();
+            lp.layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
+            getWindow().setAttributes(lp);
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════

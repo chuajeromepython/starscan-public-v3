@@ -7,9 +7,21 @@
         <!-- ── Global Poppins font ── -->
         <item name="android:fontFamily">@font/poppins</item>
         <item name="fontFamily">@font/poppins</item>
+
+        <!-- Allow edge-to-edge content to draw under the display cutout
+             (punch-hole/notch) instead of leaving a black reserved bar,
+             since the app hides the status bar and goes edge-to-edge. -->
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="p">shortEdges</item>
     </style>
 
     <style name="Theme.OMRScanner" parent="Base.Theme.OMRScanner" />
+
+    <!-- CameraActivity keeps the platform-default cutout handling — the
+         live scanning screen should not draw its content underneath the
+         punch-hole camera; only Dashboard-style screens opt into that. -->
+    <style name="Theme.OMRScanner.Camera" parent="Theme.OMRScanner">
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="p">default</item>
+    </style>
 
     <!-- Rounded white card look for the class-card overflow menu -->
     <style name="PopupMenu.RoundedCard" parent="Widget.Material3.PopupMenu">

@@ -7,5 +7,10 @@
         <!-- ── Global Poppins font ── -->
         <item name="android:fontFamily">@font/poppins</item>
         <item name="fontFamily">@font/poppins</item>
+
+        <!-- Allow edge-to-edge content to draw under the display cutout
+             (punch-hole/notch) instead of leaving a black reserved bar,
+             since the app hides the status bar and goes edge-to-edge. -->
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="p">shortEdges</item>
     </style>
 </resources>
