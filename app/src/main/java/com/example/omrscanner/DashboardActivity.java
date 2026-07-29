@@ -1969,7 +1969,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private void showCameraModeDialog() {
         final String[] cameraModes = {
                 "Fixed Mount — Use this for elevated phone mounts where sheets slide underneath automatically.",
-                "Handheld — Auto-detects the sheet's corners in any orientation — no need to line up guide squares or tilt the phone."
+                "Handheld — Auto-detects the sheet's corners in any orientation — no need to line up guide squares or tilt the phone.",
+                "Flat Scan — Sheet lies flat on a table, hold the phone flat in portrait, looking straight down."
         };
 
         android.content.SharedPreferences prefs =
@@ -1988,6 +1989,17 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 .setTitle("Choose Camera Mode")
                 .setSingleChoiceItems(cameraModeItems, defaultSelection, (dialog, which) -> selectedMode[0] = which)
                 .setPositiveButton("Open Camera", (dialog, which) -> {
+                    // Index 2 (Flat Scan) is a fully separate Activity with its
+                    // own launch path -- it does not touch EXTRA_FIXED_MOUNT_MODE
+                    // / EXTRA_TILT_AGNOSTIC_MODE routing used by the first two
+                    // options below, so this branch can't affect their behavior.
+                    if (selectedMode[0] == 2) {
+                        prefs.edit()
+                                .putBoolean(PREF_BASIC_MODE, false)
+                                .apply();
+                        launchFlatScanCamera();
+                        return;
+                    }
                     boolean tiltAgnosticMode = selectedMode[0] == 1;
                     prefs.edit()
                             .putBoolean(PREF_TILT_AGNOSTIC_MODE, tiltAgnosticMode)
@@ -1997,6 +2009,14 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
+    }
+
+    private void launchFlatScanCamera() {
+        Intent intent = new Intent(this, com.example.omrscanner.camera.FlatScanCameraActivity.class);
+        if (selectedSheetType != null) intent.putExtra(EXTRA_SHEET_TYPE, selectedSheetType);
+        if (selectedClass != null) intent.putExtra(EXTRA_CLASS_ID, selectedClass.getId());
+        if (selectedActivity != null) intent.putExtra(EXTRA_ACTIVITY_ID, selectedActivity.getId());
+        startActivity(intent);
     }
 
     private void launchBasicCamera() {
