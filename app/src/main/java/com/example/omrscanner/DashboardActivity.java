@@ -143,6 +143,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private String selectedMyAssessmentsTypeFilter = null;
     private String selectedMyAssessmentsClassFilter = null;
 
+    private String answerKeysSearchQuery = "";
+    private String selectedAnswerKeysSort = ASSESSMENT_SORT_NEWEST;
+    private String selectedAnswerKeysSheetFilter = null;
+    private String selectedAnswerKeysLinkFilter = null; // null, "LINKED", or "UNLINKED"
+    private String selectedAnswerKeysAssessmentFilter = null; // linked assessment id, null = All
+
     private int homeQueryGeneration = 0;
     private int assessmentQueryGeneration = 0;
 
@@ -150,6 +156,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private Runnable pendingHomeSearchRunnable;
     private Runnable pendingAssessmentSearchRunnable;
     private Runnable pendingMyAssessmentsSearchRunnable;
+    private Runnable pendingAnswerKeysSearchRunnable;
 
     // ── Helpers ──
     private DashboardUiHelper ui;
@@ -211,6 +218,14 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private TextView answerKeysAllCount;
     private TextView answerKeysSummaryCount, answerKeysSummarySheetTypes, answerKeysSummaryTeacher;
     private View answerKeysHeaderAddBtn;
+    private LinearLayout answerKeysSheetTabs;
+    private LinearLayout answerKeysLinkStatusTabs;
+    private TextView answerKeysAssessmentFilterPicker;
+    private EditText answerKeysSearchInput;
+    private TextView answerKeysSortPicker;
+    private LinearLayout answerKeysFilterPanel;
+    private android.widget.ImageView answerKeysFilterToggle;
+    private boolean answerKeysFilterPanelVisible = false;
     private View classAssessmentsHeaderAddBtn;
     private View assessmentsHeaderAddBtn;
 
@@ -467,6 +482,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         answerKeysAllList = findViewById(R.id.answerKeysAllList);
         answerKeysAllEmpty = findViewById(R.id.answerKeysAllEmpty);
         answerKeysAllCount = findViewById(R.id.answerKeysAllCount);
+        answerKeysSheetTabs = findViewById(R.id.answerKeysSheetTabs);
+        answerKeysLinkStatusTabs = findViewById(R.id.answerKeysLinkStatusTabs);
+        answerKeysAssessmentFilterPicker = findViewById(R.id.answerKeysAssessmentFilterPicker);
+        answerKeysSearchInput = findViewById(R.id.answerKeysSearchInput);
+        answerKeysSortPicker = findViewById(R.id.answerKeysSortPicker);
+        answerKeysFilterPanel = findViewById(R.id.answerKeysFilterPanel);
+        answerKeysFilterToggle = findViewById(R.id.answerKeysFilterToggle);
         answerKeysSummaryCount = findViewById(R.id.answerKeysSummaryCount);
         answerKeysSummarySheetTypes = findViewById(R.id.answerKeysSummarySheetTypes);
         answerKeysSummaryTeacher = findViewById(R.id.answerKeysSummaryTeacher);
@@ -612,6 +634,22 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             }
         });
 
+        answerKeysSearchInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int st, int c, int a) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int st, int b, int c) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                answerKeysSearchQuery = s != null ? s.toString().trim() : "";
+                scheduleAnswerKeysSearchRefresh();
+            }
+        });
+
         homeClassSortPicker.setOnClickListener(v ->
                 homeRenderer.showClassSortDialog(selectedClassSort, key -> {
                     selectedClassSort = key;
@@ -629,6 +667,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     selectedMyAssessmentsSort = key;
                     updateSortPickers();
                     if (SCREEN_ASSESSMENTS.equals(currentScreen)) renderAssessmentsScreen();
+                }));
+        answerKeysSortPicker.setOnClickListener(v ->
+                classRenderer.showAssessmentSortDialog(selectedAnswerKeysSort, key -> {
+                    selectedAnswerKeysSort = key;
+                    updateSortPickers();
+                    if (SCREEN_ANSWERKEYS.equals(currentScreen)) renderAnswerKeysScreen();
                 }));
 
         updateSortPickers();
@@ -658,6 +702,34 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                             || selectedMyAssessmentsSheetFilter != null
                             || selectedMyAssessmentsTypeFilter != null
                             || selectedMyAssessmentsClassFilter != null);
+        });
+
+        answerKeysFilterToggle.setOnClickListener(v -> {
+            answerKeysFilterPanelVisible = !answerKeysFilterPanelVisible;
+            answerKeysFilterPanel.setVisibility(answerKeysFilterPanelVisible ? View.VISIBLE : View.GONE);
+            classRenderer.updateAssessmentFilterToggleAppearance(answerKeysFilterToggle,
+                    answerKeysFilterPanelVisible,
+                    !ASSESSMENT_SORT_NEWEST.equals(selectedAnswerKeysSort)
+                            || selectedAnswerKeysSheetFilter != null
+                            || selectedAnswerKeysLinkFilter != null
+                            || selectedAnswerKeysAssessmentFilter != null);
+        });
+
+        answerKeysAssessmentFilterPicker.setOnClickListener(v -> {
+            java.util.LinkedHashMap<String, String> options = buildAnswerKeysLinkedAssessmentOptions();
+            List<String> labels = new ArrayList<>();
+            List<String> values = new ArrayList<>();
+            labels.add("All");
+            values.add(null);
+            for (java.util.Map.Entry<String, String> e : options.entrySet()) {
+                labels.add(e.getValue());
+                values.add(e.getKey());
+            }
+            classRenderer.showChoiceFilterDialog("Filter by Linked Assessment", labels, values,
+                    selectedAnswerKeysAssessmentFilter, id -> {
+                        selectedAnswerKeysAssessmentFilter = id;
+                        renderAnswerKeysScreen();
+                    });
         });
     }
 
@@ -964,6 +1036,15 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             if (SCREEN_ASSESSMENTS.equals(currentScreen)) renderAssessmentsScreen();
         };
         searchDebounceHandler.postDelayed(pendingMyAssessmentsSearchRunnable, 220);
+    }
+
+    private void scheduleAnswerKeysSearchRefresh() {
+        if (pendingAnswerKeysSearchRunnable != null)
+            searchDebounceHandler.removeCallbacks(pendingAnswerKeysSearchRunnable);
+        pendingAnswerKeysSearchRunnable = () -> {
+            if (SCREEN_ANSWERKEYS.equals(currentScreen)) renderAnswerKeysScreen();
+        };
+        searchDebounceHandler.postDelayed(pendingAnswerKeysSearchRunnable, 220);
     }
 
     // Disclaimer Template
@@ -1901,13 +1982,105 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     // RENDER — ANSWER KEYS (all)
     // ═══════════════════════════════════════════════════════════════
 
+    /** Distinct assessment id -> name across every answer key's linked assessments. */
+    private java.util.LinkedHashMap<String, String> buildAnswerKeysLinkedAssessmentOptions() {
+        java.util.LinkedHashMap<String, String> options = new java.util.LinkedHashMap<>();
+        for (List<AnswerKeyLinkedAssessment> list : answerKeyLinkedAssessments.values()) {
+            if (list == null) continue;
+            for (AnswerKeyLinkedAssessment a : list) {
+                if (a != null && a.id != null) {
+                    options.put(a.id, (a.name != null && !a.name.trim().isEmpty()) ? a.name : "(untitled)");
+                }
+            }
+        }
+        return options;
+    }
+
     private void renderAnswerKeysScreen() {
         answerKeysAllList.removeAllViews();
 
-        List<AnswerKeyEntity> keys = (answerKeys != null) ? answerKeys : new ArrayList<>();
+        List<AnswerKeyEntity> allKeys = (answerKeys != null) ? answerKeys : new ArrayList<>();
+
+        // Sheet-type filter tabs — built from the full unfiltered set so tab counts stay stable.
+        classRenderer.buildAnswerKeySheetTabs(answerKeysSheetTabs, allKeys, selectedAnswerKeysSheetFilter,
+                filterVal -> {
+                    selectedAnswerKeysSheetFilter = filterVal;
+                    renderAnswerKeysScreen();
+                });
+
+        // Linked/Unlinked status tabs.
+        classRenderer.buildAnswerKeyLinkStatusTabs(answerKeysLinkStatusTabs, allKeys, answerKeyLinkInfo,
+                selectedAnswerKeysLinkFilter, filterVal -> {
+                    selectedAnswerKeysLinkFilter = filterVal;
+                    renderAnswerKeysScreen();
+                });
+
+        // "Linked To" picker label.
+        java.util.LinkedHashMap<String, String> linkedAssessmentOptions = buildAnswerKeysLinkedAssessmentOptions();
+        if (answerKeysAssessmentFilterPicker != null) {
+            String pickerLabel = "All";
+            if (selectedAnswerKeysAssessmentFilter != null) {
+                String name = linkedAssessmentOptions.get(selectedAnswerKeysAssessmentFilter);
+                pickerLabel = (name != null) ? name : "All";
+            }
+            answerKeysAssessmentFilterPicker.setText(pickerLabel + " \u25be");
+        }
+
+        classRenderer.updateAssessmentFilterToggleAppearance(answerKeysFilterToggle,
+                answerKeysFilterPanelVisible,
+                !ASSESSMENT_SORT_NEWEST.equals(selectedAnswerKeysSort)
+                        || selectedAnswerKeysSheetFilter != null
+                        || selectedAnswerKeysLinkFilter != null
+                        || selectedAnswerKeysAssessmentFilter != null);
+
+        // Apply sheet-type, link-status, linked-assessment, and search filters.
+        String query = (answerKeysSearchQuery != null) ? answerKeysSearchQuery.toLowerCase(Locale.ROOT) : "";
+        List<AnswerKeyEntity> keys = new ArrayList<>();
+        for (AnswerKeyEntity k : allKeys) {
+            if (selectedAnswerKeysSheetFilter != null && !selectedAnswerKeysSheetFilter.equals(k.sheetType)) continue;
+
+            AnswerKeyLinkInfo linkInfo = answerKeyLinkInfo.get(k.id);
+            boolean isLinked = (linkInfo != null && linkInfo.linkedCount > 0);
+            if ("LINKED".equals(selectedAnswerKeysLinkFilter) && !isLinked) continue;
+            if ("UNLINKED".equals(selectedAnswerKeysLinkFilter) && isLinked) continue;
+
+            if (selectedAnswerKeysAssessmentFilter != null) {
+                List<AnswerKeyLinkedAssessment> linked = answerKeyLinkedAssessments.get(k.id);
+                boolean matchesAssessment = false;
+                if (linked != null) {
+                    for (AnswerKeyLinkedAssessment a : linked) {
+                        if (a != null && selectedAnswerKeysAssessmentFilter.equals(a.id)) {
+                            matchesAssessment = true;
+                            break;
+                        }
+                    }
+                }
+                if (!matchesAssessment) continue;
+            }
+
+            if (!query.isEmpty()) {
+                String name = (k.name != null) ? k.name.toLowerCase(Locale.ROOT) : "";
+                String sheet = (k.sheetType != null) ? k.sheetType.toLowerCase(Locale.ROOT) : "";
+                String year = (k.schoolYear != null) ? k.schoolYear.toLowerCase(Locale.ROOT) : "";
+                if (!name.contains(query) && !sheet.contains(query) && !year.contains(query)) continue;
+            }
+            keys.add(k);
+        }
+
+        // Apply sort.
+        java.util.Collections.sort(keys, (a, b) -> {
+            if (ClassScreenRenderer.ASSESSMENT_SORT_OLDEST.equals(selectedAnswerKeysSort))
+                return Long.compare(a.createdAt, b.createdAt);
+            if (ClassScreenRenderer.ASSESSMENT_SORT_NAME_ASC.equals(selectedAnswerKeysSort))
+                return (a.name != null ? a.name : "").compareToIgnoreCase(b.name != null ? b.name : "");
+            if (ClassScreenRenderer.ASSESSMENT_SORT_NAME_DESC.equals(selectedAnswerKeysSort))
+                return (b.name != null ? b.name : "").compareToIgnoreCase(a.name != null ? a.name : "");
+            // NEWEST (default) — exam-date sort options don't apply to answer keys, fall back to newest.
+            return Long.compare(b.createdAt, a.createdAt);
+        });
 
         java.util.Set<String> sheetTypes = new java.util.HashSet<>();
-        for (AnswerKeyEntity k : keys) {
+        for (AnswerKeyEntity k : allKeys) {
             if (k.sheetType != null && !k.sheetType.trim().isEmpty()) sheetTypes.add(k.sheetType);
         }
         answerKeysSummaryCount.setText(String.valueOf(keys.size()));
@@ -1964,6 +2137,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             classAssessmentSortPicker.setText(classRenderer.getAssessmentSortLabel(selectedAssessmentSort) + " \u25be");
         if (myAssessmentsSortPicker != null)
             myAssessmentsSortPicker.setText(classRenderer.getAssessmentSortLabel(selectedMyAssessmentsSort) + " \u25be");
+        if (answerKeysSortPicker != null)
+            answerKeysSortPicker.setText(classRenderer.getAssessmentSortLabel(selectedAnswerKeysSort) + " \u25be");
     }
 
     // ═══════════════════════════════════════════════════════════════

@@ -214,6 +214,86 @@ public class ClassScreenRenderer {
     }
 
     /**
+     * Populates the sheet-type tab row above the ALL ANSWER KEYS list.
+     * Tallies whatever sheet types are actually present (ZPH30/40/50/60), unlike
+     * buildClassSheetTabs which only distinguishes ZPH40/ZPH60 for assessments.
+     * @param onTabSelected called with the selected filterValue (null = All)
+     */
+    public void buildAnswerKeySheetTabs(LinearLayout tabContainer,
+                                        List<AnswerKeyEntity> keys, String selectedSheetFilter,
+                                        java.util.function.Consumer<String> onTabSelected) {
+
+        java.util.LinkedHashMap<String, Integer> counts = new java.util.LinkedHashMap<>();
+        if (keys != null) {
+            for (AnswerKeyEntity k : keys) {
+                if (k.sheetType == null || k.sheetType.trim().isEmpty()) continue;
+                counts.put(k.sheetType, counts.containsKey(k.sheetType) ? counts.get(k.sheetType) + 1 : 1);
+            }
+        }
+        int totalCount = (keys != null) ? keys.size() : 0;
+
+        List<Object[]> tabList = new ArrayList<>();
+        tabList.add(new Object[]{"All", null, totalCount});
+        List<String> sortedTypes = new ArrayList<>(counts.keySet());
+        java.util.Collections.sort(sortedTypes);
+        for (String type : sortedTypes) {
+            tabList.add(new Object[]{type, type, counts.get(type)});
+        }
+
+        renderPillRow(tabContainer, tabList.toArray(new Object[0][]), selectedSheetFilter, onTabSelected);
+    }
+
+    /**
+     * Populates the All / Linked / Unlinked pill row above the ALL ANSWER KEYS list.
+     * "Linked" means at least one assessment currently references the key.
+     */
+    public void buildAnswerKeyLinkStatusTabs(LinearLayout tabContainer,
+                                             List<AnswerKeyEntity> keys,
+                                             java.util.Map<String, AnswerKeyLinkInfo> linkInfoMap,
+                                             String selectedLinkFilter,
+                                             java.util.function.Consumer<String> onTabSelected) {
+
+        int linkedCount = 0, unlinkedCount = 0;
+        if (keys != null) {
+            for (AnswerKeyEntity k : keys) {
+                AnswerKeyLinkInfo info = (linkInfoMap != null) ? linkInfoMap.get(k.id) : null;
+                boolean linked = (info != null && info.linkedCount > 0);
+                if (linked) linkedCount++; else unlinkedCount++;
+            }
+        }
+        int totalCount = (keys != null) ? keys.size() : 0;
+
+        Object[][] tabs = {
+                {"All",      null,       totalCount},
+                {"Linked",   "LINKED",   linkedCount},
+                {"Unlinked", "UNLINKED", unlinkedCount},
+        };
+
+        renderPillRow(tabContainer, tabs, selectedLinkFilter, onTabSelected);
+    }
+
+    /**
+     * Generic single-choice filter dialog. labels[i] corresponds to values[i];
+     * values.get(0) should be null, representing the "All" option.
+     * Used by Answer Keys' "Filter by Linked Assessment" picker.
+     */
+    public void showChoiceFilterDialog(String title, List<String> labels, List<String> values,
+                                       String selectedValue, java.util.function.Consumer<String> onSelected) {
+        int checked = 0;
+        for (int i = 0; i < values.size(); i++) {
+            if (values.get(i) != null && values.get(i).equals(selectedValue)) { checked = i; break; }
+        }
+        final int checkedFinal = checked;
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_OMRScanner_Dialog)
+                .setTitle(title)
+                .setSingleChoiceItems(blackItems(labels.toArray(new String[0])), checkedFinal, (dialog, which) -> {
+                    onSelected.accept(values.get(which));
+                    dialog.dismiss();
+                })
+                .show();
+    }
+
+    /**
      * Populates a small segmented-control row for choosing what the pill row below groups by.
      * @param onSelected called with "SHEET", "TYPE", or "CLASS"
      */
