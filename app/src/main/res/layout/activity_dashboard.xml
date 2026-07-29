@@ -2231,7 +2231,7 @@
                                     <ImageView
                                         android:layout_width="20dp"
                                         android:layout_height="20dp"
-                                        android:src="@drawable/ic_scan_line"
+                                        android:src="@drawable/ic_scan_circle"
                                         app:tint="#0038A8" />
 
                                     <TextView
@@ -2878,7 +2878,7 @@
                     android:id="@+id/navAnswerKeysIcon"
                     android:layout_width="20dp"
                     android:layout_height="20dp"
-                    android:src="@drawable/ic_lock"
+                    android:src="@drawable/ic_key"
                     app:tint="#CCFFFFFF" />
 
                 <TextView
@@ -2886,7 +2886,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:text="Keys"
+                    android:text="Answer Keys"
                     android:textColor="#CCFFFFFF"
                     android:textSize="10sp" />
 
