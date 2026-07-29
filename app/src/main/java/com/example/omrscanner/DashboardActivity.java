@@ -158,6 +158,16 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private Runnable pendingMyAssessmentsSearchRunnable;
     private Runnable pendingAnswerKeysSearchRunnable;
 
+    private static final long LAST_SYNCED_TICK_MS = 60_000; // re-render "X ago" every minute
+    private final Handler lastSyncedTicker = new Handler(Looper.getMainLooper());
+    private final Runnable lastSyncedTickRunnable = new Runnable() {
+        @Override
+        public void run() {
+            updateLastSyncedLabel();
+            lastSyncedTicker.postDelayed(this, LAST_SYNCED_TICK_MS);
+        }
+    };
+
     // ── Helpers ──
     private DashboardUiHelper ui;
     private HomeScreenRenderer homeRenderer;
@@ -172,6 +182,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private ImageButton btnBack, btnUpload;
     private TextView topBarTitle, topBarBadge;
     private TextView tvTeacherName;
+    private TextView tvLastSynced;
     private LinearLayout teacherNameRow;
 
     private View screenHome, screenAssessments, screenAnswerKeys;
@@ -181,7 +192,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private LinearLayout navHomeTab, navUserTab, navAssessmentsTab, navAnswerKeysTab;
     private ImageView navHomeIcon, navUserIcon, navAssessmentsIcon, navAnswerKeysIcon;
     private TextView navHomeLabel, navUserLabel, navAssessmentsLabel, navAnswerKeysLabel;
-    private TextView userNameText, userSchoolText;
+    private TextView userNameText, userSchoolText, userLastSynced;
     private TextView userStatClasses, userStatAssessments, userStatScans, userStatAnswerKeys;
     private TextView userDetailFullName, userDetailUsername, userDetailUserId, userDetailSchool,
             userDetailServerIp, userDetailStatus, userDetailMemberSince, userDetailLastUpdated;
@@ -256,6 +267,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private static final String UPLOAD_ASSESSMENT_PATH = "/api/upload/assessment"; // multipart CSV upload
     private static final String SYNC_PREFS = "omr_sync_prefs";
     private static final String SYNC_PREFS_KEY_PREFIX = "last_sync_millis_";
+    private static final String PREF_LAST_GLOBAL_SYNC = "last_global_sync_millis";
     private static final long STUDENT_SYNC_STALE_MS = 24L * 60 * 60 * 1000; // 24 hours
 
 
@@ -331,6 +343,14 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         super.onResume();
         enableFullScreen();
         loadDataFromDb();
+        lastSyncedTicker.removeCallbacks(lastSyncedTickRunnable);
+        lastSyncedTicker.postDelayed(lastSyncedTickRunnable, LAST_SYNCED_TICK_MS);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        lastSyncedTicker.removeCallbacks(lastSyncedTickRunnable);
     }
 
     @Override
@@ -340,6 +360,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             searchDebounceHandler.removeCallbacks(pendingHomeSearchRunnable);
         if (pendingAssessmentSearchRunnable != null)
             searchDebounceHandler.removeCallbacks(pendingAssessmentSearchRunnable);
+        lastSyncedTicker.removeCallbacks(lastSyncedTickRunnable);
         syncExecutor.shutdown();
     }
 
@@ -404,6 +425,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         topBarTitle = findViewById(R.id.topBarTitle);
         topBarBadge = findViewById(R.id.topBarBadge);
         tvTeacherName = findViewById(R.id.tvTeacherName);
+        tvLastSynced = findViewById(R.id.tvLastSynced);
         teacherNameRow = findViewById(R.id.teacherNameRow);
 
         screenHome = findViewById(R.id.screenHome);
@@ -428,6 +450,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         navAnswerKeysLabel = findViewById(R.id.navAnswerKeysLabel);
         userNameText = findViewById(R.id.userNameText);
         userSchoolText = findViewById(R.id.userSchoolText);
+        userLastSynced = findViewById(R.id.userLastSynced);
         userRescanRow = findViewById(R.id.userRescanRow);
         userStatClasses = findViewById(R.id.userStatClasses);
         userStatAssessments = findViewById(R.id.userStatAssessments);
@@ -1349,10 +1372,14 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
                 final int totalWritten = written;
                 runOnUiThread(() -> {
+                    getSharedPreferences(SYNC_PREFS, MODE_PRIVATE).edit()
+                            .putLong(PREF_LAST_GLOBAL_SYNC, System.currentTimeMillis())
+                            .apply();
                     android.widget.Toast.makeText(this,
                             "Synced " + totalWritten + " class" + (totalWritten == 1 ? "" : "es"),
                             android.widget.Toast.LENGTH_SHORT).show();
                     loadDataFromDb(); // refresh class cards with the new/updated rows
+                    updateLastSyncedLabel();
                 });
             } catch (Exception e) {
                 android.util.Log.e("OMR_CLASSROOM_SYNC", "Sync failed: " + e.getClass().getSimpleName() + ": " + e.getMessage(), e);
@@ -1566,6 +1593,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private void refreshUserScreen() {
         String displayName = globalTeacherName != null ? globalTeacherName.trim() : "";
         userNameText.setText(!displayName.isEmpty() ? displayName : "Scan your QR code to set your name");
+        updateLastSyncedLabel();
 
         SimpleDateFormat sdf = new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault());
 
@@ -2377,7 +2405,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 ? activeUserFirstName
                 : globalTeacherName;
         if (displayName != null && !displayName.isEmpty()) {
-            tvTeacherName.setText(displayName);
+            tvTeacherName.setText("Welcome, " + displayName + " \uD83D\uDC4B");
             tvTeacherName.setTextColor(Color.parseColor("#FFFFFF"));
             tvTeacherName.setTypeface(null, Typeface.BOLD);
         } else {
@@ -2393,6 +2421,27 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             homeTeacherLabel.setText(fullTeacherName != null && !fullTeacherName.isEmpty()
                     ? "Teacher: " + fullTeacherName : "Teacher: Unknown");
         }
+
+        updateLastSyncedLabel();
+    }
+
+    /** Renders "Last synced X ago" (or "Not synced yet") wherever it's shown — header + User tab. */
+    private void updateLastSyncedLabel() {
+        long lastSyncMillis = getSharedPreferences(SYNC_PREFS, MODE_PRIVATE)
+                .getLong(PREF_LAST_GLOBAL_SYNC, 0L);
+
+        String label;
+        if (lastSyncMillis > 0L) {
+            CharSequence relative = android.text.format.DateUtils.getRelativeTimeSpanString(
+                    lastSyncMillis, System.currentTimeMillis(),
+                    android.text.format.DateUtils.MINUTE_IN_MILLIS);
+            label = "Last synced " + relative;
+        } else {
+            label = "Not synced yet";
+        }
+
+        if (tvLastSynced != null) tvLastSynced.setText(label);
+        if (userLastSynced != null) userLastSynced.setText(label);
     }
 
     private void publishResult(List<ClassFolder> loaded,
@@ -2608,7 +2657,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     @Override
     public void setGlobalTeacherName(String n) {
         globalTeacherName = n;
-        tvTeacherName.setText(n);
+        tvTeacherName.setText("Welcome, " + n);
         tvTeacherName.setTextColor(Color.parseColor("#FFFFFF"));
         tvTeacherName.setTypeface(null, Typeface.BOLD);
         if (SCREEN_CLASS.equals(currentScreen) && selectedClass != null)

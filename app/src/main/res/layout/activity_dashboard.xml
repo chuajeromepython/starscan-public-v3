@@ -103,6 +103,18 @@
 
                 </LinearLayout>
 
+                <TextView
+                    android:id="@+id/tvLastSynced"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:includeFontPadding="false"
+                    android:fontFamily="@font/poppins_medium"
+                    android:text="Not synced yet"
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="11sp"
+                    android:textStyle="italic" />
+
             </LinearLayout>
 
             <ImageButton
@@ -2024,6 +2036,18 @@
                             android:fontFamily="@font/poppins_medium"
                             android:gravity="center"
                             android:visibility="gone" />
+
+                        <TextView
+                            android:id="@+id/userLastSynced"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:text="Not synced yet"
+                            android:textColor="#94A3B8"
+                            android:textSize="12sp"
+                            android:fontFamily="@font/poppins_medium"
+                            android:gravity="center"
+                            android:textStyle="italic" />
 
                         <com.google.android.material.card.MaterialCardView
                             android:layout_width="match_parent"
