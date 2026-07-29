@@ -32,6 +32,7 @@
         <activity android:name=".camera.BasicCameraActivity"
             android:screenOrientation="portrait"/>
         <activity android:name=".camera.FlatScanCameraActivity"
+            android:theme="@style/Theme.OMRScanner.Camera"
             android:screenOrientation="portrait"/>
         <activity android:name=".ui.BasicPreviewActivity"
             android:screenOrientation="portrait"/>

@@ -16,9 +16,10 @@
 
     <style name="Theme.OMRScanner" parent="Base.Theme.OMRScanner" />
 
-    <!-- CameraActivity keeps the platform-default cutout handling — the
-         live scanning screen should not draw its content underneath the
-         punch-hole camera; only Dashboard-style screens opt into that. -->
+    <!-- CameraActivity and FlatScanCameraActivity keep the platform-default
+         cutout handling — live scanning screens should not draw their
+         content underneath the punch-hole camera; only Dashboard-style
+         screens opt into that. -->
     <style name="Theme.OMRScanner.Camera" parent="Theme.OMRScanner">
         <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="p">default</item>
     </style>
