@@ -8,6 +8,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -241,12 +242,18 @@ public class HomeScreenRenderer {
         accentBar.setBackground(accentBg);
         card.addView(accentBar);
 
+        // Card body: a FrameLayout so the trailing arrow can be pinned to the
+        // bottom-right corner independently of the vertical content stack.
+        FrameLayout cardBody = new FrameLayout(activity);
+        cardBody.setLayoutParams(new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
         // Content
         LinearLayout content = new LinearLayout(activity);
         content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(ui.dp(14), ui.dp(14), ui.dp(14), ui.dp(14));
-        content.setLayoutParams(new LinearLayout.LayoutParams(
-                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        content.setLayoutParams(new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         // Title row
         LinearLayout header = new LinearLayout(activity);
@@ -315,13 +322,6 @@ public class HomeScreenRenderer {
             popup.show();
         });
         header.addView(menuBtn);
-
-        TextView arrow = new TextView(activity);
-        arrow.setText("›");
-        arrow.setTextColor(Color.parseColor("#CBD5E1"));
-        arrow.setTextSize(20);
-        arrow.setPadding(ui.dp(8), 0, 0, 0);
-        header.addView(arrow);
         content.addView(header);
 
         // Teacher row
@@ -370,7 +370,22 @@ public class HomeScreenRenderer {
         statusBadge.setLayoutParams(statusBadgeLp);
         content.addView(statusBadge);
 
-        card.addView(content);
+        cardBody.addView(content);
+
+        TextView arrow = new TextView(activity);
+        arrow.setText("›");
+        arrow.setTextColor(Color.parseColor("#CBD5E1"));
+        arrow.setTextSize(20);
+        arrow.setGravity(Gravity.CENTER);
+        FrameLayout.LayoutParams arrowLp = new FrameLayout.LayoutParams(
+                ui.dp(32), ViewGroup.LayoutParams.WRAP_CONTENT);
+        arrowLp.gravity = Gravity.BOTTOM | Gravity.END;
+        arrowLp.bottomMargin = ui.dp(10);
+        arrowLp.rightMargin = ui.dp(14);
+        arrow.setLayoutParams(arrowLp);
+        cardBody.addView(arrow);
+
+        card.addView(cardBody);
         card.setOnClickListener(v -> onOpen.run());
         return card;
     }

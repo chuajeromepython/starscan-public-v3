@@ -8,6 +8,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -406,22 +407,25 @@ public class ClassScreenRenderer {
     public View createActivityCard(AssessmentListRow row,
             Runnable onEdit, Runnable onSelectAnswerKey, Runnable onDelete, Runnable onUpload, Runnable onOpen) {
 
-        LinearLayout card = new LinearLayout(activity);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(ui.dp(16), ui.dp(16), ui.dp(16), ui.dp(16));
-        card.setClickable(true);
-        card.setFocusable(true);
+        FrameLayout card = new FrameLayout(activity);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.bottomMargin = ui.dp(12);
+        card.setLayoutParams(lp);
+
+        LinearLayout cardBody = new LinearLayout(activity);
+        cardBody.setOrientation(LinearLayout.VERTICAL);
+        cardBody.setPadding(ui.dp(16), ui.dp(16), ui.dp(16), ui.dp(16));
+        cardBody.setClickable(true);
+        cardBody.setFocusable(true);
+        cardBody.setLayoutParams(new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(Color.WHITE);
         bg.setCornerRadius(ui.dp(16));
         bg.setStroke(ui.dp(1), Color.parseColor("#E2E8F0"));
-        card.setBackground(bg);
-
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.bottomMargin = ui.dp(12);
-        card.setLayoutParams(lp);
+        cardBody.setBackground(bg);
 
         // Header
         LinearLayout header = new LinearLayout(activity);
@@ -512,13 +516,7 @@ public class ClassScreenRenderer {
             popup.show();
         });
         header.addView(menuBtn);
-
-        TextView arrow = new TextView(activity);
-        arrow.setText("›");
-        arrow.setTextColor(Color.parseColor("#94A3B8"));
-        arrow.setTextSize(18);
-        header.addView(arrow);
-        card.addView(header);
+        cardBody.addView(header);
 
         // Meta
         TextView meta = new TextView(activity);
@@ -534,7 +532,7 @@ public class ClassScreenRenderer {
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         mlp.topMargin = ui.dp(8);
         meta.setLayoutParams(mlp);
-        card.addView(meta);
+        cardBody.addView(meta);
 
         // Scan count badge + class badge + answer key badge + needs-correction badge
         // (scan count badge always shown; the rest only when applicable)
@@ -622,10 +620,25 @@ public class ClassScreenRenderer {
                 badgeRow.addView(correctionBadge);
             }
 
-            card.addView(badgeRow);
+            cardBody.addView(badgeRow);
         }
 
-        card.setOnClickListener(v -> onOpen.run());
+        cardBody.setOnClickListener(v -> onOpen.run());
+        card.addView(cardBody);
+
+        TextView arrow = new TextView(activity);
+        arrow.setText("›");
+        arrow.setTextColor(Color.parseColor("#94A3B8"));
+        arrow.setTextSize(18);
+        arrow.setGravity(Gravity.CENTER);
+        FrameLayout.LayoutParams arrowLp = new FrameLayout.LayoutParams(
+                ui.dp(32), ViewGroup.LayoutParams.WRAP_CONTENT);
+        arrowLp.gravity = Gravity.BOTTOM | Gravity.END;
+        arrowLp.bottomMargin = ui.dp(16);
+        arrowLp.rightMargin = ui.dp(16);
+        arrow.setLayoutParams(arrowLp);
+        card.addView(arrow);
+
         return card;
     }
 
@@ -635,22 +648,25 @@ public class ClassScreenRenderer {
     public View createAnswerKeyCard(AnswerKeyEntity key, AnswerKeyLinkInfo link,
                                     List<AnswerKeyLinkedAssessment> linkedAssessments, Runnable onView, Runnable onEdit, Runnable onDelete) {
 
-        LinearLayout card = new LinearLayout(activity);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(ui.dp(16), ui.dp(16), ui.dp(16), ui.dp(16));
-        card.setClickable(true);
-        card.setFocusable(true);
+        FrameLayout card = new FrameLayout(activity);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.bottomMargin = ui.dp(12);
+        card.setLayoutParams(lp);
+
+        LinearLayout cardBody = new LinearLayout(activity);
+        cardBody.setOrientation(LinearLayout.VERTICAL);
+        cardBody.setPadding(ui.dp(16), ui.dp(16), ui.dp(16), ui.dp(16));
+        cardBody.setClickable(true);
+        cardBody.setFocusable(true);
+        cardBody.setLayoutParams(new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(Color.WHITE);
         bg.setCornerRadius(ui.dp(16));
         bg.setStroke(ui.dp(1), Color.parseColor("#E2E8F0"));
-        card.setBackground(bg);
-
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.bottomMargin = ui.dp(12);
-        card.setLayoutParams(lp);
+        cardBody.setBackground(bg);
 
         // Header
         LinearLayout header = new LinearLayout(activity);
@@ -669,8 +685,7 @@ public class ClassScreenRenderer {
         leftCol.addView(title);
 
         TextView sub = new TextView(activity);
-        sub.setText("Sheet: " + (key.sheetType != null ? key.sheetType : "—")
-                + " · " + key.getNumItems() + " items");
+        sub.setText("Sheet: " + (key.sheetType != null ? key.sheetType : "—"));
         sub.setTextColor(Color.parseColor("#64748B"));
         sub.setTextSize(12);
         LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
@@ -735,13 +750,7 @@ public class ClassScreenRenderer {
             popup.show();
         });
         header.addView(menuBtn);
-
-        TextView arrow = new TextView(activity);
-        arrow.setText("›");
-        arrow.setTextColor(Color.parseColor("#94A3B8"));
-        arrow.setTextSize(18);
-        header.addView(arrow);
-        card.addView(header);
+        cardBody.addView(header);
 
         // Link status: tappable "Linked to" dropdown + sheet-type badge, or a single "not linked" badge
         LinearLayout linkBadgeRow = new LinearLayout(activity);
@@ -793,7 +802,7 @@ public class ClassScreenRenderer {
 
             if (link.linkedSheetType != null) {
                 TextView typeBadge = new TextView(activity);
-                typeBadge.setText(link.linkedSheetType + " (" + key.getNumItems() + " items)");
+                typeBadge.setText(link.linkedSheetType);
                 typeBadge.setTextColor(Color.parseColor("#1D4ED8"));
                 typeBadge.setTextSize(11);
                 typeBadge.setTypeface(null, Typeface.ITALIC);
@@ -823,7 +832,7 @@ public class ClassScreenRenderer {
             notLinkedBadge.setPadding(ui.dp(8), ui.dp(3), ui.dp(8), ui.dp(3));
             linkBadgeRow.addView(notLinkedBadge);
         }
-        card.addView(linkBadgeRow);
+        cardBody.addView(linkBadgeRow);
 
         // Meta
         TextView meta = new TextView(activity);
@@ -837,9 +846,24 @@ public class ClassScreenRenderer {
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         mlp.topMargin = ui.dp(8);
         meta.setLayoutParams(mlp);
-        card.addView(meta);
+        cardBody.addView(meta);
 
-        card.setOnClickListener(v -> onView.run());
+        cardBody.setOnClickListener(v -> onView.run());
+        card.addView(cardBody);
+
+        TextView arrow = new TextView(activity);
+        arrow.setText("›");
+        arrow.setTextColor(Color.parseColor("#94A3B8"));
+        arrow.setTextSize(18);
+        arrow.setGravity(Gravity.CENTER);
+        FrameLayout.LayoutParams arrowLp = new FrameLayout.LayoutParams(
+                ui.dp(32), ViewGroup.LayoutParams.WRAP_CONTENT);
+        arrowLp.gravity = Gravity.BOTTOM | Gravity.END;
+        arrowLp.bottomMargin = ui.dp(16);
+        arrowLp.rightMargin = ui.dp(16);
+        arrow.setLayoutParams(arrowLp);
+        card.addView(arrow);
+
         return card;
     }
 
