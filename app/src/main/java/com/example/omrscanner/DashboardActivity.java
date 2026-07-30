@@ -134,6 +134,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private String selectedClassGradeFilter = null;
     private String selectedClassSchoolYearFilter = null;
     private String selectedClassSort = CLASS_SORT_NEWEST;
+    private String homeGroupBy = "GRADE"; // GRADE or YEAR
 
     private String assessmentSearchQuery = "";
     private String selectedAssessmentSort = ASSESSMENT_SORT_NEWEST;
@@ -152,6 +153,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private String selectedAnswerKeysSheetFilter = null;
     private String selectedAnswerKeysLinkFilter = null; // null, "LINKED", or "UNLINKED"
     private String selectedAnswerKeysAssessmentFilter = null; // linked assessment id, null = All
+    private String answerKeysGroupBy = "SHEET"; // SHEET or STATUS
 
     private int homeQueryGeneration = 0;
     private int assessmentQueryGeneration = 0;
@@ -209,6 +211,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private LinearLayout scansClassTabs;
     private LinearLayout scansAssessmentTabs;
     private LinearLayout scansNeedsCorrectionTabs;
+    private LinearLayout scansGroupSwitcher;
+    private LinearLayout scansSheetFilterBlock, scansClassFilterBlock, scansAssessmentFilterBlock, scansNeedsCorrectionFilterBlock;
     private boolean scansFilterPanelVisible = false;
 
     private String scansSearchQuery = "";
@@ -217,6 +221,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private String selectedScansClassFilter = null;
     private String selectedScansAssessmentFilter = null;
     private String selectedScansNeedsCorrectionFilter = null; // null, "YES", or "NO"
+    private String scansGroupBy = "SHEET"; // SHEET, CLASS, ASSESSMENT, or CORRECTION
     private Runnable pendingScansSearchRunnable;
     private TextView userNameText, userSchoolText, userLastSynced;
     private TextView userStatClasses, userStatAssessments, userStatScans, userStatAnswerKeys;
@@ -229,6 +234,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private EditText homeClassSearchInput;
     private TextView homeClassSortPicker;
     private LinearLayout homeGradeFilterChips, homeSchoolYearFilterChips;
+    private LinearLayout homeGroupSwitcher, homeGradeFilterBlock, homeSchoolYearFilterBlock;
     private LinearLayout homeFilterPanel;
     private android.widget.ImageView homeFilterToggle;
     private boolean homeFilterPanelVisible = false;
@@ -257,6 +263,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private View answerKeysHeaderAddBtn;
     private LinearLayout answerKeysSheetTabs;
     private LinearLayout answerKeysLinkStatusTabs;
+    private LinearLayout answerKeysGroupSwitcher;
+    private LinearLayout answerKeysSheetFilterBlock, answerKeysLinkStatusFilterBlock;
     private TextView answerKeysAssessmentFilterPicker;
     private EditText answerKeysSearchInput;
     private TextView answerKeysSortPicker;
@@ -493,6 +501,11 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         scansClassTabs = findViewById(R.id.scansClassTabs);
         scansAssessmentTabs = findViewById(R.id.scansAssessmentTabs);
         scansNeedsCorrectionTabs = findViewById(R.id.scansNeedsCorrectionTabs);
+        scansGroupSwitcher = findViewById(R.id.scansGroupSwitcher);
+        scansSheetFilterBlock = findViewById(R.id.scansSheetFilterBlock);
+        scansClassFilterBlock = findViewById(R.id.scansClassFilterBlock);
+        scansAssessmentFilterBlock = findViewById(R.id.scansAssessmentFilterBlock);
+        scansNeedsCorrectionFilterBlock = findViewById(R.id.scansNeedsCorrectionFilterBlock);
         userNameText = findViewById(R.id.userNameText);
         userSchoolText = findViewById(R.id.userSchoolText);
         userLastSynced = findViewById(R.id.userLastSynced);
@@ -516,6 +529,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         homeClassSortPicker = findViewById(R.id.homeClassSortPicker);
         homeGradeFilterChips = findViewById(R.id.homeGradeFilterChips);
         homeSchoolYearFilterChips = findViewById(R.id.homeSchoolYearFilterChips);
+        homeGroupSwitcher = findViewById(R.id.homeGroupSwitcher);
+        homeGradeFilterBlock = findViewById(R.id.homeGradeFilterBlock);
+        homeSchoolYearFilterBlock = findViewById(R.id.homeSchoolYearFilterBlock);
         homeFilterPanel = findViewById(R.id.homeFilterPanel);
         homeFilterToggle = findViewById(R.id.homeFilterToggle);
         homeSummaryClassCount = findViewById(R.id.homeSummaryClassCount);
@@ -552,6 +568,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         answerKeysAllCount = findViewById(R.id.answerKeysAllCount);
         answerKeysSheetTabs = findViewById(R.id.answerKeysSheetTabs);
         answerKeysLinkStatusTabs = findViewById(R.id.answerKeysLinkStatusTabs);
+        answerKeysGroupSwitcher = findViewById(R.id.answerKeysGroupSwitcher);
+        answerKeysSheetFilterBlock = findViewById(R.id.answerKeysSheetFilterBlock);
+        answerKeysLinkStatusFilterBlock = findViewById(R.id.answerKeysLinkStatusFilterBlock);
         answerKeysAssessmentFilterPicker = findViewById(R.id.answerKeysAssessmentFilterPicker);
         answerKeysSearchInput = findViewById(R.id.answerKeysSearchInput);
         answerKeysSortPicker = findViewById(R.id.answerKeysSortPicker);
@@ -1895,9 +1914,22 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         homeRenderer.updateFilterToggleAppearance(homeFilterToggle, homeFilterPanelVisible,
                 selectedClassGradeFilter, selectedClassSchoolYearFilter, selectedClassSort);
 
+        classRenderer.buildGroupBySwitcher(homeGroupSwitcher, new String[][]{
+                {"Grade", "GRADE"},
+                {"School Year", "YEAR"},
+        }, homeGroupBy, key -> {
+            homeGroupBy = key;
+            renderHomeScreen();
+        });
+        homeGradeFilterBlock.setVisibility("GRADE".equals(homeGroupBy) ? View.VISIBLE : View.GONE);
+        homeSchoolYearFilterBlock.setVisibility("YEAR".equals(homeGroupBy) ? View.VISIBLE : View.GONE);
+
+        String activeGradeFilter = "GRADE".equals(homeGroupBy) ? selectedClassGradeFilter : null;
+        String activeYearFilter = "YEAR".equals(homeGroupBy) ? selectedClassSchoolYearFilter : null;
+
         final int requestId = ++homeQueryGeneration;
-        repo.queryClassList(classSearchQuery, selectedClassGradeFilter,
-                selectedClassSchoolYearFilter, selectedClassSort, rows -> runOnUiThread(() -> {
+        repo.queryClassList(classSearchQuery, activeGradeFilter,
+                activeYearFilter, selectedClassSort, rows -> runOnUiThread(() -> {
                     if (requestId != homeQueryGeneration || !SCREEN_HOME.equals(currentScreen))
                         return;
 
@@ -2074,29 +2106,45 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
                     List<ScanListRow> allRowsList = (allRows != null) ? allRows : new ArrayList<>();
 
-                    classRenderer.buildScansSheetTabs(scansSheetTabs, allRowsList, selectedScansSheetFilter,
-                            filterVal -> {
-                                selectedScansSheetFilter = filterVal;
-                                renderScansScreen();
-                            });
+                    classRenderer.buildGroupBySwitcher(scansGroupSwitcher, new String[][]{
+                            {"Sheet Type", "SHEET"},
+                            {"Class", "CLASS"},
+                            {"Assessment", "ASSESSMENT"},
+                            {"Correction", "CORRECTION"},
+                    }, scansGroupBy, key -> {
+                        scansGroupBy = key;
+                        renderScansScreen();
+                    });
+                    scansSheetFilterBlock.setVisibility("SHEET".equals(scansGroupBy) ? View.VISIBLE : View.GONE);
+                    scansClassFilterBlock.setVisibility("CLASS".equals(scansGroupBy) ? View.VISIBLE : View.GONE);
+                    scansAssessmentFilterBlock.setVisibility("ASSESSMENT".equals(scansGroupBy) ? View.VISIBLE : View.GONE);
+                    scansNeedsCorrectionFilterBlock.setVisibility("CORRECTION".equals(scansGroupBy) ? View.VISIBLE : View.GONE);
 
-                    classRenderer.buildScansClassTabs(scansClassTabs, allRowsList, selectedScansClassFilter,
-                            filterVal -> {
-                                selectedScansClassFilter = filterVal;
-                                renderScansScreen();
-                            });
-
-                    classRenderer.buildScansAssessmentTabs(scansAssessmentTabs, allRowsList, selectedScansAssessmentFilter,
-                            filterVal -> {
-                                selectedScansAssessmentFilter = filterVal;
-                                renderScansScreen();
-                            });
-
-                    classRenderer.buildScansNeedsCorrectionTabs(scansNeedsCorrectionTabs, allRowsList, selectedScansNeedsCorrectionFilter,
-                            filterVal -> {
-                                selectedScansNeedsCorrectionFilter = filterVal;
-                                renderScansScreen();
-                            });
+                    if ("SHEET".equals(scansGroupBy)) {
+                        classRenderer.buildScansSheetTabs(scansSheetTabs, allRowsList, selectedScansSheetFilter,
+                                filterVal -> {
+                                    selectedScansSheetFilter = filterVal;
+                                    renderScansScreen();
+                                });
+                    } else if ("CLASS".equals(scansGroupBy)) {
+                        classRenderer.buildScansClassTabs(scansClassTabs, allRowsList, selectedScansClassFilter,
+                                filterVal -> {
+                                    selectedScansClassFilter = filterVal;
+                                    renderScansScreen();
+                                });
+                    } else if ("ASSESSMENT".equals(scansGroupBy)) {
+                        classRenderer.buildScansAssessmentTabs(scansAssessmentTabs, allRowsList, selectedScansAssessmentFilter,
+                                filterVal -> {
+                                    selectedScansAssessmentFilter = filterVal;
+                                    renderScansScreen();
+                                });
+                    } else {
+                        classRenderer.buildScansNeedsCorrectionTabs(scansNeedsCorrectionTabs, allRowsList, selectedScansNeedsCorrectionFilter,
+                                filterVal -> {
+                                    selectedScansNeedsCorrectionFilter = filterVal;
+                                    renderScansScreen();
+                                });
+                    }
 
                     classRenderer.updateAssessmentFilterToggleAppearance(scansFilterToggle,
                             scansFilterPanelVisible,
@@ -2107,13 +2155,17 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                     || selectedScansNeedsCorrectionFilter != null);
 
                     String query = (scansSearchQuery != null) ? scansSearchQuery.toLowerCase(Locale.ROOT) : "";
+                    String activeScansSheetFilter = "SHEET".equals(scansGroupBy) ? selectedScansSheetFilter : null;
+                    String activeScansClassFilter = "CLASS".equals(scansGroupBy) ? selectedScansClassFilter : null;
+                    String activeScansAssessmentFilter = "ASSESSMENT".equals(scansGroupBy) ? selectedScansAssessmentFilter : null;
+                    String activeScansNeedsCorrectionFilter = "CORRECTION".equals(scansGroupBy) ? selectedScansNeedsCorrectionFilter : null;
                     List<ScanListRow> rows = new ArrayList<>();
                     for (ScanListRow row : allRowsList) {
-                        if (selectedScansSheetFilter != null && !selectedScansSheetFilter.equals(row.sheetType)) continue;
-                        if (selectedScansClassFilter != null && !selectedScansClassFilter.equals(row.classId)) continue;
-                        if (selectedScansAssessmentFilter != null && !selectedScansAssessmentFilter.equals(row.assessmentId)) continue;
-                        if ("YES".equals(selectedScansNeedsCorrectionFilter) && !row.needsCorrection) continue;
-                        if ("NO".equals(selectedScansNeedsCorrectionFilter) && row.needsCorrection) continue;
+                        if (activeScansSheetFilter != null && !activeScansSheetFilter.equals(row.sheetType)) continue;
+                        if (activeScansClassFilter != null && !activeScansClassFilter.equals(row.classId)) continue;
+                        if (activeScansAssessmentFilter != null && !activeScansAssessmentFilter.equals(row.assessmentId)) continue;
+                        if ("YES".equals(activeScansNeedsCorrectionFilter) && !row.needsCorrection) continue;
+                        if ("NO".equals(activeScansNeedsCorrectionFilter) && row.needsCorrection) continue;
                         if (!query.isEmpty()) {
                             boolean matches = (row.studentLrn != null && row.studentLrn.toLowerCase(Locale.ROOT).contains(query))
                                     || (row.assessmentName != null && row.assessmentName.toLowerCase(Locale.ROOT).contains(query))
@@ -2279,19 +2331,31 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
         List<AnswerKeyEntity> allKeys = (answerKeys != null) ? answerKeys : new ArrayList<>();
 
-        // Sheet-type filter tabs — built from the full unfiltered set so tab counts stay stable.
-        classRenderer.buildAnswerKeySheetTabs(answerKeysSheetTabs, allKeys, selectedAnswerKeysSheetFilter,
-                filterVal -> {
-                    selectedAnswerKeysSheetFilter = filterVal;
-                    renderAnswerKeysScreen();
-                });
+        classRenderer.buildGroupBySwitcher(answerKeysGroupSwitcher, new String[][]{
+                {"Sheet Type", "SHEET"},
+                {"Status", "STATUS"},
+        }, answerKeysGroupBy, key -> {
+            answerKeysGroupBy = key;
+            renderAnswerKeysScreen();
+        });
+        answerKeysSheetFilterBlock.setVisibility("SHEET".equals(answerKeysGroupBy) ? View.VISIBLE : View.GONE);
+        answerKeysLinkStatusFilterBlock.setVisibility("STATUS".equals(answerKeysGroupBy) ? View.VISIBLE : View.GONE);
 
-        // Linked/Unlinked status tabs.
-        classRenderer.buildAnswerKeyLinkStatusTabs(answerKeysLinkStatusTabs, allKeys, answerKeyLinkInfo,
-                selectedAnswerKeysLinkFilter, filterVal -> {
-                    selectedAnswerKeysLinkFilter = filterVal;
-                    renderAnswerKeysScreen();
-                });
+        // Sheet-type filter tabs — built from the full unfiltered set so tab counts stay stable.
+        if ("SHEET".equals(answerKeysGroupBy)) {
+            classRenderer.buildAnswerKeySheetTabs(answerKeysSheetTabs, allKeys, selectedAnswerKeysSheetFilter,
+                    filterVal -> {
+                        selectedAnswerKeysSheetFilter = filterVal;
+                        renderAnswerKeysScreen();
+                    });
+        } else {
+            // Linked/Unlinked status tabs.
+            classRenderer.buildAnswerKeyLinkStatusTabs(answerKeysLinkStatusTabs, allKeys, answerKeyLinkInfo,
+                    selectedAnswerKeysLinkFilter, filterVal -> {
+                        selectedAnswerKeysLinkFilter = filterVal;
+                        renderAnswerKeysScreen();
+                    });
+        }
 
         // "Linked To" picker label.
         java.util.LinkedHashMap<String, String> linkedAssessmentOptions = buildAnswerKeysLinkedAssessmentOptions();
@@ -2313,14 +2377,16 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
         // Apply sheet-type, link-status, linked-assessment, and search filters.
         String query = (answerKeysSearchQuery != null) ? answerKeysSearchQuery.toLowerCase(Locale.ROOT) : "";
+        String activeAnswerKeysSheetFilter = "SHEET".equals(answerKeysGroupBy) ? selectedAnswerKeysSheetFilter : null;
+        String activeAnswerKeysLinkFilter = "STATUS".equals(answerKeysGroupBy) ? selectedAnswerKeysLinkFilter : null;
         List<AnswerKeyEntity> keys = new ArrayList<>();
         for (AnswerKeyEntity k : allKeys) {
-            if (selectedAnswerKeysSheetFilter != null && !selectedAnswerKeysSheetFilter.equals(k.sheetType)) continue;
+            if (activeAnswerKeysSheetFilter != null && !activeAnswerKeysSheetFilter.equals(k.sheetType)) continue;
 
             AnswerKeyLinkInfo linkInfo = answerKeyLinkInfo.get(k.id);
             boolean isLinked = (linkInfo != null && linkInfo.linkedCount > 0);
-            if ("LINKED".equals(selectedAnswerKeysLinkFilter) && !isLinked) continue;
-            if ("UNLINKED".equals(selectedAnswerKeysLinkFilter) && isLinked) continue;
+            if ("LINKED".equals(activeAnswerKeysLinkFilter) && !isLinked) continue;
+            if ("UNLINKED".equals(activeAnswerKeysLinkFilter) && isLinked) continue;
 
             if (selectedAnswerKeysAssessmentFilter != null) {
                 List<AnswerKeyLinkedAssessment> linked = answerKeyLinkedAssessments.get(k.id);
