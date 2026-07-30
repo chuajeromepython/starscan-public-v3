@@ -204,17 +204,17 @@ public class DashboardUiHelper {
         TextView chip = new TextView(activity);
         chip.setText(label);
         chip.setTextSize(12);
-        chip.setPadding(dp(12), dp(7), dp(12), dp(7));
+        chip.setPadding(dp(14), dp(8), dp(14), dp(8));
         chip.setClickable(true);
         chip.setFocusable(true);
 
         GradientDrawable bg = new GradientDrawable();
-        bg.setCornerRadius(dp(16));
+        bg.setCornerRadius(dp(20));
         if (isActive) {
             bg.setColor(Color.parseColor("#0038A8"));
             chip.setTextColor(Color.WHITE);
         } else {
-            bg.setColor(Color.parseColor("#F8FAFC"));
+            bg.setColor(Color.parseColor("#F1F5F9"));
             bg.setStroke(dp(1), Color.parseColor("#E2E8F0"));
             chip.setTextColor(Color.parseColor("#64748B"));
         }

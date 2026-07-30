@@ -58,6 +58,7 @@ import com.example.omrscanner.dashboard.ScansScreenRenderer;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -201,16 +202,20 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private ScansScreenRenderer scansRenderer;
 
     private EditText scansSearchInput;
-    private android.widget.ImageView scansFilterToggle;
+    private TextView scansSortPicker;
     private LinearLayout scansFilterPanel;
-    private TextView scansClassFilterPicker, scansAssessmentFilterPicker,
-            scansSheetTypeFilterPicker, scansNeedsCorrectionFilterPicker;
+    private android.widget.ImageView scansFilterToggle;
+    private LinearLayout scansSheetTabs;
+    private LinearLayout scansClassTabs;
+    private LinearLayout scansAssessmentTabs;
+    private LinearLayout scansNeedsCorrectionTabs;
     private boolean scansFilterPanelVisible = false;
 
     private String scansSearchQuery = "";
+    private String selectedScansSort = ClassScreenRenderer.ASSESSMENT_SORT_NEWEST;
+    private String selectedScansSheetFilter = null;
     private String selectedScansClassFilter = null;
     private String selectedScansAssessmentFilter = null;
-    private String selectedScansSheetTypeFilter = null;
     private String selectedScansNeedsCorrectionFilter = null; // null, "YES", or "NO"
     private Runnable pendingScansSearchRunnable;
     private TextView userNameText, userSchoolText, userLastSynced;
@@ -481,12 +486,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         scansAllSummaryCount = findViewById(R.id.scansAllSummaryCount);
         scansAllSummaryTeacher = findViewById(R.id.scansAllSummaryTeacher);
         scansSearchInput = findViewById(R.id.scansSearchInput);
-        scansFilterToggle = findViewById(R.id.scansFilterToggle);
+        scansSortPicker = findViewById(R.id.scansSortPicker);
         scansFilterPanel = findViewById(R.id.scansFilterPanel);
-        scansClassFilterPicker = findViewById(R.id.scansClassFilterPicker);
-        scansAssessmentFilterPicker = findViewById(R.id.scansAssessmentFilterPicker);
-        scansSheetTypeFilterPicker = findViewById(R.id.scansSheetTypeFilterPicker);
-        scansNeedsCorrectionFilterPicker = findViewById(R.id.scansNeedsCorrectionFilterPicker);
+        scansFilterToggle = findViewById(R.id.scansFilterToggle);
+        scansSheetTabs = findViewById(R.id.scansSheetTabs);
+        scansClassTabs = findViewById(R.id.scansClassTabs);
+        scansAssessmentTabs = findViewById(R.id.scansAssessmentTabs);
+        scansNeedsCorrectionTabs = findViewById(R.id.scansNeedsCorrectionTabs);
         userNameText = findViewById(R.id.userNameText);
         userSchoolText = findViewById(R.id.userSchoolText);
         userLastSynced = findViewById(R.id.userLastSynced);
@@ -725,7 +731,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             @Override
             public void afterTextChanged(Editable s) {
                 scansSearchQuery = s != null ? s.toString().trim() : "";
-                scheduleScansSearchRefresh();
+                if (SCREEN_SCANS.equals(currentScreen)) renderScansScreen();
             }
         });
 
@@ -752,6 +758,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     selectedAnswerKeysSort = key;
                     updateSortPickers();
                     if (SCREEN_ANSWERKEYS.equals(currentScreen)) renderAnswerKeysScreen();
+                }));
+
+        scansSortPicker.setOnClickListener(v ->
+                classRenderer.showAssessmentSortDialog(selectedScansSort, key -> {
+                    selectedScansSort = key;
+                    updateSortPickers();
+                    if (SCREEN_SCANS.equals(currentScreen)) renderScansScreen();
                 }));
 
         updateSortPickers();
@@ -794,6 +807,18 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                             || selectedAnswerKeysAssessmentFilter != null);
         });
 
+        scansFilterToggle.setOnClickListener(v -> {
+            scansFilterPanelVisible = !scansFilterPanelVisible;
+            scansFilterPanel.setVisibility(scansFilterPanelVisible ? View.VISIBLE : View.GONE);
+            classRenderer.updateAssessmentFilterToggleAppearance(scansFilterToggle,
+                    scansFilterPanelVisible,
+                    !ASSESSMENT_SORT_NEWEST.equals(selectedScansSort)
+                            || selectedScansSheetFilter != null
+                            || selectedScansClassFilter != null
+                            || selectedScansAssessmentFilter != null
+                            || selectedScansNeedsCorrectionFilter != null);
+        });
+
         answerKeysAssessmentFilterPicker.setOnClickListener(v -> {
             java.util.LinkedHashMap<String, String> options = buildAnswerKeysLinkedAssessmentOptions();
             List<String> labels = new ArrayList<>();
@@ -808,79 +833,6 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     selectedAnswerKeysAssessmentFilter, id -> {
                         selectedAnswerKeysAssessmentFilter = id;
                         renderAnswerKeysScreen();
-                    });
-        });
-
-        scansFilterToggle.setOnClickListener(v -> {
-            scansFilterPanelVisible = !scansFilterPanelVisible;
-            scansFilterPanel.setVisibility(scansFilterPanelVisible ? View.VISIBLE : View.GONE);
-            classRenderer.updateAssessmentFilterToggleAppearance(scansFilterToggle,
-                    scansFilterPanelVisible,
-                    selectedScansClassFilter != null || selectedScansAssessmentFilter != null
-                            || selectedScansSheetTypeFilter != null || selectedScansNeedsCorrectionFilter != null);
-        });
-
-        scansClassFilterPicker.setOnClickListener(v -> {
-            List<String> labels = new ArrayList<>();
-            List<String> values = new ArrayList<>();
-            labels.add("All");
-            values.add(null);
-            for (java.util.Map.Entry<String, String> e : buildScansClassOptions().entrySet()) {
-                labels.add(e.getValue());
-                values.add(e.getKey());
-            }
-            classRenderer.showChoiceFilterDialog("Filter by Class", labels, values,
-                    selectedScansClassFilter, id -> {
-                        selectedScansClassFilter = id;
-                        renderScansScreen();
-                    });
-        });
-
-        scansAssessmentFilterPicker.setOnClickListener(v -> {
-            List<String> labels = new ArrayList<>();
-            List<String> values = new ArrayList<>();
-            labels.add("All");
-            values.add(null);
-            for (java.util.Map.Entry<String, String> e : buildScansAssessmentOptions().entrySet()) {
-                labels.add(e.getValue());
-                values.add(e.getKey());
-            }
-            classRenderer.showChoiceFilterDialog("Filter by Assessment", labels, values,
-                    selectedScansAssessmentFilter, id -> {
-                        selectedScansAssessmentFilter = id;
-                        renderScansScreen();
-                    });
-        });
-
-        scansSheetTypeFilterPicker.setOnClickListener(v -> {
-            List<String> labels = new ArrayList<>();
-            List<String> values = new ArrayList<>();
-            labels.add("All");
-            values.add(null);
-            for (java.util.Map.Entry<String, String> e : buildScansSheetTypeOptions().entrySet()) {
-                labels.add(e.getValue());
-                values.add(e.getKey());
-            }
-            classRenderer.showChoiceFilterDialog("Filter by Sheet Type", labels, values,
-                    selectedScansSheetTypeFilter, id -> {
-                        selectedScansSheetTypeFilter = id;
-                        renderScansScreen();
-                    });
-        });
-
-        scansNeedsCorrectionFilterPicker.setOnClickListener(v -> {
-            List<String> labels = new ArrayList<>();
-            labels.add("All");
-            labels.add("Needs Correction");
-            labels.add("OK");
-            List<String> values = new ArrayList<>();
-            values.add(null);
-            values.add("YES");
-            values.add("NO");
-            classRenderer.showChoiceFilterDialog("Filter by Correction Status", labels, values,
-                    selectedScansNeedsCorrectionFilter, id -> {
-                        selectedScansNeedsCorrectionFilter = id;
-                        renderScansScreen();
                     });
         });
     }
@@ -2116,26 +2068,86 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     ? "Teacher: " + summaryTeacherName : "Teacher: Unknown");
         }
 
-        repo.queryAllScans(selectedScansClassFilter, selectedScansAssessmentFilter,
-                selectedScansSheetTypeFilter, selectedScansNeedsCorrectionFilter, scansSearchQuery,
-                rows -> runOnUiThread(() -> {
+        repo.queryAllScans(null, null, null, null, "",
+                allRows -> runOnUiThread(() -> {
                     if (!SCREEN_SCANS.equals(currentScreen)) return;
 
-            int rowCount = (rows != null) ? rows.size() : 0;
-            if (scansAllCount != null) scansAllCount.setText(String.valueOf(rowCount));
-            if (scansAllSummaryCount != null) scansAllSummaryCount.setText(String.valueOf(rowCount));
+                    List<ScanListRow> allRowsList = (allRows != null) ? allRows : new ArrayList<>();
 
-            if (rowCount == 0) {
-                scansAllEmpty.setVisibility(View.VISIBLE);
-                scansAllList.setVisibility(View.GONE);
-                return;
-            }
-            scansAllEmpty.setVisibility(View.GONE);
-            scansAllList.setVisibility(View.VISIBLE);
-            for (ScanListRow row : rows) {
-                scansAllList.addView(scansRenderer.createScanCard(row));
-            }
-        }));
+                    classRenderer.buildScansSheetTabs(scansSheetTabs, allRowsList, selectedScansSheetFilter,
+                            filterVal -> {
+                                selectedScansSheetFilter = filterVal;
+                                renderScansScreen();
+                            });
+
+                    classRenderer.buildScansClassTabs(scansClassTabs, allRowsList, selectedScansClassFilter,
+                            filterVal -> {
+                                selectedScansClassFilter = filterVal;
+                                renderScansScreen();
+                            });
+
+                    classRenderer.buildScansAssessmentTabs(scansAssessmentTabs, allRowsList, selectedScansAssessmentFilter,
+                            filterVal -> {
+                                selectedScansAssessmentFilter = filterVal;
+                                renderScansScreen();
+                            });
+
+                    classRenderer.buildScansNeedsCorrectionTabs(scansNeedsCorrectionTabs, allRowsList, selectedScansNeedsCorrectionFilter,
+                            filterVal -> {
+                                selectedScansNeedsCorrectionFilter = filterVal;
+                                renderScansScreen();
+                            });
+
+                    classRenderer.updateAssessmentFilterToggleAppearance(scansFilterToggle,
+                            scansFilterPanelVisible,
+                            !ClassScreenRenderer.ASSESSMENT_SORT_NEWEST.equals(selectedScansSort)
+                                    || selectedScansSheetFilter != null
+                                    || selectedScansClassFilter != null
+                                    || selectedScansAssessmentFilter != null
+                                    || selectedScansNeedsCorrectionFilter != null);
+
+                    String query = (scansSearchQuery != null) ? scansSearchQuery.toLowerCase(Locale.ROOT) : "";
+                    List<ScanListRow> rows = new ArrayList<>();
+                    for (ScanListRow row : allRowsList) {
+                        if (selectedScansSheetFilter != null && !selectedScansSheetFilter.equals(row.sheetType)) continue;
+                        if (selectedScansClassFilter != null && !selectedScansClassFilter.equals(row.classId)) continue;
+                        if (selectedScansAssessmentFilter != null && !selectedScansAssessmentFilter.equals(row.assessmentId)) continue;
+                        if ("YES".equals(selectedScansNeedsCorrectionFilter) && !row.needsCorrection) continue;
+                        if ("NO".equals(selectedScansNeedsCorrectionFilter) && row.needsCorrection) continue;
+                        if (!query.isEmpty()) {
+                            boolean matches = (row.studentLrn != null && row.studentLrn.toLowerCase(Locale.ROOT).contains(query))
+                                    || (row.assessmentName != null && row.assessmentName.toLowerCase(Locale.ROOT).contains(query))
+                                    || (row.className != null && row.className.toLowerCase(Locale.ROOT).contains(query));
+                            if (!matches) continue;
+                        }
+                        rows.add(row);
+                    }
+
+                    if (ClassScreenRenderer.ASSESSMENT_SORT_OLDEST.equals(selectedScansSort)) {
+                        Collections.sort(rows, (a, b) -> Long.compare(a.timestamp, b.timestamp));
+                    } else if (ClassScreenRenderer.ASSESSMENT_SORT_NAME_ASC.equals(selectedScansSort)) {
+                        Collections.sort(rows, (a, b) -> (a.studentLrn != null ? a.studentLrn : "").compareToIgnoreCase(b.studentLrn != null ? b.studentLrn : ""));
+                    } else if (ClassScreenRenderer.ASSESSMENT_SORT_NAME_DESC.equals(selectedScansSort)) {
+                        Collections.sort(rows, (a, b) -> (b.studentLrn != null ? b.studentLrn : "").compareToIgnoreCase(a.studentLrn != null ? a.studentLrn : ""));
+                    } else {
+                        Collections.sort(rows, (a, b) -> Long.compare(b.timestamp, a.timestamp));
+                    }
+
+                    int rowCount = rows.size();
+                    if (scansAllCount != null) scansAllCount.setText(String.valueOf(rowCount));
+                    if (scansAllSummaryCount != null) scansAllSummaryCount.setText(String.valueOf(rowCount));
+
+                    if (rowCount == 0) {
+                        scansAllEmpty.setVisibility(View.VISIBLE);
+                        scansAllList.setVisibility(View.GONE);
+                        return;
+                    }
+                    scansAllEmpty.setVisibility(View.GONE);
+                    scansAllList.setVisibility(View.VISIBLE);
+                    for (ScanListRow row : rows) {
+                        scansAllList.addView(scansRenderer.createScanCard(row));
+                    }
+                }));
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -2405,6 +2417,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             myAssessmentsSortPicker.setText(classRenderer.getAssessmentSortLabel(selectedMyAssessmentsSort) + " \u25be");
         if (answerKeysSortPicker != null)
             answerKeysSortPicker.setText(classRenderer.getAssessmentSortLabel(selectedAnswerKeysSort) + " \u25be");
+        if (scansSortPicker != null)
+            scansSortPicker.setText(classRenderer.getAssessmentSortLabel(selectedScansSort) + " \u25be");
     }
 
     // ═══════════════════════════════════════════════════════════════

@@ -18,6 +18,7 @@ import com.example.omrscanner.database.entities.AnswerKeyEntity;
 import com.example.omrscanner.database.projections.AssessmentListRow;
 import com.example.omrscanner.database.projections.AnswerKeyLinkInfo;
 import com.example.omrscanner.database.projections.AnswerKeyLinkedAssessment;
+import com.example.omrscanner.database.projections.ScanListRow;
 import com.example.omrscanner.models.ActivityFolder;
 import com.example.omrscanner.models.ClassFolder;
 import java.text.SimpleDateFormat;
@@ -242,6 +243,99 @@ public class ClassScreenRenderer {
         }
 
         renderPillRow(tabContainer, tabList.toArray(new Object[0][]), selectedSheetFilter, onTabSelected);
+    }
+
+    public void buildScansSheetTabs(LinearLayout tabContainer, List<ScanListRow> scans,
+                                    String selectedSheetFilter,
+                                    java.util.function.Consumer<String> onTabSelected) {
+
+        java.util.LinkedHashMap<String, Integer> counts = new java.util.LinkedHashMap<>();
+        if (scans != null) {
+            for (ScanListRow s : scans) {
+                if (s.sheetType == null || s.sheetType.trim().isEmpty()) continue;
+                counts.put(s.sheetType, counts.containsKey(s.sheetType) ? counts.get(s.sheetType) + 1 : 1);
+            }
+        }
+        int totalCount = (scans != null) ? scans.size() : 0;
+
+        List<Object[]> tabList = new ArrayList<>();
+        tabList.add(new Object[]{"All", null, totalCount});
+        List<String> sortedTypes = new ArrayList<>(counts.keySet());
+        java.util.Collections.sort(sortedTypes);
+        for (String type : sortedTypes) {
+            tabList.add(new Object[]{type, type, counts.get(type)});
+        }
+
+        renderPillRow(tabContainer, tabList.toArray(new Object[0][]), selectedSheetFilter, onTabSelected);
+    }
+
+    public void buildScansClassTabs(LinearLayout tabContainer, List<ScanListRow> scans,
+                                    String selectedClassFilter,
+                                    java.util.function.Consumer<String> onTabSelected) {
+
+        java.util.LinkedHashMap<String, String> names = new java.util.LinkedHashMap<>();
+        java.util.LinkedHashMap<String, Integer> counts = new java.util.LinkedHashMap<>();
+        if (scans != null) {
+            for (ScanListRow s : scans) {
+                if (s.classId == null) continue;
+                names.put(s.classId, s.className);
+                counts.put(s.classId, counts.containsKey(s.classId) ? counts.get(s.classId) + 1 : 1);
+            }
+        }
+        int totalCount = (scans != null) ? scans.size() : 0;
+
+        List<Object[]> tabList = new ArrayList<>();
+        tabList.add(new Object[]{"All", null, totalCount});
+        for (String classId : names.keySet()) {
+            tabList.add(new Object[]{names.get(classId), classId, counts.get(classId)});
+        }
+
+        renderPillRow(tabContainer, tabList.toArray(new Object[0][]), selectedClassFilter, onTabSelected);
+    }
+
+    public void buildScansAssessmentTabs(LinearLayout tabContainer, List<ScanListRow> scans,
+                                         String selectedAssessmentFilter,
+                                         java.util.function.Consumer<String> onTabSelected) {
+
+        java.util.LinkedHashMap<String, String> names = new java.util.LinkedHashMap<>();
+        java.util.LinkedHashMap<String, Integer> counts = new java.util.LinkedHashMap<>();
+        if (scans != null) {
+            for (ScanListRow s : scans) {
+                if (s.assessmentId == null) continue;
+                names.put(s.assessmentId, s.assessmentName);
+                counts.put(s.assessmentId, counts.containsKey(s.assessmentId) ? counts.get(s.assessmentId) + 1 : 1);
+            }
+        }
+        int totalCount = (scans != null) ? scans.size() : 0;
+
+        List<Object[]> tabList = new ArrayList<>();
+        tabList.add(new Object[]{"All", null, totalCount});
+        for (String assessmentId : names.keySet()) {
+            tabList.add(new Object[]{names.get(assessmentId), assessmentId, counts.get(assessmentId)});
+        }
+
+        renderPillRow(tabContainer, tabList.toArray(new Object[0][]), selectedAssessmentFilter, onTabSelected);
+    }
+
+    public void buildScansNeedsCorrectionTabs(LinearLayout tabContainer, List<ScanListRow> scans,
+                                              String selectedNeedsCorrectionFilter,
+                                              java.util.function.Consumer<String> onTabSelected) {
+
+        int needsCorrectionCount = 0, okCount = 0;
+        if (scans != null) {
+            for (ScanListRow s : scans) {
+                if (s.needsCorrection) needsCorrectionCount++; else okCount++;
+            }
+        }
+        int totalCount = (scans != null) ? scans.size() : 0;
+
+        Object[][] tabs = {
+                {"All",              null,  totalCount},
+                {"Needs Correction", "YES", needsCorrectionCount},
+                {"OK",               "NO",  okCount},
+        };
+
+        renderPillRow(tabContainer, tabs, selectedNeedsCorrectionFilter, onTabSelected);
     }
 
     /**

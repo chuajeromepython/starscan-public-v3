@@ -1228,12 +1228,12 @@
                                     android:layout_width="0dp"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="1"
-                                    android:text="Class"
+                                    android:text="Sort"
                                     android:textColor="#64748B"
                                     android:textSize="11sp"
                                     android:textStyle="bold" />
                                 <TextView
-                                    android:id="@+id/scansClassFilterPicker"
+                                    android:id="@+id/scansSortPicker"
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:background="@drawable/bg_sort_pill"
@@ -1241,93 +1241,93 @@
                                     android:paddingTop="5dp"
                                     android:paddingEnd="10dp"
                                     android:paddingBottom="5dp"
-                                    android:text="All ▾"
+                                    android:text="Newest ▾"
                                     android:textColor="#1E293B"
                                     android:textSize="11sp" />
                             </LinearLayout>
 
-                            <LinearLayout
+                            <TextView
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:layout_marginBottom="8dp"
-                                android:gravity="center_vertical"
-                                android:orientation="horizontal">
-                                <TextView
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:text="Assessment"
-                                    android:textColor="#64748B"
-                                    android:textSize="11sp"
-                                    android:textStyle="bold" />
-                                <TextView
-                                    android:id="@+id/scansAssessmentFilterPicker"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:background="@drawable/bg_sort_pill"
-                                    android:paddingStart="10dp"
-                                    android:paddingTop="5dp"
-                                    android:paddingEnd="10dp"
-                                    android:paddingBottom="5dp"
-                                    android:text="All ▾"
-                                    android:textColor="#1E293B"
-                                    android:textSize="11sp" />
-                            </LinearLayout>
+                                android:layout_marginBottom="5dp"
+                                android:text="Filter Sheet Type"
+                                android:textColor="#64748B"
+                                android:textSize="10sp"
+                                android:textStyle="bold" />
 
-                            <LinearLayout
+                            <HorizontalScrollView
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:layout_marginBottom="8dp"
-                                android:gravity="center_vertical"
-                                android:orientation="horizontal">
-                                <TextView
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:text="Sheet Type"
-                                    android:textColor="#64748B"
-                                    android:textSize="11sp"
-                                    android:textStyle="bold" />
-                                <TextView
-                                    android:id="@+id/scansSheetTypeFilterPicker"
+                                android:scrollbars="none">
+                                <LinearLayout
+                                    android:id="@+id/scansSheetTabs"
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
-                                    android:background="@drawable/bg_sort_pill"
-                                    android:paddingStart="10dp"
-                                    android:paddingTop="5dp"
-                                    android:paddingEnd="10dp"
-                                    android:paddingBottom="5dp"
-                                    android:text="All ▾"
-                                    android:textColor="#1E293B"
-                                    android:textSize="11sp" />
-                            </LinearLayout>
+                                    android:orientation="horizontal" />
+                            </HorizontalScrollView>
 
-                            <LinearLayout
+                            <TextView
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:gravity="center_vertical"
-                                android:orientation="horizontal">
-                                <TextView
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_weight="1"
-                                    android:text="Needs Correction"
-                                    android:textColor="#64748B"
-                                    android:textSize="11sp"
-                                    android:textStyle="bold" />
-                                <TextView
-                                    android:id="@+id/scansNeedsCorrectionFilterPicker"
+                                android:layout_marginTop="8dp"
+                                android:layout_marginBottom="5dp"
+                                android:text="Filter Class"
+                                android:textColor="#64748B"
+                                android:textSize="10sp"
+                                android:textStyle="bold" />
+
+                            <HorizontalScrollView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:scrollbars="none">
+                                <LinearLayout
+                                    android:id="@+id/scansClassTabs"
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
-                                    android:background="@drawable/bg_sort_pill"
-                                    android:paddingStart="10dp"
-                                    android:paddingTop="5dp"
-                                    android:paddingEnd="10dp"
-                                    android:paddingBottom="5dp"
-                                    android:text="All ▾"
-                                    android:textColor="#1E293B"
-                                    android:textSize="11sp" />
-                            </LinearLayout>
+                                    android:orientation="horizontal" />
+                            </HorizontalScrollView>
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="8dp"
+                                android:layout_marginBottom="5dp"
+                                android:text="Filter Assessment"
+                                android:textColor="#64748B"
+                                android:textSize="10sp"
+                                android:textStyle="bold" />
+
+                            <HorizontalScrollView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:scrollbars="none">
+                                <LinearLayout
+                                    android:id="@+id/scansAssessmentTabs"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:orientation="horizontal" />
+                            </HorizontalScrollView>
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="8dp"
+                                android:layout_marginBottom="5dp"
+                                android:text="Needs Correction"
+                                android:textColor="#64748B"
+                                android:textSize="10sp"
+                                android:textStyle="bold" />
+
+                            <HorizontalScrollView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:scrollbars="none">
+                                <LinearLayout
+                                    android:id="@+id/scansNeedsCorrectionTabs"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:orientation="horizontal" />
+                            </HorizontalScrollView>
                         </LinearLayout>
 
                         <TextView
