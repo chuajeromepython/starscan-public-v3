@@ -12,6 +12,7 @@ import com.example.omrscanner.database.entities.StudentLrnEntity;
 import com.example.omrscanner.database.entities.TeacherEntity;
 import com.example.omrscanner.database.projections.AssessmentListRow;
 import com.example.omrscanner.database.projections.ClassListRow;
+import com.example.omrscanner.database.projections.ScanListRow;
 import com.example.omrscanner.database.entities.UserEntity;
 import com.example.omrscanner.database.projections.AnswerKeyLinkInfo;
 import com.example.omrscanner.database.projections.AnswerKeyLinkedAssessment;
@@ -371,6 +372,17 @@ public class OMRRepository {
   public void getScansByAssessment(String assessmentId, Callback<List<ScanEntity>> callback) {
     executor.execute(() -> {
       List<ScanEntity> list = db.scanDao().getByAssessment(assessmentId);
+      if (callback != null)
+        callback.onResult(list);
+    });
+  }
+
+  /** All scans across all classes, for the read-only Scans tab. */
+  public void queryAllScans(String classIdFilter, String assessmentIdFilter, String sheetTypeFilter,
+                            String needsCorrectionFilter, String search, Callback<List<ScanListRow>> callback) {
+    executor.execute(() -> {
+      List<ScanListRow> list = db.scanDao().queryAllScans(classIdFilter, assessmentIdFilter,
+              sheetTypeFilter, needsCorrectionFilter, search);
       if (callback != null)
         callback.onResult(list);
     });

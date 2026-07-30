@@ -52,6 +52,8 @@ import android.widget.ImageView;
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 import com.example.omrscanner.database.projections.AnswerKeyLinkInfo;
 import com.example.omrscanner.database.projections.AnswerKeyLinkedAssessment;
+import com.example.omrscanner.database.projections.ScanListRow;
+import com.example.omrscanner.dashboard.ScansScreenRenderer;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -95,6 +97,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private static final String SCREEN_USER = "user";
     private static final String SCREEN_ASSESSMENTS = "assessments";
     private static final String SCREEN_ANSWERKEYS = "answerkeys";
+    private static final String SCREEN_SCANS = "scans";
 
     // ── Sort constants (delegated to renderers, kept here for initialisation) ──
     private static final String CLASS_SORT_NEWEST = HomeScreenRenderer.CLASS_SORT_NEWEST;
@@ -185,13 +188,31 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private TextView tvLastSynced;
     private LinearLayout teacherNameRow;
 
-    private View screenHome, screenAssessments, screenAnswerKeys;
+    private View screenHome, screenAssessments, screenAnswerKeys, screenScans;
     private ScrollView screenClass, screenActivity, screenUser;
 
     private android.widget.FrameLayout bottomNav;
-    private LinearLayout navHomeTab, navUserTab, navAssessmentsTab, navAnswerKeysTab;
-    private ImageView navHomeIcon, navUserIcon, navAssessmentsIcon, navAnswerKeysIcon;
-    private TextView navHomeLabel, navUserLabel, navAssessmentsLabel, navAnswerKeysLabel;
+    private LinearLayout navHomeTab, navUserTab, navAssessmentsTab, navAnswerKeysTab, navScansTab;
+    private ImageView navHomeIcon, navUserIcon, navAssessmentsIcon, navAnswerKeysIcon, navScansIcon;
+    private TextView navHomeLabel, navUserLabel, navAssessmentsLabel, navAnswerKeysLabel, navScansLabel;
+
+    private LinearLayout scansAllList, scansAllEmpty;
+    private TextView scansAllCount, scansAllSummaryCount, scansAllSummaryTeacher;
+    private ScansScreenRenderer scansRenderer;
+
+    private EditText scansSearchInput;
+    private android.widget.ImageView scansFilterToggle;
+    private LinearLayout scansFilterPanel;
+    private TextView scansClassFilterPicker, scansAssessmentFilterPicker,
+            scansSheetTypeFilterPicker, scansNeedsCorrectionFilterPicker;
+    private boolean scansFilterPanelVisible = false;
+
+    private String scansSearchQuery = "";
+    private String selectedScansClassFilter = null;
+    private String selectedScansAssessmentFilter = null;
+    private String selectedScansSheetTypeFilter = null;
+    private String selectedScansNeedsCorrectionFilter = null; // null, "YES", or "NO"
+    private Runnable pendingScansSearchRunnable;
     private TextView userNameText, userSchoolText, userLastSynced;
     private TextView userStatClasses, userStatAssessments, userStatScans, userStatAnswerKeys;
     private TextView userDetailFullName, userDetailUsername, userDetailUserId, userDetailSchool,
@@ -331,6 +352,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         homeRenderer = new HomeScreenRenderer(this, ui);
         classRenderer = new ClassScreenRenderer(this, ui);
         activityRenderer = new ActivityScreenRenderer(this, ui);
+        scansRenderer = new ScansScreenRenderer(this, ui);
         dialogs = new DashboardDialogs(this, ui, repo, this);
 
         initViews();
@@ -431,6 +453,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         screenHome = findViewById(R.id.screenHome);
         screenAssessments = findViewById(R.id.screenAssessments);
         screenAnswerKeys = findViewById(R.id.screenAnswerKeys);
+        screenScans = findViewById(R.id.screenScans);
         screenClass = findViewById(R.id.screenClass);
         screenActivity = findViewById(R.id.screenActivity);
         screenUser = findViewById(R.id.screenUser);
@@ -440,14 +463,30 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         navUserTab = findViewById(R.id.navUserTab);
         navAssessmentsTab = findViewById(R.id.navAssessmentsTab);
         navAnswerKeysTab = findViewById(R.id.navAnswerKeysTab);
+        navScansTab = findViewById(R.id.navScansTab);
         navHomeIcon = findViewById(R.id.navHomeIcon);
         navUserIcon = findViewById(R.id.navUserIcon);
         navAssessmentsIcon = findViewById(R.id.navAssessmentsIcon);
         navAnswerKeysIcon = findViewById(R.id.navAnswerKeysIcon);
+        navScansIcon = findViewById(R.id.navScansIcon);
         navHomeLabel = findViewById(R.id.navHomeLabel);
         navUserLabel = findViewById(R.id.navUserLabel);
         navAssessmentsLabel = findViewById(R.id.navAssessmentsLabel);
         navAnswerKeysLabel = findViewById(R.id.navAnswerKeysLabel);
+        navScansLabel = findViewById(R.id.navScansLabel);
+
+        scansAllList = findViewById(R.id.scansAllList);
+        scansAllEmpty = findViewById(R.id.scansAllEmpty);
+        scansAllCount = findViewById(R.id.scansAllCount);
+        scansAllSummaryCount = findViewById(R.id.scansAllSummaryCount);
+        scansAllSummaryTeacher = findViewById(R.id.scansAllSummaryTeacher);
+        scansSearchInput = findViewById(R.id.scansSearchInput);
+        scansFilterToggle = findViewById(R.id.scansFilterToggle);
+        scansFilterPanel = findViewById(R.id.scansFilterPanel);
+        scansClassFilterPicker = findViewById(R.id.scansClassFilterPicker);
+        scansAssessmentFilterPicker = findViewById(R.id.scansAssessmentFilterPicker);
+        scansSheetTypeFilterPicker = findViewById(R.id.scansSheetTypeFilterPicker);
+        scansNeedsCorrectionFilterPicker = findViewById(R.id.scansNeedsCorrectionFilterPicker);
         userNameText = findViewById(R.id.userNameText);
         userSchoolText = findViewById(R.id.userSchoolText);
         userLastSynced = findViewById(R.id.userLastSynced);
@@ -549,6 +588,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         navUserTab.setOnClickListener(v -> selectUserTab());
         navAssessmentsTab.setOnClickListener(v -> selectAssessmentsTab());
         navAnswerKeysTab.setOnClickListener(v -> selectAnswerKeysTab());
+        navScansTab.setOnClickListener(v -> selectScansTab());
 
         btnBack.setOnClickListener(v -> navigateBack());
         btnUpload.setOnClickListener(v -> dialogs.showGlobalUploadClassDialog());
@@ -673,6 +713,22 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             }
         });
 
+        scansSearchInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int st, int c, int a) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int st, int b, int c) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                scansSearchQuery = s != null ? s.toString().trim() : "";
+                scheduleScansSearchRefresh();
+            }
+        });
+
         homeClassSortPicker.setOnClickListener(v ->
                 homeRenderer.showClassSortDialog(selectedClassSort, key -> {
                     selectedClassSort = key;
@@ -754,6 +810,123 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                         renderAnswerKeysScreen();
                     });
         });
+
+        scansFilterToggle.setOnClickListener(v -> {
+            scansFilterPanelVisible = !scansFilterPanelVisible;
+            scansFilterPanel.setVisibility(scansFilterPanelVisible ? View.VISIBLE : View.GONE);
+            classRenderer.updateAssessmentFilterToggleAppearance(scansFilterToggle,
+                    scansFilterPanelVisible,
+                    selectedScansClassFilter != null || selectedScansAssessmentFilter != null
+                            || selectedScansSheetTypeFilter != null || selectedScansNeedsCorrectionFilter != null);
+        });
+
+        scansClassFilterPicker.setOnClickListener(v -> {
+            List<String> labels = new ArrayList<>();
+            List<String> values = new ArrayList<>();
+            labels.add("All");
+            values.add(null);
+            for (java.util.Map.Entry<String, String> e : buildScansClassOptions().entrySet()) {
+                labels.add(e.getValue());
+                values.add(e.getKey());
+            }
+            classRenderer.showChoiceFilterDialog("Filter by Class", labels, values,
+                    selectedScansClassFilter, id -> {
+                        selectedScansClassFilter = id;
+                        renderScansScreen();
+                    });
+        });
+
+        scansAssessmentFilterPicker.setOnClickListener(v -> {
+            List<String> labels = new ArrayList<>();
+            List<String> values = new ArrayList<>();
+            labels.add("All");
+            values.add(null);
+            for (java.util.Map.Entry<String, String> e : buildScansAssessmentOptions().entrySet()) {
+                labels.add(e.getValue());
+                values.add(e.getKey());
+            }
+            classRenderer.showChoiceFilterDialog("Filter by Assessment", labels, values,
+                    selectedScansAssessmentFilter, id -> {
+                        selectedScansAssessmentFilter = id;
+                        renderScansScreen();
+                    });
+        });
+
+        scansSheetTypeFilterPicker.setOnClickListener(v -> {
+            List<String> labels = new ArrayList<>();
+            List<String> values = new ArrayList<>();
+            labels.add("All");
+            values.add(null);
+            for (java.util.Map.Entry<String, String> e : buildScansSheetTypeOptions().entrySet()) {
+                labels.add(e.getValue());
+                values.add(e.getKey());
+            }
+            classRenderer.showChoiceFilterDialog("Filter by Sheet Type", labels, values,
+                    selectedScansSheetTypeFilter, id -> {
+                        selectedScansSheetTypeFilter = id;
+                        renderScansScreen();
+                    });
+        });
+
+        scansNeedsCorrectionFilterPicker.setOnClickListener(v -> {
+            List<String> labels = new ArrayList<>();
+            labels.add("All");
+            labels.add("Needs Correction");
+            labels.add("OK");
+            List<String> values = new ArrayList<>();
+            values.add(null);
+            values.add("YES");
+            values.add("NO");
+            classRenderer.showChoiceFilterDialog("Filter by Correction Status", labels, values,
+                    selectedScansNeedsCorrectionFilter, id -> {
+                        selectedScansNeedsCorrectionFilter = id;
+                        renderScansScreen();
+                    });
+        });
+    }
+
+    /** Class id -> display name, for the Scans tab's class filter. */
+    private java.util.LinkedHashMap<String, String> buildScansClassOptions() {
+        java.util.LinkedHashMap<String, String> map = new java.util.LinkedHashMap<>();
+        for (ClassFolder cf : classFolders) {
+            map.put(cf.getId(), cf.getDisplayName());
+        }
+        return map;
+    }
+
+    /** Assessment id -> "Name — Class", for the Scans tab's assessment filter. */
+    private java.util.LinkedHashMap<String, String> buildScansAssessmentOptions() {
+        java.util.LinkedHashMap<String, String> map = new java.util.LinkedHashMap<>();
+        for (ClassFolder cf : classFolders) {
+            if (cf.getActivities() == null) continue;
+            for (ActivityFolder af : cf.getActivities()) {
+                map.put(af.getId(), af.getName() + " \u2014 " + cf.getDisplayName());
+            }
+        }
+        return map;
+    }
+
+    /** Distinct sheet types currently in use, for the Scans tab's sheet-type filter. */
+    private java.util.LinkedHashMap<String, String> buildScansSheetTypeOptions() {
+        java.util.TreeSet<String> types = new java.util.TreeSet<>();
+        for (ClassFolder cf : classFolders) {
+            if (cf.getActivities() == null) continue;
+            for (ActivityFolder af : cf.getActivities()) {
+                if (af.getSheetType() != null && !af.getSheetType().isEmpty()) types.add(af.getSheetType());
+            }
+        }
+        java.util.LinkedHashMap<String, String> map = new java.util.LinkedHashMap<>();
+        for (String t : types) map.put(t, t);
+        return map;
+    }
+
+    private void scheduleScansSearchRefresh() {
+        if (pendingScansSearchRunnable != null)
+            searchDebounceHandler.removeCallbacks(pendingScansSearchRunnable);
+        pendingScansSearchRunnable = () -> {
+            if (SCREEN_SCANS.equals(currentScreen)) renderScansScreen();
+        };
+        searchDebounceHandler.postDelayed(pendingScansSearchRunnable, 220);
     }
 
     /**
@@ -1405,6 +1578,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         screenUser.setVisibility(View.GONE);
         screenAssessments.setVisibility(View.GONE);
         screenAnswerKeys.setVisibility(View.GONE);
+        screenScans.setVisibility(View.GONE);
 
         switch (screen) {
             case SCREEN_HOME:
@@ -1506,6 +1680,17 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 breadcrumbDivider.setVisibility(View.GONE);
                 renderAnswerKeysScreen();
                 break;
+
+            case SCREEN_SCANS:
+                screenScans.setVisibility(View.VISIBLE);
+                btnBack.setVisibility(View.GONE);
+                fabMain.setVisibility(View.GONE);
+                topBarTitle.setText("Scans");
+                topBarBadge.setVisibility(View.GONE);
+                breadcrumbBar.setVisibility(View.GONE);
+                breadcrumbDivider.setVisibility(View.GONE);
+                renderScansScreen();
+                break;
         }
 
         updateBottomNavSelection(screen);
@@ -1513,7 +1698,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
     /** True for the "chrome" tabs that sit alongside Home in the bottom nav. */
     private boolean isChromeTab(String screen) {
-        return SCREEN_USER.equals(screen) || SCREEN_ASSESSMENTS.equals(screen) || SCREEN_ANSWERKEYS.equals(screen);
+        return SCREEN_USER.equals(screen) || SCREEN_ASSESSMENTS.equals(screen)
+                || SCREEN_ANSWERKEYS.equals(screen) || SCREEN_SCANS.equals(screen);
     }
 
     /** Switches to the Home tab's remembered screen (called by the tab tap or back button). */
@@ -1557,6 +1743,16 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         }
     }
 
+    /** Switches to the read-only Scans tab, remembering whatever content screen was active before. */
+    private void selectScansTab() {
+        if (!SCREEN_SCANS.equals(currentScreen)) {
+            if (!isChromeTab(currentScreen)) {
+                screenBeforeChromeTab = currentScreen;
+            }
+            showScreen(SCREEN_SCANS);
+        }
+    }
+
     /** Colors the active vs inactive tab icon/label. */
     private void updateBottomNavSelection(String screen) {
         int activeColor = Color.parseColor("#FFFFFF");
@@ -1570,7 +1766,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         boolean userActive = SCREEN_USER.equals(screen);
         boolean assessmentsActive = SCREEN_ASSESSMENTS.equals(screen);
         boolean answerKeysActive = SCREEN_ANSWERKEYS.equals(screen);
-        boolean homeActive = !userActive && !assessmentsActive && !answerKeysActive;
+        boolean scansActive = SCREEN_SCANS.equals(screen);
+        boolean homeActive = !userActive && !assessmentsActive && !answerKeysActive && !scansActive;
 
         navHomeIcon.setColorFilter(activeColor);
         navHomeIcon.setImageAlpha(homeActive ? activeAlpha : inactiveAlpha);
@@ -1583,6 +1780,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         navAnswerKeysIcon.setColorFilter(activeColor);
         navAnswerKeysIcon.setImageAlpha(answerKeysActive ? activeAlpha : inactiveAlpha);
         navAnswerKeysLabel.setTextColor(answerKeysActive ? activeColor : inactiveColor);
+
+        navScansIcon.setColorFilter(activeColor);
+        navScansIcon.setImageAlpha(scansActive ? activeAlpha : inactiveAlpha);
+        navScansLabel.setTextColor(scansActive ? activeColor : inactiveColor);
 
         navUserIcon.setColorFilter(activeColor);
         navUserIcon.setImageAlpha(userActive ? activeAlpha : inactiveAlpha);
@@ -1898,6 +2099,43 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                 }));
                     }
                 }));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // RENDER — SCANS (all classes, read-only)
+    // ═══════════════════════════════════════════════════════════════
+
+    private void renderScansScreen() {
+        scansAllList.removeAllViews();
+
+        String summaryTeacherName = (activeUserFirstName != null && !activeUserFirstName.isEmpty())
+                ? (activeUserFirstName + (activeUserLastName != null && !activeUserLastName.isEmpty() ? " " + activeUserLastName : ""))
+                : globalTeacherName;
+        if (scansAllSummaryTeacher != null) {
+            scansAllSummaryTeacher.setText(summaryTeacherName != null && !summaryTeacherName.isEmpty()
+                    ? "Teacher: " + summaryTeacherName : "Teacher: Unknown");
+        }
+
+        repo.queryAllScans(selectedScansClassFilter, selectedScansAssessmentFilter,
+                selectedScansSheetTypeFilter, selectedScansNeedsCorrectionFilter, scansSearchQuery,
+                rows -> runOnUiThread(() -> {
+                    if (!SCREEN_SCANS.equals(currentScreen)) return;
+
+            int rowCount = (rows != null) ? rows.size() : 0;
+            if (scansAllCount != null) scansAllCount.setText(String.valueOf(rowCount));
+            if (scansAllSummaryCount != null) scansAllSummaryCount.setText(String.valueOf(rowCount));
+
+            if (rowCount == 0) {
+                scansAllEmpty.setVisibility(View.VISIBLE);
+                scansAllList.setVisibility(View.GONE);
+                return;
+            }
+            scansAllEmpty.setVisibility(View.GONE);
+            scansAllList.setVisibility(View.VISIBLE);
+            for (ScanListRow row : rows) {
+                scansAllList.addView(scansRenderer.createScanCard(row));
+            }
+        }));
     }
 
     // ═══════════════════════════════════════════════════════════════

@@ -41,6 +41,10 @@ public class ScanDetailActivity extends AppCompatActivity {
     public static final String EXTRA_CLASS_ID = "class_id";
     public static final String EXTRA_ACTIVITY_ID = "activity_id";
     public static final String EXTRA_SCAN_INDEX = "scan_index";
+    /** Alternative lookup key: open a scan directly by its DB id (used by the cross-class Scans tab). */
+    public static final String EXTRA_SCAN_ID = "scan_id";
+    /** When true, hides all edit affordances — the scan is shown but cannot be modified. */
+    public static final String EXTRA_READ_ONLY = "read_only";
 
     private static final String PREFS_NAME = "omr_dashboard";
     private static final String KEY_CLASSES = "class_folders";
@@ -61,6 +65,8 @@ public class ScanDetailActivity extends AppCompatActivity {
     // ── State ──────────────────────────────────────────────────
     private String classId, activityId;
     private int scanIndex;
+    private int scanId = -1;
+    private boolean readOnly = false;
 
     private ClassFolder currentClass;
     private ActivityFolder currentActivity;
@@ -106,6 +112,13 @@ public class ScanDetailActivity extends AppCompatActivity {
             classId = getIntent().getStringExtra(EXTRA_CLASS_ID);
             activityId = getIntent().getStringExtra(EXTRA_ACTIVITY_ID);
             scanIndex = getIntent().getIntExtra(EXTRA_SCAN_INDEX, -1);
+            scanId = getIntent().getIntExtra(EXTRA_SCAN_ID, -1);
+            readOnly = getIntent().getBooleanExtra(EXTRA_READ_ONLY, false);
+        }
+
+        if (readOnly) {
+            // No edit affordance at all in read-only mode — not just disabled, gone.
+            btnEditToggle.setVisibility(View.GONE);
         }
 
         loadData();
@@ -130,10 +143,71 @@ public class ScanDetailActivity extends AppCompatActivity {
         btnSaveChanges.setOnClickListener(v -> saveChanges());
     }
 
+    /** Loads a scan by its raw DB id, resolving its class/assessment along the way.
+     *  Used by the read-only Scans tab, which doesn't have a per-assessment index. */
+    private void loadDataByScanId() {
+        repo.getScanById(scanId, scanEntity -> {
+            if (scanEntity == null) {
+                runOnUiThread(() -> showError("Scan not found"));
+                return;
+            }
+            currentScanEntity = scanEntity;
+            activityId = scanEntity.assessmentId;
+
+            repo.getAssessmentById(activityId, assessmentEntity -> {
+                if (assessmentEntity == null) {
+                    runOnUiThread(() -> showError("Activity not found"));
+                    return;
+                }
+                currentActivity = DataMapper.toActivityFolder(assessmentEntity);
+                classId = assessmentEntity.classId;
+
+                if (assessmentEntity.answerKeyId != null) {
+                    currentAnswerKey = repo.getAnswerKeyByIdSync(assessmentEntity.answerKeyId);
+                    if (currentAnswerKey != null && currentAnswerKey.answers != null) {
+                        correctAnswers = currentAnswerKey.answers.split(",");
+                    }
+                }
+
+                repo.getClassById(classId, classEntity -> {
+                    if (classEntity != null) {
+                        repo.getFirstTeacher(teacherEntity -> {
+                            String teacherName = (teacherEntity != null && teacherEntity.name != null)
+                                    ? teacherEntity.name : "Unknown";
+                            currentClass = DataMapper.toClassFolder(classEntity, teacherName);
+                            loadAnswersAndPopulate();
+                        });
+                    } else {
+                        loadAnswersAndPopulate();
+                    }
+                });
+            });
+        });
+    }
+
+    private void loadAnswersAndPopulate() {
+        repo.getAnswersByScan(currentScanEntity.id, answerEntities -> {
+            Map<Integer, String> answers = DataMapper.toAnswerMap(answerEntities);
+            currentScan = DataMapper.toScanEntry(currentScanEntity, answers);
+
+            editedAnswers.clear();
+            if (currentScan.getAnswers() != null) {
+                editedAnswers.putAll(currentScan.getAnswers());
+            }
+
+            runOnUiThread(this::populateUI);
+        });
+    }
+
     // ──────────────────────────────────────────────────────────
     // DATA
     // ──────────────────────────────────────────────────────────
     private void loadData() {
+        if (scanId != -1) {
+            loadDataByScanId();
+            return;
+        }
+
         if (classId == null || activityId == null || scanIndex < 0) {
             showError("Invalid scan data");
             return;
@@ -190,7 +264,15 @@ public class ScanDetailActivity extends AppCompatActivity {
     }
 
     private void populateUI() {
-        topBarTitle.setText("Scan #" + (scanIndex + 1));
+        if (scanIndex >= 0) {
+            topBarTitle.setText("Scan #" + (scanIndex + 1));
+        } else {
+            // Opened by scan id (e.g. from the read-only Scans tab) — there's no
+            // meaningful "Nth scan in this assessment" position to show, so fall
+            // back to the LRN, which is more useful here anyway.
+            String lrn = currentScan.getLrn();
+            topBarTitle.setText((lrn != null && !lrn.isEmpty()) ? lrn : "Scan Details");
+        }
 
         // Image — prefer overlay (highlighted bubbles), fall back to raw
         String imgPath = currentScan.getOverlayImagePath();
@@ -539,6 +621,7 @@ public class ScanDetailActivity extends AppCompatActivity {
     // EDIT / SAVE LOGIC
     // ──────────────────────────────────────────────────────────
     private void toggleEditMode() {
+        if (readOnly) return;
         isEditing = !isEditing;
 
         if (isEditing) {
@@ -570,6 +653,7 @@ public class ScanDetailActivity extends AppCompatActivity {
     }
 
     private void saveChanges() {
+        if (readOnly) return;
         // 1. Update LRN
         currentScan.setLrn(etLrn.getText().toString().trim());
 

@@ -8,6 +8,7 @@ import androidx.room.Query;
 import androidx.room.Update;
 
 import com.example.omrscanner.database.entities.ScanEntity;
+import com.example.omrscanner.database.projections.ScanListRow;
 
 import java.util.List;
 
@@ -73,4 +74,37 @@ public interface ScanDao {
    */
   @Query("SELECT * FROM scans WHERE assessment_id = :assessmentId AND student_lrn = :lrn LIMIT 1")
   ScanEntity getByAssessmentAndLrn(String assessmentId, String lrn);
+
+  /**
+   * Every scan across every class/assessment, newest first — powers the
+   * read-only "Scans" tab. Joined with assessments/classes purely for
+   * display (class + assessment name) and filtering; no write access is
+   * exposed here.
+   *
+   * All filter params are nullable/blank-safe — pass null or "" to mean "All".
+   * needsCorrectionFilter accepts "YES", "NO", or null/"" for All.
+   */
+  @Query("SELECT s.id AS id, s.assessment_id AS assessmentId, a.class_id AS classId, " +
+          "(c.grade || ' \u2014 ' || c.section) AS className, a.name AS assessmentName, " +
+          "a.sheet_type AS sheetType, s.student_lrn AS studentLrn, s.score AS score, " +
+          "s.detected_bubbles AS detectedBubbles, s.num_items AS numItems, " +
+          "s.timestamp AS timestamp, (a.answer_key_id IS NOT NULL) AS isGraded, " +
+          "EXISTS(SELECT 1 FROM answers ans WHERE ans.scan_id = s.id AND LENGTH(ans.answer) > 1) AS needsCorrection " +
+          "FROM scans s " +
+          "JOIN assessments a ON a.id = s.assessment_id " +
+          "LEFT JOIN classes c ON c.id = a.class_id " +
+          "WHERE (:classIdFilter IS NULL OR :classIdFilter = '' OR a.class_id = :classIdFilter) " +
+          "AND (:assessmentIdFilter IS NULL OR :assessmentIdFilter = '' OR a.id = :assessmentIdFilter) " +
+          "AND (:sheetTypeFilter IS NULL OR :sheetTypeFilter = '' OR a.sheet_type = :sheetTypeFilter) " +
+          "AND (:needsCorrectionFilter IS NULL OR :needsCorrectionFilter = '' " +
+          "     OR (:needsCorrectionFilter = 'YES' AND EXISTS(SELECT 1 FROM answers ans2 WHERE ans2.scan_id = s.id AND LENGTH(ans2.answer) > 1)) " +
+          "     OR (:needsCorrectionFilter = 'NO' AND NOT EXISTS(SELECT 1 FROM answers ans2 WHERE ans2.scan_id = s.id AND LENGTH(ans2.answer) > 1))) " +
+          "AND (:search IS NULL OR :search = '' " +
+          "     OR s.student_lrn LIKE '%' || :search || '%' " +
+          "     OR a.name LIKE '%' || :search || '%' " +
+          "     OR a.sheet_type LIKE '%' || :search || '%' " +
+          "     OR (c.grade || ' ' || c.section) LIKE '%' || :search || '%') " +
+          "ORDER BY s.timestamp DESC")
+  List<ScanListRow> queryAllScans(String classIdFilter, String assessmentIdFilter,
+                                  String sheetTypeFilter, String needsCorrectionFilter, String search);
 }
