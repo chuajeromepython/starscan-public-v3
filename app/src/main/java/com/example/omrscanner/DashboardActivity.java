@@ -13,6 +13,7 @@ import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.ImageButton;
@@ -187,7 +188,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     // VIEWS
     // ═══════════════════════════════════════════════════════════════
 
-    private ImageButton btnBack, btnUpload;
+    private ImageButton btnBack, btnUpload, btnHelp;
     private TextView topBarTitle, topBarBadge;
     private TextView tvTeacherName;
     private TextView tvLastSynced;
@@ -373,6 +374,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         initViews();
         initBackHandler();
         loadDataFromDb();
+        checkServerReachability();
     }
 
     @Override
@@ -459,6 +461,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private void initViews() {
         btnBack = findViewById(R.id.btnBack);
         btnUpload = findViewById(R.id.btnUpload);
+        btnHelp = findViewById(R.id.btnHelp);
         topBarTitle = findViewById(R.id.topBarTitle);
         topBarBadge = findViewById(R.id.topBarBadge);
         tvTeacherName = findViewById(R.id.tvTeacherName);
@@ -619,6 +622,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
         btnBack.setOnClickListener(v -> navigateBack());
         btnUpload.setOnClickListener(v -> dialogs.showGlobalUploadClassDialog());
+        btnHelp.setOnClickListener(v -> showFaqDialog());
         fabMain.setOnClickListener(v -> toggleFabMenu());
         fabScrim.setOnClickListener(v -> closeFabMenu());
 
@@ -1535,6 +1539,291 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 if (conn != null) conn.disconnect();
             }
         });
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // SERVER REACHABILITY CHECK
+    // ═══════════════════════════════════════════════════════════════
+
+    private void checkServerReachability() {
+        repo.getActiveUser(user -> {
+            if (user == null || user.serverIp == null || user.serverIp.trim().isEmpty()) {
+                return; // no server saved yet — nothing to check
+            }
+            final String serverIp = user.serverIp;
+            syncExecutor.execute(() -> {
+                boolean reachable;
+                java.net.HttpURLConnection conn = null;
+                try {
+                    java.net.URL url = new java.net.URL(serverIp);
+                    conn = (java.net.HttpURLConnection) url.openConnection();
+                    conn.setConnectTimeout(3000);
+                    conn.setReadTimeout(3000);
+                    conn.setRequestMethod("GET");
+                    conn.getResponseCode(); // any response at all = reachable
+                    reachable = true;
+                } catch (Exception e) {
+                    android.util.Log.w("OMR_PING", "Server unreachable: "
+                            + e.getClass().getSimpleName() + ": " + e.getMessage());
+                    reachable = false;
+                } finally {
+                    if (conn != null) conn.disconnect();
+                }
+                final boolean isReachable = reachable;
+                runOnUiThread(() -> {
+                    if (!isReachable && !isFinishing() && !isDestroyed()) {
+                        showServerUnreachableCard();
+                    }
+                });
+            });
+        });
+    }
+
+    private void showServerUnreachableCard() {
+        android.app.Dialog dialog = new android.app.Dialog(this);
+        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+        dialog.setCancelable(true);
+
+        LinearLayout root = ui.buildSheet();
+        root.addView(ui.createDialogHandle());
+        root.addView(ui.buildSheetTitle("⚠️ Can't Reach Server", "#DC2626", android.view.Gravity.START, 12));
+
+        TextView note = new TextView(this);
+        note.setText("We couldn't connect to the last known server. If its IP address changed, rescan your QR code to reconnect.");
+        note.setTextColor(Color.parseColor("#64748B"));
+        note.setTextSize(13);
+        LinearLayout.LayoutParams noteLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        noteLp.bottomMargin = ui.dp(20);
+        note.setLayoutParams(noteLp);
+        root.addView(note);
+
+        LinearLayout actions = ui.buildActionsRow(ui.dp(4));
+        TextView btnDismiss = ui.createDialogButton("Not Now", false);
+        TextView btnRescan  = ui.createDialogButton("Rescan QR Code", true);
+        actions.addView(btnDismiss);
+        actions.addView(ui.spacer(ui.dp(10)));
+        actions.addView(btnRescan);
+        root.addView(actions);
+
+        btnDismiss.setOnClickListener(v -> dialog.dismiss());
+        btnRescan.setOnClickListener(v -> {
+            dialog.dismiss();
+            startActivity(new Intent(this, QrScannerActivity.class));
+        });
+
+        dialog.setContentView(root);
+        ui.configureBottomDialog(dialog);
+        dialog.show();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // HELP / FAQ
+    // ═══════════════════════════════════════════════════════════════
+
+    private void showFaqDialog() {
+        android.app.Dialog dialog = new android.app.Dialog(this);
+        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+        dialog.setCancelable(true);
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        android.graphics.drawable.GradientDrawable rootBg = new android.graphics.drawable.GradientDrawable();
+        rootBg.setColor(Color.WHITE);
+        rootBg.setCornerRadii(new float[]{ui.dp(24), ui.dp(24), ui.dp(24), ui.dp(24), 0, 0, 0, 0});
+        root.setBackground(rootBg);
+
+        // ── Header row: title + close button ───────────────────────
+        LinearLayout headerRow = new LinearLayout(this);
+        headerRow.setOrientation(LinearLayout.HORIZONTAL);
+        headerRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        headerRow.setPadding(ui.dp(20), ui.dp(20), ui.dp(12), ui.dp(12));
+
+        TextView title = new TextView(this);
+        title.setText("❓ Help & FAQ");
+        title.setTextColor(Color.parseColor("#0038A8"));
+        title.setTextSize(18);
+        title.setTypeface(null, android.graphics.Typeface.BOLD);
+        title.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        headerRow.addView(title);
+
+        android.widget.ImageView btnClose = new android.widget.ImageView(this);
+        btnClose.setImageResource(R.drawable.ic_close);
+        btnClose.setColorFilter(Color.parseColor("#64748B"));
+        btnClose.setPadding(ui.dp(8), ui.dp(8), ui.dp(8), ui.dp(8));
+        btnClose.setLayoutParams(new LinearLayout.LayoutParams(ui.dp(36), ui.dp(36)));
+        btnClose.setClickable(true);
+        btnClose.setFocusable(true);
+        headerRow.addView(btnClose);
+        root.addView(headerRow);
+
+        View divider = new View(this);
+        divider.setBackgroundColor(Color.parseColor("#E2E8F0"));
+        divider.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ui.dp(1)));
+        root.addView(divider);
+
+        // ── Scrollable body ─────────────────────────────────────────
+        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
+        scroll.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(ui.dp(20), ui.dp(16), ui.dp(20), ui.dp(24));
+        scroll.addView(body);
+        root.addView(scroll);
+
+        // ── Getting started ─────────────────────────────────────────
+        addFaqCategory(body, "GETTING STARTED");
+        addFaqItem(body,
+                "How do I connect the app to my account?",
+                "Scan your QR code from the STARS website (your teacher account's QR page). This saves your name, school, and the server address on your device so the app knows where to sync.");
+        addFaqItem(body,
+                "What does \"Sync\" on the home screen do?",
+                "It pulls your assigned classes and sections from the STARS system into the app.");
+        addFaqItem(body,
+                "Do I need internet access to use the app?",
+                "No, not for scanning. Classes, assessments, answer keys, and scans are all stored locally on your device. You only need a connection to the server when syncing classes/students or uploading assessment results.");
+
+        // ── Classes & syncing ────────────────────────────────────────
+        addFaqCategory(body, "CLASSES & SYNCING");
+        addFaqItem(body,
+                "What does syncing students inside a class do?",
+                "It pulls that class's student roster (LRNs) from STARS so scanned answer sheets can be matched against real students.");
+        addFaqItem(body,
+                "How often do I need to re-sync students?",
+                "The app flags a class's student roster as stale after 24 hours, but you can manually re-sync anytime from that class's screen.");
+        addFaqItem(body,
+                "What does \"Upload Assessment\" do?",
+                "It uploads that assessment's results (as CSV) to the STARS system for the matching classroom.");
+
+        // ── Assessments & answer keys ────────────────────────────────
+        addFaqCategory(body, "ASSESSMENTS & ANSWER KEYS");
+        addFaqItem(body,
+                "What sheet types are supported?",
+                "ZPH40 (40 items) and ZPH60 (60 items) are the sheet types currently supported when creating an assessment.");
+        addFaqItem(body,
+                "Where do answer keys come from?",
+                "Answer keys are created and stored locally in the app — they are not synced from the STARS website.");
+        addFaqItem(body,
+                "Why aren't my scans showing a score?",
+                "A scan is only auto-graded if its assessment is already linked to an answer key at the time you scan it. Link the answer key to the assessment before scanning if you want scores calculated right away.");
+        addFaqItem(body,
+                "What does the badge on an answer key card mean?",
+                "It shows whether that answer key is currently linked to an assessment, so you can tell at a glance which keys are active.");
+
+        // ── Scanning ─────────────────────────────────────────────────
+        addFaqCategory(body, "SCANNING");
+        addFaqItem(body,
+                "What's the difference between handheld and fixed-mount scanning?",
+                "Handheld is for holding the phone directly over a sheet. Fixed-mount is for an elevated or mounted phone with sheets slid underneath — it adds extra distance compensation for detecting the sheet's corner anchors.");
+        addFaqItem(body,
+                "Can I import a photo from my gallery instead of scanning live?",
+                "Not currently — scanning is live-camera only in this version of the app.");
+        addFaqItem(body,
+                "Where do my scanned results get saved?",
+                "Every saved scan is automatically written to Downloads/OMRScanner on your device (images + CSV) — there's no manual export step.");
+        addFaqItem(body,
+                "Where can I review all my scans?",
+                "The Scans tab shows a flat, read-only list of every scan across all your classes. To edit a scan, open it from its own class → assessment screen instead.");
+
+        // ── Troubleshooting ──────────────────────────────────────────
+        addFaqCategory(body, "TROUBLESHOOTING");
+        addFaqItem(body,
+                "Why does the app say \"Can't Reach Server\"?",
+                "This means the app couldn't connect to the last server address it saved. This usually happens when the server's IP address has changed since you last scanned your QR code. Rescan your QR code to update it, or check that your phone and the server are on the same network.");
+        addFaqItem(body,
+                "Is my data private?",
+                "Everything is stored locally on your device in its own database. Data only leaves the device when you explicitly sync or upload to your configured STARS server.");
+
+        dialog.setContentView(root);
+        if (dialog.getWindow() != null) {
+            android.view.WindowManager.LayoutParams wlp = dialog.getWindow().getAttributes();
+            android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+            dialog.getWindow().setLayout(
+                    android.view.WindowManager.LayoutParams.MATCH_PARENT,
+                    (int) (dm.heightPixels * 0.85));
+            dialog.getWindow().setGravity(android.view.Gravity.BOTTOM);
+            dialog.getWindow().setBackgroundDrawable(
+                    new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
+        }
+
+        btnClose.setOnClickListener(v -> dialog.dismiss());
+        dialog.show();
+    }
+
+    private void addFaqCategory(LinearLayout container, String text) {
+        TextView label = new TextView(this);
+        label.setText(text);
+        label.setTextSize(11);
+        label.setTextColor(Color.parseColor("#0038A8"));
+        label.setTypeface(null, android.graphics.Typeface.BOLD);
+        label.setAllCaps(true);
+        label.setLetterSpacing(0.08f);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = ui.dp(16);
+        lp.bottomMargin = ui.dp(8);
+        label.setLayoutParams(lp);
+        container.addView(label);
+    }
+
+    private void addFaqItem(LinearLayout container, String question, String answer) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(ui.dp(14), ui.dp(12), ui.dp(14), ui.dp(12));
+        card.setClickable(true);
+        card.setFocusable(true);
+
+        android.graphics.drawable.GradientDrawable cardBg = new android.graphics.drawable.GradientDrawable();
+        cardBg.setColor(Color.parseColor("#F8FAFC"));
+        cardBg.setCornerRadius(ui.dp(12));
+        cardBg.setStroke(ui.dp(1), Color.parseColor("#E2E8F0"));
+        card.setBackground(cardBg);
+
+        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cardLp.bottomMargin = ui.dp(10);
+        card.setLayoutParams(cardLp);
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+
+        TextView q = new TextView(this);
+        q.setText(question);
+        q.setTextColor(Color.parseColor("#1E293B"));
+        q.setTextSize(14);
+        q.setTypeface(null, android.graphics.Typeface.BOLD);
+        q.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        row.addView(q);
+
+        android.widget.ImageView chevron = new android.widget.ImageView(this);
+        chevron.setImageResource(R.drawable.ic_chevron_right);
+        chevron.setColorFilter(Color.parseColor("#94A3B8"));
+        chevron.setLayoutParams(new LinearLayout.LayoutParams(ui.dp(20), ui.dp(20)));
+        row.addView(chevron);
+        card.addView(row);
+
+        TextView a = new TextView(this);
+        a.setText(answer);
+        a.setTextColor(Color.parseColor("#64748B"));
+        a.setTextSize(13);
+        a.setLineSpacing(ui.dp(2), 1f);
+        LinearLayout.LayoutParams aLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        aLp.topMargin = ui.dp(8);
+        a.setLayoutParams(aLp);
+        a.setVisibility(View.GONE);
+        card.addView(a);
+
+        card.setOnClickListener(v -> {
+            boolean expanded = a.getVisibility() == View.VISIBLE;
+            a.setVisibility(expanded ? View.GONE : View.VISIBLE);
+            chevron.setRotation(expanded ? 0f : 90f);
+        });
+
+        container.addView(card);
     }
 
     // ═══════════════════════════════════════════════════════════════
