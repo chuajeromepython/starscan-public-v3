@@ -1,5 +1,7 @@
 package com.example.omrscanner;
 
+// this page manages the dashboard
+
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
