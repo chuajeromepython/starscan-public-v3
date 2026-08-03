@@ -39,4 +39,8 @@ public interface AnswerDao {
 
   @Query("SELECT COUNT(*) FROM answers WHERE scan_id = :scanId AND answer != ''")
   int countAnsweredItems(int scanId);
+
+  /** Every answer, unfiltered — used for full local backup export. */
+  @Query("SELECT * FROM answers")
+  List<AnswerEntity> getAllSync();
 }

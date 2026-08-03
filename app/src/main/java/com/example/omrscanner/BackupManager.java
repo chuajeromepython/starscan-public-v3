@@ -1,0 +1,433 @@
+package com.example.omrscanner;
+
+import android.content.Context;
+import android.net.Uri;
+import android.util.Log;
+
+import com.example.omrscanner.database.AppDatabase;
+import com.example.omrscanner.database.entities.AnswerEntity;
+import com.example.omrscanner.database.entities.AnswerKeyEntity;
+import com.example.omrscanner.database.entities.AssessmentEntity;
+import com.example.omrscanner.database.entities.ClassEntity;
+import com.example.omrscanner.database.entities.ScanEntity;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+import java.util.zip.ZipOutputStream;
+
+/**
+ * BackupManager
+ *
+ * Handles manual "back up my data" / "restore from backup" for the data that
+ * has NO copy on the server and is otherwise lost on uninstall:
+ *
+ *   assessments, scans, answers, answer_keys  + scan images
+ *
+ * Classes, student_lrn, and the teacher/user profile are intentionally
+ * excluded — they are fully re-derived from the system via QR scan + sync,
+ * so backing them up would just be redundant and stale the moment the user
+ * re-syncs.
+ *
+ * The one thing that makes this non-trivial: a class's LOCAL id
+ * (ClassEntity.id) is NOT stable across uninstall/reinstall — every fresh
+ * sync generates a brand-new random id (see OMRRepository.upsertClassFromSync).
+ * The only stable identifier is the server's classroom_id. So assessments are
+ * exported keyed by classroomId, and remapped back to whatever the CURRENT
+ * local class id is at restore time.
+ *
+ * The backup file itself must be written outside app-private storage (via
+ * Storage Access Framework Uris passed in from the Activity) — anything
+ * written to filesDir/getExternalFilesDir() is deleted along with the app on
+ * uninstall, same as the data it's trying to protect.
+ */
+public class BackupManager {
+
+    private static final String TAG = "BackupManager";
+
+    /** Bump if the exported JSON shape changes in a way old restores can't read. */
+    private static final int BACKUP_FORMAT_VERSION = 1;
+
+    private static final String ENTRY_MANIFEST = "backup.json";
+    private static final String ENTRY_IMAGES_PREFIX = "images/";
+
+    private final Context appContext;
+    private final AppDatabase db;
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+
+    public BackupManager(Context context) {
+        this.appContext = context.getApplicationContext();
+        this.db = AppDatabase.getInstance(appContext);
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Public callback contracts
+    // ─────────────────────────────────────────────────────────────────
+
+    public interface ExportCallback {
+        void onSuccess(int assessmentCount, int scanCount, int answerKeyCount);
+        void onError(Exception e);
+    }
+
+    public interface RestoreCallback {
+        /** skippedAssessments = assessments whose class isn't synced locally (yet). */
+        void onSuccess(int restoredAssessments, int restoredScans, int restoredAnswerKeys, int skippedAssessments);
+        void onError(Exception e);
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // EXPORT
+    // ─────────────────────────────────────────────────────────────────
+
+    /**
+     * @param destination a Uri obtained from ACTION_CREATE_DOCUMENT — MUST be
+     *                    outside app-private storage or the backup is pointless.
+     */
+    public void exportBackup(Uri destination, ExportCallback callback) {
+        executor.execute(() -> {
+            try {
+                Map<String, Integer> classIdToClassroomId = new HashMap<>();
+                for (ClassEntity c : db.classDao().getAll()) {
+                    if (c.classroomId != null) {
+                        classIdToClassroomId.put(c.id, c.classroomId);
+                    }
+                }
+
+                JSONObject manifest = new JSONObject();
+                manifest.put("formatVersion", BACKUP_FORMAT_VERSION);
+                manifest.put("exportedAt", System.currentTimeMillis());
+
+                Set<String> keptAssessmentIds = new HashSet<>();
+                JSONArray assessmentsJson = new JSONArray();
+                int skippedNoClassroom = 0;
+                for (AssessmentEntity a : db.assessmentDao().getAllSync()) {
+                    Integer classroomId = classIdToClassroomId.get(a.classId);
+                    if (classroomId == null) {
+                        // Class isn't a synced (server) class — no stable id to
+                        // restore against later. Shouldn't happen now that
+                        // classes can only come from the system, but skip
+                        // defensively rather than write an unrestoreable row.
+                        skippedNoClassroom++;
+                        continue;
+                    }
+                    assessmentsJson.put(assessmentToJson(a, classroomId));
+                    keptAssessmentIds.add(a.id);
+                }
+                if (skippedNoClassroom > 0) {
+                    Log.w(TAG, "Skipped " + skippedNoClassroom + " assessment(s) with no synced classroom_id");
+                }
+                manifest.put("assessments", assessmentsJson);
+
+                Set<Integer> keptScanIds = new HashSet<>();
+                JSONArray scansJson = new JSONArray();
+                for (ScanEntity s : db.scanDao().getAllSync()) {
+                    if (!keptAssessmentIds.contains(s.assessmentId)) continue;
+                    scansJson.put(scanToJson(s));
+                    keptScanIds.add(s.id);
+                }
+                manifest.put("scans", scansJson);
+
+                JSONArray answersJson = new JSONArray();
+                for (AnswerEntity ans : db.answerDao().getAllSync()) {
+                    if (!keptScanIds.contains(ans.scanId)) continue;
+                    answersJson.put(answerToJson(ans));
+                }
+                manifest.put("answers", answersJson);
+
+                JSONArray keysJson = new JSONArray();
+                for (AnswerKeyEntity k : db.answerKeyDao().getAll()) {
+                    keysJson.put(answerKeyToJson(k));
+                }
+                manifest.put("answerKeys", keysJson);
+
+                writeZip(destination, manifest);
+
+                callback.onSuccess(assessmentsJson.length(), scansJson.length(), keysJson.length());
+            } catch (Exception e) {
+                Log.e(TAG, "Export failed", e);
+                callback.onError(e);
+            }
+        });
+    }
+
+    private void writeZip(Uri destination, JSONObject manifest) throws IOException {
+        try (OutputStream rawOut = appContext.getContentResolver().openOutputStream(destination)) {
+            if (rawOut == null) throw new IOException("Could not open destination for writing");
+            try (ZipOutputStream zos = new ZipOutputStream(new BufferedOutputStream(rawOut))) {
+                zos.putNextEntry(new ZipEntry(ENTRY_MANIFEST));
+                zos.write(manifest.toString().getBytes(StandardCharsets.UTF_8));
+                zos.closeEntry();
+
+                File imagesDir = new File(appContext.getFilesDir(), "images");
+                File[] images = imagesDir.exists() ? imagesDir.listFiles() : null;
+                if (images != null) {
+                    byte[] buf = new byte[8192];
+                    for (File img : images) {
+                        if (!img.isFile()) continue;
+                        zos.putNextEntry(new ZipEntry(ENTRY_IMAGES_PREFIX + img.getName()));
+                        try (InputStream fis = new FileInputStream(img)) {
+                            int read;
+                            while ((read = fis.read(buf)) != -1) {
+                                zos.write(buf, 0, read);
+                            }
+                        }
+                        zos.closeEntry();
+                    }
+                }
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // RESTORE
+    // ─────────────────────────────────────────────────────────────────
+
+    /**
+     * @param source a Uri obtained from ACTION_OPEN_DOCUMENT pointing at a
+     *               previously exported backup zip.
+     */
+    public void restoreBackup(Uri source, RestoreCallback callback) {
+        executor.execute(() -> {
+            try {
+                List<ClassEntity> localClasses = db.classDao().getAll();
+                if (localClasses.isEmpty()) {
+                    callback.onError(new IllegalStateException(
+                            "No classes found yet. Scan your QR code and sync your classes first, " +
+                                    "then restore the backup."));
+                    return;
+                }
+                Map<Integer, String> classroomIdToLocalClassId = new HashMap<>();
+                for (ClassEntity c : localClasses) {
+                    if (c.classroomId != null) {
+                        classroomIdToLocalClassId.put(c.classroomId, c.id);
+                    }
+                }
+
+                JSONObject manifest = readZip(source);
+
+                int restoredAssessments = 0;
+                int skippedAssessments = 0;
+                Set<String> restoredAssessmentIds = new HashSet<>();
+
+                JSONArray assessmentsJson = manifest.optJSONArray("assessments");
+                if (assessmentsJson != null) {
+                    for (int i = 0; i < assessmentsJson.length(); i++) {
+                        JSONObject o = assessmentsJson.getJSONObject(i);
+                        int classroomId = o.optInt("classroomId", -1);
+                        String localClassId = classroomIdToLocalClassId.get(classroomId);
+                        if (localClassId == null) {
+                            // Teacher no longer has this class synced locally —
+                            // can't safely restore its assessments without a
+                            // valid class_id foreign key.
+                            skippedAssessments++;
+                            continue;
+                        }
+                        AssessmentEntity a = assessmentFromJson(o, localClassId);
+                        db.assessmentDao().insert(a); // REPLACE on conflict
+                        restoredAssessmentIds.add(a.id);
+                        restoredAssessments++;
+                    }
+                }
+
+                int restoredScans = 0;
+                JSONArray scansJson = manifest.optJSONArray("scans");
+                if (scansJson != null) {
+                    for (int i = 0; i < scansJson.length(); i++) {
+                        JSONObject o = scansJson.getJSONObject(i);
+                        String assessmentId = o.optString("assessmentId", null);
+                        if (assessmentId == null || !restoredAssessmentIds.contains(assessmentId)) continue;
+                        db.scanDao().insert(scanFromJson(o));
+                        restoredScans++;
+                    }
+                }
+
+                JSONArray answersJson = manifest.optJSONArray("answers");
+                if (answersJson != null) {
+                    List<AnswerEntity> batch = new ArrayList<>();
+                    for (int i = 0; i < answersJson.length(); i++) {
+                        batch.add(answerFromJson(answersJson.getJSONObject(i)));
+                    }
+                    if (!batch.isEmpty()) db.answerDao().insertAll(batch);
+                }
+
+                int restoredAnswerKeys = 0;
+                JSONArray keysJson = manifest.optJSONArray("answerKeys");
+                if (keysJson != null) {
+                    for (int i = 0; i < keysJson.length(); i++) {
+                        db.answerKeyDao().insert(answerKeyFromJson(keysJson.getJSONObject(i)));
+                        restoredAnswerKeys++;
+                    }
+                }
+
+                callback.onSuccess(restoredAssessments, restoredScans, restoredAnswerKeys, skippedAssessments);
+            } catch (Exception e) {
+                Log.e(TAG, "Restore failed", e);
+                callback.onError(e);
+            }
+        });
+    }
+
+    private JSONObject readZip(Uri source) throws IOException, JSONException {
+        File imagesDir = new File(appContext.getFilesDir(), "images");
+        //noinspection ResultOfMethodCallIgnored
+        imagesDir.mkdirs();
+
+        JSONObject manifest = null;
+        try (InputStream rawIn = appContext.getContentResolver().openInputStream(source)) {
+            if (rawIn == null) throw new IOException("Could not open backup file for reading");
+            try (ZipInputStream zis = new ZipInputStream(new BufferedInputStream(rawIn))) {
+                ZipEntry entry;
+                byte[] buf = new byte[8192];
+                while ((entry = zis.getNextEntry()) != null) {
+                    String name = entry.getName();
+                    if (ENTRY_MANIFEST.equals(name)) {
+                        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                        int read;
+                        while ((read = zis.read(buf)) != -1) bos.write(buf, 0, read);
+                        manifest = new JSONObject(bos.toString("UTF-8"));
+                    } else if (!entry.isDirectory() && name.startsWith(ENTRY_IMAGES_PREFIX)) {
+                        String fileName = name.substring(ENTRY_IMAGES_PREFIX.length());
+                        if (fileName.isEmpty() || fileName.contains("..")) continue; // zip-slip guard
+                        File outFile = new File(imagesDir, fileName);
+                        try (OutputStream fos = new FileOutputStream(outFile)) {
+                            int read;
+                            while ((read = zis.read(buf)) != -1) fos.write(buf, 0, read);
+                        }
+                    }
+                    zis.closeEntry();
+                }
+            }
+        }
+        if (manifest == null) {
+            throw new IOException("This file doesn't look like a valid backup (missing " + ENTRY_MANIFEST + ")");
+        }
+        return manifest;
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // JSON <-> Entity mapping
+    // ─────────────────────────────────────────────────────────────────
+
+    private JSONObject assessmentToJson(AssessmentEntity a, int classroomId) throws JSONException {
+        JSONObject o = new JSONObject();
+        o.put("id", a.id);
+        o.put("classroomId", classroomId);
+        o.put("name", a.name);
+        o.put("sheetType", a.sheetType);
+        o.put("examDate", a.examDate);
+        o.put("examDateEpoch", a.examDateEpoch);
+        o.put("createdAt", a.createdAt);
+        o.put("answerKeyId", a.answerKeyId);
+        o.put("assessmentType", a.assessmentType);
+        o.put("hotSync", a.hotSync);
+        return o;
+    }
+
+    private AssessmentEntity assessmentFromJson(JSONObject o, String localClassId) throws JSONException {
+        AssessmentEntity a = new AssessmentEntity();
+        a.id = o.getString("id");
+        a.classId = localClassId;
+        a.name = o.optString("name", null);
+        a.sheetType = o.optString("sheetType", null);
+        a.examDate = o.optString("examDate", null);
+        a.examDateEpoch = o.optLong("examDateEpoch", 0);
+        a.createdAt = o.optLong("createdAt", System.currentTimeMillis());
+        a.answerKeyId = o.isNull("answerKeyId") ? null : o.optString("answerKeyId", null);
+        a.assessmentType = o.isNull("assessmentType") ? null : o.optString("assessmentType", null);
+        a.hotSync = o.optInt("hotSync", 0);
+        return a;
+    }
+
+    private JSONObject scanToJson(ScanEntity s) throws JSONException {
+        JSONObject o = new JSONObject();
+        o.put("id", s.id); // preserved as-is; restore writes it back explicitly (not autoGenerated)
+        o.put("assessmentId", s.assessmentId);
+        o.put("studentLrn", s.studentLrn);
+        o.put("detectedBubbles", s.detectedBubbles);
+        o.put("score", s.score == null ? JSONObject.NULL : s.score);
+        o.put("numItems", s.numItems);
+        o.put("imagePath", s.imagePath);
+        o.put("overlayImagePath", s.overlayImagePath);
+        o.put("timestamp", s.timestamp);
+        o.put("updatedAt", s.updatedAt);
+        return o;
+    }
+
+    private ScanEntity scanFromJson(JSONObject o) throws JSONException {
+        ScanEntity s = new ScanEntity();
+        s.id = o.optInt("id", 0); // explicit id -> Room/SQLite keeps it (not treated as "generate new")
+        s.assessmentId = o.getString("assessmentId");
+        s.studentLrn = o.optString("studentLrn", null);
+        s.detectedBubbles = o.optInt("detectedBubbles", 0);
+        s.score = o.isNull("score") ? null : o.optInt("score");
+        s.numItems = o.optInt("numItems", 0);
+        s.imagePath = o.optString("imagePath", null);
+        s.overlayImagePath = o.optString("overlayImagePath", null);
+        s.timestamp = o.optLong("timestamp", System.currentTimeMillis());
+        s.updatedAt = o.optLong("updatedAt", System.currentTimeMillis());
+        return s;
+    }
+
+    private JSONObject answerToJson(AnswerEntity a) throws JSONException {
+        JSONObject o = new JSONObject();
+        o.put("id", a.id);
+        o.put("scanId", a.scanId);
+        o.put("itemNumber", a.itemNumber);
+        o.put("answer", a.answer);
+        return o;
+    }
+
+    private AnswerEntity answerFromJson(JSONObject o) throws JSONException {
+        AnswerEntity a = new AnswerEntity();
+        a.id = o.optInt("id", 0);
+        a.scanId = o.getInt("scanId");
+        a.itemNumber = o.getInt("itemNumber");
+        a.answer = o.optString("answer", "");
+        return a;
+    }
+
+    private JSONObject answerKeyToJson(AnswerKeyEntity k) throws JSONException {
+        JSONObject o = new JSONObject();
+        o.put("id", k.id);
+        o.put("name", k.name);
+        o.put("schoolYear", k.schoolYear);
+        o.put("sheetType", k.sheetType);
+        o.put("answers", k.answers);
+        o.put("createdAt", k.createdAt);
+        o.put("updatedAt", k.updatedAt);
+        return o;
+    }
+
+    private AnswerKeyEntity answerKeyFromJson(JSONObject o) throws JSONException {
+        AnswerKeyEntity k = new AnswerKeyEntity();
+        k.id = o.getString("id");
+        k.name = o.optString("name", null);
+        k.schoolYear = o.optString("schoolYear", null);
+        k.sheetType = o.optString("sheetType", null);
+        k.answers = o.optString("answers", null);
+        k.createdAt = o.optLong("createdAt", 0);
+        k.updatedAt = o.optLong("updatedAt", 0);
+        return k;
+    }
+}

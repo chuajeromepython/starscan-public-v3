@@ -39,6 +39,10 @@ public interface ScanDao {
   @Query("SELECT COUNT(*) FROM scans")
   int countAll();
 
+  /** Every scan, unfiltered — used for full local backup export. */
+  @Query("SELECT * FROM scans")
+  List<ScanEntity> getAllSync();
+
   /**
    * Update the score received from the external grading system.
    * Also updates updated_at timestamp.

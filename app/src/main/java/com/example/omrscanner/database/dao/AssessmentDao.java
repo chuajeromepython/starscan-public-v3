@@ -42,6 +42,10 @@ public interface AssessmentDao {
   @Query("SELECT COUNT(*) FROM assessments")
   int countAll();
 
+  /** Every assessment, unfiltered — used for full local backup export. */
+  @Query("SELECT * FROM assessments")
+  List<AssessmentEntity> getAllSync();
+
   /** Lightweight update — links an answer key to an assessment without touching other fields. */
   @Query("UPDATE assessments SET answer_key_id = :keyId WHERE id = :assessmentId")
   void setAnswerKey(String assessmentId, String keyId);

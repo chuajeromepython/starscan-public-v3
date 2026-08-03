@@ -231,6 +231,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private TextView userDetailFullName, userDetailUsername, userDetailUserId, userDetailSchool,
             userDetailServerIp, userDetailStatus, userDetailMemberSince, userDetailLastUpdated;
     private LinearLayout userRescanRow;
+    private LinearLayout userBackupRow, userRestoreRow;
+    private BackupManager backupManager;
+    private androidx.activity.result.ActivityResultLauncher<String> createBackupFileLauncher;
+    private androidx.activity.result.ActivityResultLauncher<String[]> openBackupFileLauncher;
 
     private LinearLayout homeEmpty, homeClassList;
     private TextView homeSummaryClassCount, homeSummaryAssessmentCount;
@@ -322,6 +326,58 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         enableFullScreen();
 
         repo = new OMRRepository(this);
+        backupManager = new BackupManager(this);
+
+        createBackupFileLauncher = registerForActivityResult(
+                new androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/zip"),
+                uri -> {
+                    if (uri == null) return; // user cancelled the picker
+                    runOnUiThread(() -> Toast.makeText(this, "Backing up…", Toast.LENGTH_SHORT).show());
+                    backupManager.exportBackup(uri, new BackupManager.ExportCallback() {
+                        @Override
+                        public void onSuccess(int assessmentCount, int scanCount, int answerKeyCount) {
+                            runOnUiThread(() -> ui.showToast("Backup saved ✓  (" + assessmentCount
+                                    + " assessment(s), " + scanCount + " scan(s), " + answerKeyCount
+                                    + " answer key(s)) — keep this file safe, you'll need it to restore."));
+                        }
+
+                        @Override
+                        public void onError(Exception e) {
+                            runOnUiThread(() -> ui.showErrorDialog("Backup failed",
+                                    e.getMessage() != null ? e.getMessage() : "Unknown error."));
+                        }
+                    });
+                });
+
+        openBackupFileLauncher = registerForActivityResult(
+                new androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+                uri -> {
+                    if (uri == null) return; // user cancelled the picker
+                    runOnUiThread(() -> Toast.makeText(this, "Restoring…", Toast.LENGTH_SHORT).show());
+                    backupManager.restoreBackup(uri, new BackupManager.RestoreCallback() {
+                        @Override
+                        public void onSuccess(int restoredAssessments, int restoredScans,
+                                              int restoredAnswerKeys, int skippedAssessments) {
+                            runOnUiThread(() -> {
+                                ui.showToast("Restore complete ✓  (" + restoredAssessments
+                                        + " assessment(s), " + restoredScans + " scan(s), "
+                                        + restoredAnswerKeys + " answer key(s))");
+                                if (skippedAssessments > 0) {
+                                    ui.showErrorDialog("Some data was skipped",
+                                            skippedAssessments + " assessment(s) were skipped because their "
+                                                    + "class isn't synced to your account anymore.");
+                                }
+                                loadDataFromDb(); // refresh UI with restored data
+                            });
+                        }
+
+                        @Override
+                        public void onError(Exception e) {
+                            runOnUiThread(() -> ui.showErrorDialog("Restore failed",
+                                    e.getMessage() != null ? e.getMessage() : "Unknown error."));
+                        }
+                    });
+                });
 
         /*
         // --- DB TEST ---
@@ -515,6 +571,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         userSchoolText = findViewById(R.id.userSchoolText);
         userLastSynced = findViewById(R.id.userLastSynced);
         userRescanRow = findViewById(R.id.userRescanRow);
+        userBackupRow = findViewById(R.id.userBackupRow);
+        userRestoreRow = findViewById(R.id.userRestoreRow);
         userStatClasses = findViewById(R.id.userStatClasses);
         userStatAssessments = findViewById(R.id.userStatAssessments);
         userStatScans = findViewById(R.id.userStatScans);
@@ -613,6 +671,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         breadcrumbActivity = findViewById(R.id.breadcrumbActivity);
 
         userRescanRow.setOnClickListener(v -> showQrGuide());
+        userBackupRow.setOnClickListener(v -> {
+            String fileName = "omrscanner_backup_"
+                    + new SimpleDateFormat("yyyy-MM-dd_HHmm", Locale.getDefault()).format(new java.util.Date())
+                    + ".zip";
+            createBackupFileLauncher.launch(fileName);
+        });
+        userRestoreRow.setOnClickListener(v -> openBackupFileLauncher.launch(new String[]{"application/zip"}));
 
         navHomeTab.setOnClickListener(v -> selectHomeTab());
         navUserTab.setOnClickListener(v -> selectUserTab());
