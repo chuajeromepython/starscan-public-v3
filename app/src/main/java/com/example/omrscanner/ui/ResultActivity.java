@@ -1025,22 +1025,32 @@ public class ResultActivity extends AppCompatActivity {
                 );
 
                 // Save scan result to the class/activity folder structure
+                boolean savedToFolder = true;
                 if (classId != null && activityId != null) {
-                    saveScanToFolder(csvFilePath, replace);
+                    savedToFolder = saveScanToFolder(csvFilePath, replace);
                 }
 
-                if (csvFilePath != null) {
+                if (csvFilePath != null && savedToFolder) {
                     runOnUiThread(() -> {
                         showLoading(false);
 
                         Toast.makeText(
                                 this,
-                                "Scanned sheet is being saved...",
+                                "Scan saved ✓",
                                 Toast.LENGTH_SHORT
                         ).show();
 
                         // Finish this activity so user goes back to dashboard
                         finish();
+                    });
+                } else if (csvFilePath != null) {
+                    runOnUiThread(() -> {
+                        showLoading(false);
+                        Toast.makeText(
+                                this,
+                                "Scan export succeeded, but saving it to the class folder failed. Please try again.",
+                                Toast.LENGTH_LONG
+                        ).show();
                     });
                 } else {
                     runOnUiThread(() -> {
@@ -1070,7 +1080,7 @@ public class ResultActivity extends AppCompatActivity {
      * Save the scan result into the class/activity folder structure
      * so it appears in the Dashboard's activity scan list.
      */
-    private void saveScanToFolder(String csvFilePath, boolean replace) {
+    private boolean saveScanToFolder(String csvFilePath, boolean replace) {
         try {
             // Convert ScanResult answers to the ScanEntry format
             Map<Integer, String> answersMap = new LinkedHashMap<>();
@@ -1110,9 +1120,11 @@ public class ResultActivity extends AppCompatActivity {
 
             DashboardActivity.saveScanResult(this, classId, activityId, entry, replace);
             Log.d(TAG, "Scan result saved to folder: classId=" + classId + ", activityId=" + activityId);
+            return true;
 
         } catch (Exception e) {
             Log.e(TAG, "Error saving scan to folder", e);
+            return false;
         }
     }
 

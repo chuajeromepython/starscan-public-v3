@@ -220,8 +220,8 @@ public class BasicCameraActivity extends AppCompatActivity {
 
         cameraControl = camera.getCameraControl();
 
-        isTorchOn = true;
-        cameraControl.enableTorch(true);
+        isTorchOn = false;
+        cameraControl.enableTorch(false);
         updateFlashButton();
 
         Log.d(TAG, "Basic camera bound successfully, facing=" + cameraFacing);

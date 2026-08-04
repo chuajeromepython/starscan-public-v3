@@ -303,8 +303,8 @@ public class FlatScanCameraActivity extends AppCompatActivity {
 
         cameraControl = camera.getCameraControl();
 
-        isTorchOn = true;
-        cameraControl.enableTorch(true);
+        isTorchOn = false;
+        cameraControl.enableTorch(false);
         updateFlashButton();
 
         Log.d(TAG, "Flat scan camera bound successfully, facing=" + cameraFacing);

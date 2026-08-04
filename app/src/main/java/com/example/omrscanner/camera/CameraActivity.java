@@ -527,11 +527,11 @@ public class CameraActivity extends AppCompatActivity {
         initializeFixedMountZoomRatios();
         applyFixedMountZoom(true);
 
-// Flashlight defaults to ON every time the scanner opens — including
+// Flashlight defaults to OFF every time the scanner opens — including
 // right after a scan, since a new CameraActivity is created for each
-// capture. The user can still tap the flash button to turn it off.
-        isTorchOn = true;
-        cameraControl.enableTorch(true);
+// capture. The user can still tap the flash button to turn it on.
+        isTorchOn = false;
+        cameraControl.enableTorch(false);
         updateFlashButton();
 
         Log.d(TAG, "Camera bound successfully with ImageAnalysis, facing=" + cameraFacing
