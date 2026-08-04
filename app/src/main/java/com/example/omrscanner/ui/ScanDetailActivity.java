@@ -84,7 +84,7 @@ public class ScanDetailActivity extends AppCompatActivity {
     private EditText etLrn;
     private TextView tvScore, tvDate, tvAnswerCount, tvScoreBadge;
     private LinearLayout answersContainer;
-    private TextView btnEditToggle, topBarTitle;
+    private TextView btnEditToggle, topBarTitle, topBarBadge;
     private MaterialButton btnSaveChanges;
     private ImageButton btnBack;
 
@@ -119,6 +119,7 @@ public class ScanDetailActivity extends AppCompatActivity {
         if (readOnly) {
             // No edit affordance at all in read-only mode — not just disabled, gone.
             btnEditToggle.setVisibility(View.GONE);
+            topBarBadge.setText("Review");
         }
 
         loadData();
@@ -135,6 +136,7 @@ public class ScanDetailActivity extends AppCompatActivity {
         answersContainer = findViewById(R.id.answersContainer);
         btnEditToggle = findViewById(R.id.btnEditToggle);
         topBarTitle = findViewById(R.id.topBarTitle);
+        topBarBadge = findViewById(R.id.topBarBadge);
         btnSaveChanges = findViewById(R.id.btnSaveChanges);
         btnBack = findViewById(R.id.btnBack);
 
@@ -302,9 +304,11 @@ public class ScanDetailActivity extends AppCompatActivity {
         } else {
             tvScoreBadge.setVisibility(View.GONE);
         }
-        btnEditToggle.setVisibility(View.VISIBLE);
+        if (!readOnly) {
+            btnEditToggle.setVisibility(View.VISIBLE);
+        }
         tvDate.setText(currentScan.getFormattedDate());
-        if (currentScan.needsAnswerCorrection()) {
+        if (currentScan.needsAnswerCorrection() && !readOnly) {
             Toast.makeText(this,
                     "⚠ This scan has question(s) with multiple marks — please correct and save.",
                     Toast.LENGTH_LONG).show();
