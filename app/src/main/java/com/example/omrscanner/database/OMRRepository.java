@@ -670,6 +670,27 @@ public class OMRRepository {
     });
   }
 
+  /**
+   * Inserts a whole synced roster in a single background task. Unlike calling
+   * insertStudentLrnFromSync in a loop, this guarantees every row is written
+   * before the callback fires — looping the single-row version just enqueues
+   * N fire-and-forget tasks, so a caller waiting on "the sync finished" can
+   * race ahead of the actual writes (most noticeable on a fresh install,
+   * where the first DB open/table creation adds extra latency to those
+   * queued tasks and the count comes back low or zero).
+   */
+  public void insertStudentLrnBatch(List<StudentLrnEntity> students, Callback<Void> callback) {
+    executor.execute(() -> {
+      try {
+        db.studentLrnDao().insertAll(students);
+      } catch (Exception e) {
+        Log.e("StudentLRN", "Failed to insert synced student batch", e);
+      }
+      if (callback != null)
+        callback.onResult(null);
+    });
+  }
+
   public void insertStudentLrnFromSync(String lrn, String classId,
                                        Integer sectionId, Integer gradeLevelId, Integer classroomId, Callback<Void> callback) {
     executor.execute(() -> {

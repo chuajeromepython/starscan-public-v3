@@ -35,6 +35,9 @@ public interface StudentLrnDao {
     @Query("SELECT * FROM student_lrn WHERE className = :className")
     List<StudentLrnEntity> findByClass(String className);
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    void insertAll(List<StudentLrnEntity> students);
+
     @Query("SELECT COUNT(DISTINCT lrn) FROM student_lrn WHERE className = :className")
     int countByClass(String className);
 }
