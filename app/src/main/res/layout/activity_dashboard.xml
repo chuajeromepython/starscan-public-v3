@@ -1134,7 +1134,7 @@
                                                 android:layout_width="16dp"
                                                 android:layout_height="16dp"
                                                 android:layout_gravity="center"
-                                                android:src="@drawable/ic_scan_line"
+                                                android:src="@drawable/ic_scan_circle"
                                                 app:tint="#FFFFFF" />
                                         </FrameLayout>
 
@@ -2085,16 +2085,29 @@
                                             android:src="@drawable/ic_rotate_ccw"
                                             app:tint="#FFFFFF" />
 
-                                        <TextView
+                                        <LinearLayout
                                             android:layout_width="0dp"
                                             android:layout_height="wrap_content"
                                             android:layout_weight="1"
                                             android:layout_marginStart="10dp"
-                                            android:text="Sync Students"
-                                            android:textColor="#FFFFFF"
-                                            android:textSize="13sp"
-                                            android:textStyle="bold"
-                                            android:fontFamily="@font/poppins_bold" />
+                                            android:orientation="vertical">
+                                            <TextView
+                                                android:layout_width="wrap_content"
+                                                android:layout_height="wrap_content"
+                                                android:text="Sync Students"
+                                                android:textColor="#FFFFFF"
+                                                android:textSize="13sp"
+                                                android:textStyle="bold"
+                                                android:fontFamily="@font/poppins_bold" />
+                                            <TextView
+                                                android:id="@+id/classStudentSyncSubtitle"
+                                                android:layout_width="wrap_content"
+                                                android:layout_height="wrap_content"
+                                                android:layout_marginTop="1dp"
+                                                android:text="Not synced"
+                                                android:textColor="#CCFFFFFF"
+                                                android:textSize="11sp" />
+                                        </LinearLayout>
 
                                         <ImageView
                                             android:layout_width="16dp"

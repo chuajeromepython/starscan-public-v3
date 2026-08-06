@@ -755,6 +755,15 @@ public class OMRRepository {
     });
   }
 
+  /** Distinct synced student count for a class — used by the class header's "Students" stat. */
+  public void getStudentCountForClass(String classId, Callback<Integer> callback) {
+    executor.execute(() -> {
+      int count = db.studentLrnDao().countByClass(classId);
+      if (callback != null)
+        callback.onResult(count);
+    });
+  }
+
   public void getAllStudentLrns(Callback<List<StudentLrnEntity>> callback) {
     executor.execute(() -> {
       List<StudentLrnEntity> list = db.studentLrnDao().getAll();

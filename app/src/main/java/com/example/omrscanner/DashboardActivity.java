@@ -246,7 +246,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private android.widget.ImageView homeFilterToggle;
     private boolean homeFilterPanelVisible = false;
 
-    private TextView classTeacherLabel, classNameLabel, classActivityCount, homeTeacherLabel;
+    private TextView classTeacherLabel, classNameLabel, classActivityCount, classStudentSyncSubtitle, homeTeacherLabel;
     private LinearLayout classEmpty, classActivityList, classSheetTabs, classGroupSwitcher;
     private TextView classAssessmentCount;
     private EditText classAssessmentSearchInput;
@@ -604,6 +604,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         homeTeacherLabel = findViewById(R.id.homeTeacherLabel);
         classNameLabel = findViewById(R.id.classNameLabel);
         classActivityCount = findViewById(R.id.classActivityCount);
+        classStudentSyncSubtitle = findViewById(R.id.classStudentSyncSubtitle);
         classEmpty = findViewById(R.id.classEmpty);
         classActivityList = findViewById(R.id.classActivityList);
         classSheetTabs = findViewById(R.id.classSheetTabs);
@@ -2359,6 +2360,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         classNameLabel.setText(selectedClass.getDisplayName());
         int activityCount = selectedClass.getActivityCount();
         classActivityCount.setText(activityCount + " assessment" + (activityCount == 1 ? "" : "s"));
+
+        classStudentSyncSubtitle.setText("Checking…");
+        repo.getStudentCountForClass(selectedClass.getId(), count -> runOnUiThread(() -> {
+            if (!SCREEN_CLASS.equals(currentScreen) || selectedClass == null) return;
+            int c = (count != null) ? count : 0;
+            classStudentSyncSubtitle.setText(c > 0 ? (c + " student" + (c == 1 ? "" : "s") + " synced") : "Not synced");
+        }));
 
         classRenderer.updateAssessmentFilterToggleAppearance(classAssessmentFilterToggle,
                 classAssessmentFilterPanelVisible,
