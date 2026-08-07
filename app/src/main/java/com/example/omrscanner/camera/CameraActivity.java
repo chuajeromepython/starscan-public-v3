@@ -588,18 +588,25 @@ public class CameraActivity extends AppCompatActivity {
      * capture still produces correctly-ordered [TL, TR, BL, BR] anchors
      * for PerspectiveAligner.
      */
+    // RETURN POINT FOR UNDO
     private void analyzeFrameArucoIdentityMode(@NonNull ImageProxy imageProxy) {
         Mat gray = AnchorDetector.toGrayMat(imageProxy);
         if (gray == null) {
             onDetectionMiss();
             onAnchorsNotDetected();
-            updateTrackedMarkerOverlay(null, 0, 0, 0);
+            updateTrackedMarkerOverlay(null, 0, 0, 0, null);
             return;
         }
 
         int imageWidth = imageProxy.getWidth();
         int imageHeight = imageProxy.getHeight();
         int rotationDegrees = imageProxy.getImageInfo().getRotationDegrees();
+        // The buffer's full dimensions don't equal what's actually on screen --
+        // Preview and ImageAnalysis share a ViewPort, and CameraX reports the
+        // resulting visible sub-rectangle here rather than physically cropping
+        // the analysis buffer for us. The overlay math must offset/scale
+        // against this, not against the raw buffer size.
+        android.graphics.Rect cropRect = imageProxy.getCropRect();
 
         Map<Integer, Point[]> quadsById;
         Point[] anchors;
@@ -613,11 +620,11 @@ public class CameraActivity extends AppCompatActivity {
             gray.release();
         }
 
-        updateTrackedMarkerOverlay(quadsById, imageWidth, imageHeight, rotationDegrees);
+        updateTrackedMarkerOverlay(quadsById, imageWidth, imageHeight, rotationDegrees, cropRect);
 
         if (anchors != null) {
             onDetectionSuccess();
-            PointF[] viewPoints = scaleAnchorsToView(anchors, imageWidth, imageHeight, rotationDegrees);
+            PointF[] viewPoints = scaleAnchorsToView(anchors, imageWidth, imageHeight, rotationDegrees, cropRect);
 
             onAnchorsDetected(viewPoints, false);
 
@@ -856,7 +863,8 @@ public class CameraActivity extends AppCompatActivity {
             onDetectionSuccess();
             PointF[] viewPoints = scaleAnchorsToView(
                     anchors, imageProxy.getWidth(), imageProxy.getHeight(),
-                    imageProxy.getImageInfo().getRotationDegrees()
+                    imageProxy.getImageInfo().getRotationDegrees(),
+                    imageProxy.getCropRect()
             );
 
             onAnchorsDetected(viewPoints, false);
@@ -1009,7 +1017,8 @@ public class CameraActivity extends AppCompatActivity {
             @Nullable Map<Integer, Point[]> quadsById,
             int imageWidth,
             int imageHeight,
-            int rotationDegrees
+            int rotationDegrees,
+            @Nullable android.graphics.Rect cropRect
     ) {
         List<AnchorOverlayView.TrackedMarker> markers = null;
 
@@ -1021,7 +1030,7 @@ public class CameraActivity extends AppCompatActivity {
 
                 PointF[] viewQuad = new PointF[4];
                 for (int i = 0; i < 4; i++) {
-                    viewQuad[i] = transformPointToView(quad[i], imageWidth, imageHeight, rotationDegrees);
+                    viewQuad[i] = transformPointToView(quad[i], imageWidth, imageHeight, rotationDegrees, cropRect);
                 }
 
                 String label = ArucoAnchorDetector.labelForMarkerId(entry.getKey());
@@ -1050,7 +1059,8 @@ public class CameraActivity extends AppCompatActivity {
             Point point,
             int imageWidth,
             int imageHeight,
-            int rotationDegrees
+            int rotationDegrees,
+            @Nullable android.graphics.Rect cropRect
     ) {
         int viewWidth = anchorOverlay != null ? anchorOverlay.getWidth() : 0;
         int viewHeight = anchorOverlay != null ? anchorOverlay.getHeight() : 0;
@@ -1064,14 +1074,23 @@ public class CameraActivity extends AppCompatActivity {
             return new PointF((float) point.x, (float) point.y);
         }
 
+        // Points come in raw-buffer space, but only the crop-rect sub-region
+        // of that buffer is actually visible on screen. Offset into that
+        // sub-region and scale against its size, not the full buffer's.
+        int cropLeft = cropRect != null ? cropRect.left : 0;
+        int cropTop = cropRect != null ? cropRect.top : 0;
+        int cropWidth = cropRect != null ? cropRect.width() : imageWidth;
+        int cropHeight = cropRect != null ? cropRect.height() : imageHeight;
+
         boolean swapDimensions = rotationDegrees == 90 || rotationDegrees == 270;
-        int rotatedWidth = swapDimensions ? imageHeight : imageWidth;
-        int rotatedHeight = swapDimensions ? imageWidth : imageHeight;
+        int rotatedWidth = swapDimensions ? cropHeight : cropWidth;
+        int rotatedHeight = swapDimensions ? cropWidth : cropHeight;
 
         float scaleX = (float) viewWidth / rotatedWidth;
         float scaleY = (float) viewHeight / rotatedHeight;
 
-        PointF rotated = rotatePointToDisplay(point, imageWidth, imageHeight, rotationDegrees);
+        Point cropAdjusted = new Point(point.x - cropLeft, point.y - cropTop);
+        PointF rotated = rotatePointToDisplay(cropAdjusted, cropWidth, cropHeight, rotationDegrees);
         return new PointF(rotated.x * scaleX, rotated.y * scaleY);
     }
 
@@ -1082,7 +1101,8 @@ public class CameraActivity extends AppCompatActivity {
             Point[] anchors,
             int imageWidth,
             int imageHeight,
-            int rotationDegrees
+            int rotationDegrees,
+            @Nullable android.graphics.Rect cropRect
     ) {
         PointF[] viewPoints = new PointF[4];
 
@@ -1103,18 +1123,26 @@ public class CameraActivity extends AppCompatActivity {
             return viewPoints;
         }
 
+        // Only the crop-rect sub-region of the raw buffer is actually visible
+        // on screen -- offset into it and scale against its size.
+        int cropLeft = cropRect != null ? cropRect.left : 0;
+        int cropTop = cropRect != null ? cropRect.top : 0;
+        int cropWidth = cropRect != null ? cropRect.width() : imageWidth;
+        int cropHeight = cropRect != null ? cropRect.height() : imageHeight;
+
         boolean swapDimensions = rotationDegrees == 90 || rotationDegrees == 270;
-        int rotatedWidth = swapDimensions ? imageHeight : imageWidth;
-        int rotatedHeight = swapDimensions ? imageWidth : imageHeight;
+        int rotatedWidth = swapDimensions ? cropHeight : cropWidth;
+        int rotatedHeight = swapDimensions ? cropWidth : cropHeight;
 
         float scaleX = (float) viewWidth / rotatedWidth;
         float scaleY = (float) viewHeight / rotatedHeight;
 
         for (int i = 0; i < 4; i++) {
+            Point cropAdjusted = new Point(anchors[i].x - cropLeft, anchors[i].y - cropTop);
             PointF rotatedPoint = rotatePointToDisplay(
-                    anchors[i],
-                    imageWidth,
-                    imageHeight,
+                    cropAdjusted,
+                    cropWidth,
+                    cropHeight,
                     rotationDegrees
             );
             viewPoints[i] = new PointF(
