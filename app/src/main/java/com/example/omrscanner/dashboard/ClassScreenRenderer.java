@@ -700,7 +700,20 @@ public class ClassScreenRenderer {
                 badgeRow.addView(keyBadge);
             }
 
+            badgesContainer.addView(badgeRow);
+
+            // "Needs correction" badge — its own row below the main badge
+            // row (same pattern as the "no answer key" row below), so it
+            // doesn't get squeezed next to the other badges.
             if (hasCorrectionBadge) {
+                LinearLayout correctionRow = new LinearLayout(activity);
+                correctionRow.setOrientation(LinearLayout.HORIZONTAL);
+                correctionRow.setGravity(Gravity.CENTER_VERTICAL);
+                LinearLayout.LayoutParams correctionRowLp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                correctionRowLp.topMargin = ui.dp(6);
+                correctionRow.setLayoutParams(correctionRowLp);
+
                 TextView correctionBadge = new TextView(activity);
                 correctionBadge.setText("⚠ " + row.needsCorrectionCount
                         + (row.needsCorrectionCount == 1 ? " student needs correction" : " students need correction"));
@@ -713,14 +726,10 @@ public class ClassScreenRenderer {
                 correctionBg.setStroke(ui.dp(1), Color.parseColor("#FDE68A"));
                 correctionBadge.setBackground(correctionBg);
                 correctionBadge.setPadding(ui.dp(8), ui.dp(3), ui.dp(8), ui.dp(3));
-                LinearLayout.LayoutParams cblp = new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                cblp.leftMargin = ui.dp(6);
-                correctionBadge.setLayoutParams(cblp);
-                badgeRow.addView(correctionBadge);
-            }
+                correctionRow.addView(correctionBadge);
 
-            badgesContainer.addView(badgeRow);
+                badgesContainer.addView(correctionRow);
+            }
 
             // "No answer key attached" badge — its own row below the main
             // badge row, so the card just grows (wrap_content) to fit it
@@ -792,10 +801,17 @@ public class ClassScreenRenderer {
         cardBody.setLayoutParams(new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
+        boolean isLinkedForBorder = link != null && link.linkedAssessmentName != null;
+
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(Color.WHITE);
         bg.setCornerRadius(ui.dp(16));
-        bg.setStroke(ui.dp(1), Color.parseColor("#E2E8F0"));
+        if (isLinkedForBorder) {
+            // Green border to flag that this key is currently used by an assessment.
+            bg.setStroke(ui.dp(2), Color.parseColor("#22C55E"));
+        } else {
+            bg.setStroke(ui.dp(1), Color.parseColor("#E2E8F0"));
+        }
         cardBody.setBackground(bg);
 
         // Header

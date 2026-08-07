@@ -39,6 +39,11 @@
         <item name="colorOnSurface">@android:color/black</item>
         <item name="colorSurface">@color/bg_surface</item>
         <item name="colorSurfaceContainerHigh">@color/bg_surface</item>
+        <!-- Material's MaterialShapeDrawable auto-tints elevated surfaces (dialogs included)
+             toward colorPrimary via an elevation overlay. Since our primary is blue, every
+             dialog was rendering with a pale-blue wash and a blue-tinted elevation shadow.
+             Disabling the overlay entirely gives flat white cards with a normal gray shadow. -->
+        <item name="elevationOverlayEnabled">false</item>
         <item name="shapeAppearanceOverlay">@style/ShapeAppearance.OMRScanner.Dialog</item>
         <item name="materialAlertDialogTitleTextStyle">@style/TextAppearance.OMRScanner.DialogTitle</item>
         <item name="materialAlertDialogBodyTextStyle">@style/TextAppearance.OMRScanner.DialogBody</item>
