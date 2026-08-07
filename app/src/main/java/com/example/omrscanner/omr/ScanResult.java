@@ -62,6 +62,16 @@ public class ScanResult {
      */
     public Bitmap overlayBitmap;
 
+    /**
+     * On-screen reference image for teachers: same bubble positions as
+     * {@link #overlayBitmap}, but the answer key's correct choice is always
+     * revealed in purple on every row (split-colored when it overlaps a
+     * student mark). Null when no answer key was assigned for this scan.
+     * Display-only in memory — persisted separately from overlayBitmap so
+     * it never rides along with exports/backups (see ResultActivity).
+     */
+    public Bitmap keyReferenceBitmap;
+
     public ScanResult() {
         this.answers = new LinkedHashMap<>();
     }

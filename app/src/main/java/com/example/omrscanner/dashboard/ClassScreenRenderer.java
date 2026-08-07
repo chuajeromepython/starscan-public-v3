@@ -633,7 +633,13 @@ public class ClassScreenRenderer {
         boolean hasClassBadge = row.className != null && !row.className.trim().isEmpty();
         boolean hasKeyBadge = row.answerKeyName != null && !row.answerKeyName.isEmpty();
         boolean hasCorrectionBadge = row.needsCorrectionCount > 0;
+        boolean hasNoKeyBadge = !hasKeyBadge;
         {
+            LinearLayout badgesContainer = new LinearLayout(activity);
+            badgesContainer.setOrientation(LinearLayout.VERTICAL);
+            badgesContainer.setLayoutParams(new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
             LinearLayout badgeRow = new LinearLayout(activity);
             badgeRow.setOrientation(LinearLayout.HORIZONTAL);
             badgeRow.setGravity(Gravity.CENTER_VERTICAL);
@@ -714,7 +720,37 @@ public class ClassScreenRenderer {
                 badgeRow.addView(correctionBadge);
             }
 
-            cardBody.addView(badgeRow);
+            badgesContainer.addView(badgeRow);
+
+            // "No answer key attached" badge — its own row below the main
+            // badge row, so the card just grows (wrap_content) to fit it
+            // instead of squeezing into the first row.
+            if (hasNoKeyBadge) {
+                LinearLayout noKeyRow = new LinearLayout(activity);
+                noKeyRow.setOrientation(LinearLayout.HORIZONTAL);
+                noKeyRow.setGravity(Gravity.CENTER_VERTICAL);
+                LinearLayout.LayoutParams noKeyRowLp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                noKeyRowLp.topMargin = ui.dp(6);
+                noKeyRow.setLayoutParams(noKeyRowLp);
+
+                TextView noKeyBadge = new TextView(activity);
+                noKeyBadge.setText("🚫 No answer key attached");
+                noKeyBadge.setTextColor(Color.parseColor("#B91C1C"));
+                noKeyBadge.setTextSize(11);
+                noKeyBadge.setTypeface(null, Typeface.ITALIC);
+                GradientDrawable noKeyBg = new GradientDrawable();
+                noKeyBg.setColor(Color.parseColor("#FEF2F2"));
+                noKeyBg.setCornerRadius(ui.dp(8));
+                noKeyBg.setStroke(ui.dp(1), Color.parseColor("#FECACA"));
+                noKeyBadge.setBackground(noKeyBg);
+                noKeyBadge.setPadding(ui.dp(8), ui.dp(3), ui.dp(8), ui.dp(3));
+                noKeyRow.addView(noKeyBadge);
+
+                badgesContainer.addView(noKeyRow);
+            }
+
+            cardBody.addView(badgesContainer);
         }
 
         cardBody.setOnClickListener(v -> onOpen.run());

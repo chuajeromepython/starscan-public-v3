@@ -88,6 +88,11 @@ public class ScanDetailActivity extends AppCompatActivity {
     private MaterialButton btnSaveChanges;
     private ImageButton btnBack;
 
+    // Answer-key reference toggle (works in both edit mode and read-only Scans tab)
+    private LinearLayout keyReferenceRow;
+    private MaterialButton btnToggleKeyReferenceDetail;
+    private boolean showingKeyReferenceDetail = false;
+
     private boolean isEditing = false;
     private Map<Integer, String> editedAnswers = new LinkedHashMap<>();
 
@@ -139,10 +144,13 @@ public class ScanDetailActivity extends AppCompatActivity {
         topBarBadge = findViewById(R.id.topBarBadge);
         btnSaveChanges = findViewById(R.id.btnSaveChanges);
         btnBack = findViewById(R.id.btnBack);
+        keyReferenceRow = findViewById(R.id.keyReferenceRow);
+        btnToggleKeyReferenceDetail = findViewById(R.id.btnToggleKeyReferenceDetail);
 
         btnBack.setOnClickListener(v -> finish());
         btnEditToggle.setOnClickListener(v -> toggleEditMode());
         btnSaveChanges.setOnClickListener(v -> saveChanges());
+        btnToggleKeyReferenceDetail.setOnClickListener(v -> toggleKeyReferenceDetailView());
     }
 
     /** Loads a scan by its raw DB id, resolving its class/assessment along the way.
@@ -276,18 +284,15 @@ public class ScanDetailActivity extends AppCompatActivity {
             topBarTitle.setText((lrn != null && !lrn.isEmpty()) ? lrn : "Scan Details");
         }
 
-        // Image — prefer overlay (highlighted bubbles), fall back to raw
-        String imgPath = currentScan.getOverlayImagePath();
-        if (imgPath == null || !(new File(imgPath).exists()))
-            imgPath = currentScan.getImagePath();
-        if (imgPath != null && new File(imgPath).exists()) {
-            Bitmap bmp = BitmapFactory.decodeFile(imgPath);
-            scanImage.setImageBitmap(bmp);
-            imgPlaceholder.setVisibility(View.GONE);
-        } else {
-            imgPlaceholder.setVisibility(View.VISIBLE);
-            imgPlaceholder.setText(imgPath != null ? "Image not found on device" : "No Image Available");
+        // Image — toggle-aware: plain scan result (overlay, falling back to
+        // raw) by default, or the saved answer-key reference image when toggled.
+        showingKeyReferenceDetail = false;
+        String keyRefPath = currentScan.getKeyReferenceImagePath();
+        boolean hasKeyReference = keyRefPath != null && new File(keyRefPath).exists();
+        if (keyReferenceRow != null) {
+            keyReferenceRow.setVisibility(hasKeyReference ? View.VISIBLE : View.GONE);
         }
+        updateDetailImageView();
 
         etLrn.setText(currentScan.getLrn());
         // DETECTED always shows raw bubble count in green
@@ -320,6 +325,44 @@ public class ScanDetailActivity extends AppCompatActivity {
         } else {
             renderAnswers();
         }
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // ANSWER-KEY REFERENCE TOGGLE
+    // ──────────────────────────────────────────────────────────
+
+    /** Loads whichever image the current toggle state implies. */
+    private void updateDetailImageView() {
+        String keyRefPath = currentScan.getKeyReferenceImagePath();
+        boolean showKey = showingKeyReferenceDetail
+                && keyRefPath != null && new File(keyRefPath).exists();
+
+        String imgPath;
+        if (showKey) {
+            imgPath = keyRefPath;
+        } else {
+            imgPath = currentScan.getOverlayImagePath();
+            if (imgPath == null || !(new File(imgPath).exists()))
+                imgPath = currentScan.getImagePath();
+        }
+
+        if (imgPath != null && new File(imgPath).exists()) {
+            Bitmap bmp = BitmapFactory.decodeFile(imgPath);
+            scanImage.setImageBitmap(bmp);
+            imgPlaceholder.setVisibility(View.GONE);
+        } else {
+            imgPlaceholder.setVisibility(View.VISIBLE);
+            imgPlaceholder.setText(imgPath != null ? "Image not found on device" : "No Image Available");
+        }
+
+        if (btnToggleKeyReferenceDetail != null) {
+            btnToggleKeyReferenceDetail.setText(showKey ? "📋 Show Scan Result" : "🔑 Show Answer Key");
+        }
+    }
+
+    private void toggleKeyReferenceDetailView() {
+        showingKeyReferenceDetail = !showingKeyReferenceDetail;
+        updateDetailImageView();
     }
 
     // ──────────────────────────────────────────────────────────

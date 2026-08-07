@@ -136,6 +136,7 @@ public final class DataMapper {
         entity.numItems = scan.getNumItems();
         entity.imagePath = scan.getImagePath();
         entity.overlayImagePath = scan.getOverlayImagePath();
+        entity.keyReferenceImagePath = scan.getKeyReferenceImagePath();
         entity.timestamp = scan.getTimestamp() > 0
                 ? scan.getTimestamp()
                 : System.currentTimeMillis();
@@ -161,6 +162,7 @@ public final class DataMapper {
         scan.setNumItems(entity.numItems);
         scan.setImagePath(entity.imagePath);
         scan.setOverlayImagePath(entity.overlayImagePath);
+        scan.setKeyReferenceImagePath(entity.keyReferenceImagePath);
         scan.setTimestamp(entity.timestamp);
         scan.setAnswers(answers != null ? answers : new LinkedHashMap<>());
         return scan;

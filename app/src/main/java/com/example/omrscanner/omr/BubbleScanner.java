@@ -28,6 +28,7 @@ public class BubbleScanner {
     private static final Scalar COLOUR_RED    = new Scalar(255, 0, 0, 255);   // red (undetected/incorrect)
     private static final Scalar COLOUR_BLACK  = new Scalar(0, 0, 0, 255);     // black (no answer key)
     private static final Scalar COLOUR_MULTI  = new Scalar(255, 255, 0, 255); // yellow (multiple marks)
+    private static final Scalar COLOUR_KEY    = new Scalar(156, 39, 176, 255); // purple (answer-key reveal, reference-only)
 
     private static final char[] CHOICE_LABELS = {'A', 'B', 'C', 'D'};
 
@@ -69,6 +70,11 @@ public class BubbleScanner {
 
         Mat overlay = colour.clone();
 
+        // Teacher-reference rendering: identical bubble positions, but always
+        // reveals the answer-key column in purple. Built only when a key was
+        // supplied. Display-only — never saved alongside overlayBitmap.
+        Mat keyOverlay = (correctAnswers != null) ? colour.clone() : null;
+
         GridAligner aligner = new GridAligner();
 
         ScanResult result = new ScanResult();
@@ -97,7 +103,7 @@ public class BubbleScanner {
             } else {
                 int[] safeOffset = sanitizeAlignmentOffset(block, scaleX, scaleY, scaledRadius, offX, offY);
                 questionCounter = scanQuestionBlock(block, scaleX, scaleY,
-                        scaledRadius, gray, overlay,
+                        scaledRadius, gray, overlay, keyOverlay,
                         result, questionCounter, safeOffset[0], safeOffset[1], correctAnswers);
             }
         }
@@ -107,6 +113,13 @@ public class BubbleScanner {
         Bitmap overlayBitmap = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888);
         Utils.matToBitmap(overlay, overlayBitmap);
         result.overlayBitmap = overlayBitmap;
+
+        if (keyOverlay != null) {
+            Bitmap keyBitmap = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888);
+            Utils.matToBitmap(keyOverlay, keyBitmap);
+            result.keyReferenceBitmap = keyBitmap;
+            keyOverlay.release();
+        }
 
         colour.release();
         gray.release();
@@ -213,7 +226,7 @@ public class BubbleScanner {
     }
 
     private int scanQuestionBlock(OmrBlock block, double scaleX, double scaleY,
-                                  int scaledRadius, Mat gray, Mat overlay,
+                                  int scaledRadius, Mat gray, Mat overlay, Mat keyOverlay,
                                   ScanResult result, int questionCounter,
                                   int offX, int offY, String[] correctAnswers) {
 
@@ -227,6 +240,22 @@ public class BubbleScanner {
             int[] cys = new int[block.cols];
             boolean[] filledFlags = new boolean[block.cols];
             Boolean[] isCorrectFlags = new Boolean[block.cols];
+
+            // Which column (if any) holds the answer key's correct choice
+            // for this question. -1 when no key, or the key letter is
+            // blank/"?"/out of range.
+            int keyCol = -1;
+            if (correctAnswers != null && questionCounter - 1 < correctAnswers.length) {
+                String key = correctAnswers[questionCounter - 1].trim();
+                if (!key.isEmpty() && !key.equals("?")) {
+                    for (int c = 0; c < CHOICE_LABELS.length && c < block.cols; c++) {
+                        if (String.valueOf(CHOICE_LABELS[c]).equals(key)) {
+                            keyCol = c;
+                            break;
+                        }
+                    }
+                }
+            }
 
             for (int col = 0; col < block.cols; col++) {
                 int cx = (int) Math.round((block.startX + col * block.dx) * scaleX) + offX;
@@ -244,11 +273,8 @@ public class BubbleScanner {
                 }
 
                 Boolean isCorrect = null;
-                if (filled && correctAnswers != null && questionCounter - 1 < correctAnswers.length) {
-                    String key = correctAnswers[questionCounter - 1].trim();
-                    if (!key.isEmpty() && !key.equals("?") && col < CHOICE_LABELS.length) {
-                        isCorrect = String.valueOf(CHOICE_LABELS[col]).equals(key);
-                    }
+                if (filled && keyCol >= 0) {
+                    isCorrect = (col == keyCol);
                 }
                 isCorrectFlags[col] = isCorrect;
             }
@@ -256,10 +282,25 @@ public class BubbleScanner {
             String answer = detected.toString();
             boolean isMultiMark = answer.length() > 1;
 
-            // Pass 2: draw every column now that isMultiMark is known for the whole row.
+            // Pass 2: draw the real scan overlay (student marks only). This is
+            // the bitmap that gets saved/exported, so it never gets the purple
+            // answer-key reveal — that stays confined to keyOverlay below.
             for (int col = 0; col < block.cols; col++) {
                 drawBubble(overlay, cxs[col], cys[col], scaledRadius,
                         filledFlags[col], isCorrectFlags[col], isMultiMark);
+            }
+
+            // Pass 3: draw the teacher-reference overlay (display/toggle only).
+            // The answer-key column is always purple here, on every row:
+            //   - correct, single mark       → half green / half purple
+            //   - key answer in a multi-mark → half yellow / half purple
+            //   - key answer left unmarked   → solid purple
+            //   - any other marked bubble    → red (single) or yellow (multi)
+            if (keyOverlay != null) {
+                for (int col = 0; col < block.cols; col++) {
+                    drawKeyReferenceBubble(keyOverlay, cxs[col], cys[col], scaledRadius,
+                            filledFlags[col], isMultiMark, col == keyCol);
+                }
             }
 
             result.answers.put(questionCounter, answer);
@@ -452,6 +493,44 @@ public class BubbleScanner {
         } else {
             Imgproc.circle(overlay, centre, radius, COLOUR_EMPTY, 1);
         }
+    }
+
+    /**
+     * Draws one bubble on the teacher-reference overlay. Unlike the saved
+     * scan overlay, this always reveals the answer key: the key column is
+     * purple on every row (solid if the student didn't mark it, split with
+     * the mark's own colour if they did — right half is always purple).
+     */
+    private void drawKeyReferenceBubble(Mat keyOverlay, int cx, int cy, int radius,
+                                        boolean filled, boolean isMultiMark, boolean isKeyCol) {
+        org.opencv.core.Point centre = new org.opencv.core.Point(cx, cy);
+
+        if (isKeyCol) {
+            if (!filled) {
+                // Key answer wasn't marked (left blank, or student picked a different bubble).
+                Imgproc.circle(keyOverlay, centre, radius, COLOUR_KEY, -1);
+            } else if (isMultiMark) {
+                // Key answer was one of several marks in this row.
+                drawSplitCircle(keyOverlay, centre, radius, COLOUR_MULTI, COLOUR_KEY);
+            } else {
+                // Student marked the key answer, and only that one.
+                drawSplitCircle(keyOverlay, centre, radius, COLOUR_FILLED, COLOUR_KEY);
+            }
+        } else if (filled) {
+            // A marked bubble that is NOT the key answer.
+            Scalar color = isMultiMark ? COLOUR_MULTI : COLOUR_RED;
+            Imgproc.circle(keyOverlay, centre, radius, color, -1);
+        } else {
+            Imgproc.circle(keyOverlay, centre, radius, COLOUR_EMPTY, 1);
+        }
+    }
+
+    /** Draws a circle split left/right between two colours. Right half is always {@code rightColor}. */
+    private void drawSplitCircle(Mat mat, org.opencv.core.Point centre, int radius,
+                                 Scalar leftColor, Scalar rightColor) {
+        org.opencv.core.Size axes = new org.opencv.core.Size(radius, radius);
+        Imgproc.ellipse(mat, centre, axes, 0, -90, 90, rightColor, -1);
+        Imgproc.ellipse(mat, centre, axes, 0, 90, 270, leftColor, -1);
     }
 
     private void drawRedBox(Mat overlay, int x1, int y1, int x2, int y2) {

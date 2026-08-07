@@ -56,6 +56,12 @@ public class ResultActivity extends AppCompatActivity {
     private ProgressBar progressBar;
     private ScrollView scrollView;
 
+    // Answer-key reference toggle
+    private MaterialButton btnToggleKeyReference;
+    private LinearLayout legendRowOriginal;
+    private LinearLayout legendRowKeyReference;
+    private boolean showingKeyReference = false;
+
     // LRN verification views
     private MaterialCardView lrnCard;
     private android.widget.LinearLayout lrnDigitContainer;
@@ -115,6 +121,9 @@ public class ResultActivity extends AppCompatActivity {
         btnRetry = findViewById(R.id.btnRetry);
         progressBar = findViewById(R.id.progressBar);
         scrollView  = findViewById(R.id.scrollView);
+        btnToggleKeyReference = findViewById(R.id.btnToggleKeyReference);
+        legendRowOriginal = findViewById(R.id.legendRowOriginal);
+        legendRowKeyReference = findViewById(R.id.legendRowKeyReference);
 
         // LRN verification views
         lrnCard       = findViewById(R.id.lrnCard);
@@ -174,6 +183,7 @@ public class ResultActivity extends AppCompatActivity {
         // Button listeners
         btnRetry.setOnClickListener(v -> retakePhoto());
         btnExport.setOnClickListener(v -> exportResults());
+        btnToggleKeyReference.setOnClickListener(v -> toggleKeyReferenceView());
         btnConfirmLrn.setOnClickListener(v -> confirmLrn());
         btnCorrectLater.setOnClickListener(v -> onCorrectLaterTapped());
         btnFixNow.setOnClickListener(v -> onFixNowTapped());
@@ -570,8 +580,14 @@ public class ResultActivity extends AppCompatActivity {
                     showLoading(false);
 
                     if (scanResult != null && scanResult.overlayBitmap != null) {
-                        // Show image with highlighted bubbles
-                        imageResult.setImageBitmap(scanResult.overlayBitmap);
+                        // Reset the toggle for this new scan, then render whichever
+                        // image that implies (plain scan result by default).
+                        showingKeyReference = false;
+                        if (btnToggleKeyReference != null) {
+                            btnToggleKeyReference.setVisibility(
+                                    scanResult.keyReferenceBitmap != null ? View.VISIBLE : View.GONE);
+                        }
+                        updateResultImageView();
 
                         // Show detection summary
                         String summary;
@@ -640,6 +656,37 @@ public class ResultActivity extends AppCompatActivity {
                 });
             }
         }).start();
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // ANSWER-KEY REFERENCE TOGGLE
+    // ──────────────────────────────────────────────────────────
+
+    /** Swaps the image + legend between the plain scan result and the answer-key reference. */
+    private void toggleKeyReferenceView() {
+        if (scanResult == null || scanResult.keyReferenceBitmap == null) return;
+        showingKeyReference = !showingKeyReference;
+        updateResultImageView();
+    }
+
+    /** Renders whichever image/legend the current toggle state implies. */
+    private void updateResultImageView() {
+        if (scanResult == null) return;
+        boolean showKey = showingKeyReference && scanResult.keyReferenceBitmap != null;
+
+        Bitmap displayBitmap = showKey ? scanResult.keyReferenceBitmap : scanResult.overlayBitmap;
+        if (displayBitmap != null) {
+            imageResult.setImageBitmap(displayBitmap);
+        }
+
+        if (legendRowOriginal != null && legendRowKeyReference != null) {
+            legendRowOriginal.setVisibility(showKey ? View.GONE : View.VISIBLE);
+            legendRowKeyReference.setVisibility(showKey ? View.VISIBLE : View.GONE);
+        }
+
+        if (btnToggleKeyReference != null) {
+            btnToggleKeyReference.setText(showKey ? "📋 Show Scan Result" : "🔑 Show Answer Key");
+        }
     }
 
     // ──────────────────────────────────────────────────────────
@@ -823,17 +870,12 @@ public class ResultActivity extends AppCompatActivity {
         btnConfirmLrn.setText("CONFIRMED ✓");
         updateSaveButtonState();
 
-        // Enable the SAVE button. Saving itself now only happens when the
-        // teacher taps SAVE (btnExport -> exportResults()) — CONFIRM no
-        // longer auto-saves and exits the screen on its own.
-        btnExport.setEnabled(true);
-
-        // Informational only — does NOT gate the save below. Flagged
-        // multi-shade answers are still allowed to save (they show up
-        // with a yellow border in the scan list for later correction);
-        // this just lets the teacher know that's the state it's in.
+        // NOTE: SAVE is intentionally NOT force-enabled here. updateSaveButtonState()
+        // above already computes the correct state — it stays disabled until the
+        // teacher also resolves any flagged multi-shaded answer(s), either by
+        // fixing them (FIX NOW) or explicitly deferring (CORRECT LATER).
         if (scanResult != null && scanResult.hasMultiLetterAnswers() && !correctionDeferred) {
-            Toast.makeText(this, "LRN verified ✓ — resolve the flagged answer(s) above, then tap SAVE.",
+            Toast.makeText(this, "LRN verified ✓ — choose FIX NOW or CORRECT LATER for the flagged answer(s) above before saving.",
                     Toast.LENGTH_LONG).show();
         } else {
             Toast.makeText(this, "LRN verified ✓ — tap SAVE to save this scan.", Toast.LENGTH_SHORT).show();
@@ -1118,6 +1160,28 @@ public class ResultActivity extends AppCompatActivity {
                 }
             }
 
+            // Save the teacher-reference (answer-key) bitmap to its OWN subfolder,
+            // deliberately kept out of images/ so ClassExporter and BackupManager
+            // — which only ever read overlayImagePath — never pick it up. This
+            // path only feeds the in-app "Show Answer Key" toggle.
+            if (scanResult.keyReferenceBitmap != null && !scanResult.keyReferenceBitmap.isRecycled()) {
+                try {
+                    java.io.File keyRefDir = new java.io.File(getFilesDir(), "images/key_reference");
+                    if (!keyRefDir.exists()) keyRefDir.mkdirs();
+
+                    String keyRefName = "keyref_" + System.currentTimeMillis() + ".png";
+                    java.io.File keyRefFile = new java.io.File(keyRefDir, keyRefName);
+                    java.io.FileOutputStream keyRefFos = new java.io.FileOutputStream(keyRefFile);
+                    scanResult.keyReferenceBitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, keyRefFos);
+                    keyRefFos.close();
+
+                    entry.setKeyReferenceImagePath(keyRefFile.getAbsolutePath());
+                    Log.d(TAG, "Key reference image saved: " + keyRefFile.getAbsolutePath());
+                } catch (Exception ke) {
+                    Log.e(TAG, "Error saving key reference image", ke);
+                }
+            }
+
             DashboardActivity.saveScanResult(this, classId, activityId, entry, replace);
             Log.d(TAG, "Scan result saved to folder: classId=" + classId + ", activityId=" + activityId);
             return true;
@@ -1143,6 +1207,10 @@ public class ResultActivity extends AppCompatActivity {
         if (scanResult != null && scanResult.overlayBitmap != null &&
                 !scanResult.overlayBitmap.isRecycled()) {
             scanResult.overlayBitmap.recycle();
+        }
+        if (scanResult != null && scanResult.keyReferenceBitmap != null &&
+                !scanResult.keyReferenceBitmap.isRecycled()) {
+            scanResult.keyReferenceBitmap.recycle();
         }
     }
 

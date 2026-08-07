@@ -15,6 +15,7 @@ public class ScanEntry {
     private String templateId;
     private String imagePath;        // path to the scanned image
     private String overlayImagePath; // path to the overlay image (with bubble highlights)
+    private String keyReferenceImagePath; // path to the answer-key reference image (in-app toggle only)
     private String csvPath;          // path to the individual CSV
     private long timestamp;
     /** True when score was computed by comparing against an answer key; false = raw detected count. */
@@ -74,6 +75,9 @@ public class ScanEntry {
 
     public String getOverlayImagePath() { return overlayImagePath; }
     public void setOverlayImagePath(String overlayImagePath) { this.overlayImagePath = overlayImagePath; }
+
+    public String getKeyReferenceImagePath() { return keyReferenceImagePath; }
+    public void setKeyReferenceImagePath(String keyReferenceImagePath) { this.keyReferenceImagePath = keyReferenceImagePath; }
 
     public String getCsvPath() { return csvPath; }
     public void setCsvPath(String csvPath) { this.csvPath = csvPath; }

@@ -50,9 +50,15 @@ public class ScansScreenRenderer {
         card.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
 
         GradientDrawable cardBg = new GradientDrawable();
-        cardBg.setColor(Color.WHITE);
         cardBg.setCornerRadius(ui.dp(16));
-        cardBg.setStroke(ui.dp(1), Color.parseColor("#E2E8F0"));
+        if (row.needsCorrection) {
+            // Same warm palette as the "needs correction" badge elsewhere in the app.
+            cardBg.setColor(Color.parseColor("#FFFBEB"));
+            cardBg.setStroke(ui.dp(2), Color.parseColor("#F59E0B"));
+        } else {
+            cardBg.setColor(Color.WHITE);
+            cardBg.setStroke(ui.dp(1), Color.parseColor("#E2E8F0"));
+        }
         card.setBackground(cardBg);
 
         LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(

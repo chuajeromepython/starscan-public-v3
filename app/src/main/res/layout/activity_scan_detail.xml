@@ -160,6 +160,42 @@
                 </FrameLayout>
             </com.google.android.material.card.MaterialCardView>
 
+            <!-- Answer-key reference toggle — hidden unless this scan has a
+                 saved key-reference image (i.e. an answer key was assigned
+                 when it was scanned). Shown in both edit mode and the
+                 read-only Scans tab, since this is the same screen. -->
+            <LinearLayout
+                android:id="@+id/keyReferenceRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:paddingTop="8dp"
+                android:visibility="gone">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnToggleKeyReferenceDetail"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="34dp"
+                    android:text="🔑 Show Answer Key"
+                    android:textAllCaps="false"
+                    android:textSize="12sp"
+                    app:cornerRadius="8dp" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="10dp"
+                    android:text="🟢🟣 Correct  🔴🟣 Wrong  🟡🟣 Multi+key  🟣 Key only"
+                    android:textColor="#64748B"
+                    android:textSize="10sp" />
+
+            </LinearLayout>
+
             <!-- Thin shadow-separator between sticky image and scroll area -->
             <View
                 android:layout_width="match_parent"

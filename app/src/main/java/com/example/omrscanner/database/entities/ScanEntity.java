@@ -46,6 +46,10 @@ public class ScanEntity {
   @ColumnInfo(name = "overlay_image_path")
   public String overlayImagePath; // Path to highlighted-bubble overlay image
 
+  @Nullable
+  @ColumnInfo(name = "key_reference_image_path")
+  public String keyReferenceImagePath; // Path to the answer-key reference image (in-app toggle only — never exported/backed up)
+
   @ColumnInfo(name = "timestamp")
   public long timestamp; // When the scan was taken
 
