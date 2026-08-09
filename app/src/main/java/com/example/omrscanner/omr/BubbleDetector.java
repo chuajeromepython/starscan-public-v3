@@ -33,7 +33,9 @@ public class BubbleDetector {
 
     // Shading detection thresholds
     private static final double SHADING_THRESHOLD = 127;
-    private static final double FILLED_RATIO_THRESHOLD = 0.35;
+
+    //private static final double FILLED_RATIO_THRESHOLD = 0.35;
+    private static final double FILLED_RATIO_THRESHOLD = 0.28;
 
     // Number of expected columns for answer choices (A, B, C, D)
     private static final int ANSWER_COLUMNS = 4;
@@ -240,9 +242,17 @@ public class BubbleDetector {
         Rect innerRect = new Rect(x, y, width, height);
         Mat roi = gray.submat(innerRect);
 
+        /*
         // Count dark pixels
+
         Mat threshROI = new Mat();
         Imgproc.threshold(roi, threshROI, SHADING_THRESHOLD, 255, Imgproc.THRESH_BINARY_INV);
+         */
+
+        // Count dark pixels (Otsu auto-calibrates the cutoff per bubble,
+        // so it adapts to pencil vs. pen and to lighting differences per scan)
+        Mat threshROI = new Mat();
+        Imgproc.threshold(roi, threshROI, 0, 255, Imgproc.THRESH_BINARY_INV | Imgproc.THRESH_OTSU);
 
         int darkPixels = Core.countNonZero(threshROI);
         int totalPixels = innerRect.width * innerRect.height;
