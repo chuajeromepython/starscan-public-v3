@@ -63,7 +63,7 @@ public class PerspectiveAligner {
             if (p == null) return false;
         }
 
-        double area = calculateQuadrilateralArea(anchors);
+        double area = calculateQuadrilateralArea(new Point[]{anchors[0], anchors[1], anchors[3], anchors[2]});
         if (area < 10000) {
             Log.w(TAG, "Anchor area too small: " + area);
             return false;
@@ -203,7 +203,7 @@ public class PerspectiveAligner {
         }
 
         // Minimum area check (Shoelace formula)
-        double area = calculateQuadrilateralArea(anchors);
+        double area = calculateQuadrilateralArea(new Point[]{anchors[0], anchors[1], anchors[3], anchors[2]});
         if (area < 10000) {
             Log.w(TAG, "Anchor area too small: " + area);
             return false;

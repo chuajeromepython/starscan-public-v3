@@ -7,40 +7,40 @@
       "label": "Question_1_10",
       "rows": 10,
       "cols": 4,
-      "start_x": 87,
-      "start_y": 204,
-      "dx": 31.33,
-      "dy": 71.0,
+      "start_x": 95.8,
+      "start_y": 186,
+      "dx": 31.16,
+      "dy": 74.0,
       "radius": 12
     },
     {
       "label": "Question_11_20",
       "rows": 10,
       "cols": 4,
-      "start_x": 271,
-      "start_y": 204,
-      "dx": 31.67,
-      "dy": 71.0,
+      "start_x": 276.0,
+      "start_y": 186,
+      "dx": 31.56,
+      "dy": 74.0,
       "radius": 12
     },
     {
       "label": "Question_21_30",
       "rows": 10,
       "cols": 4,
-      "start_x": 453,
-      "start_y": 200,
-      "dx": 31.67,
-      "dy": 71.78,
+      "start_x": 459.0,
+      "start_y": 186,
+      "dx": 31.84,
+      "dy": 74.0,
       "radius": 12
     },
     {
       "label": "Question_31_40",
       "rows": 10,
       "cols": 4,
-      "start_x": 638,
-      "start_y": 199,
-      "dx": 31.67,
-      "dy": 71.67,
+      "start_x": 641.5,
+      "start_y": 186,
+      "dx": 31.64,
+      "dy": 74.0,
       "radius": 12
     },
     {
@@ -48,9 +48,9 @@
       "rows": 10,
       "cols": 12,
       "start_x": 782,
-      "start_y": 202,
+      "start_y": 186,
       "dx": 32.18,
-      "dy": 71.44,
+      "dy": 74.0,
       "radius": 12
     }
   ]
