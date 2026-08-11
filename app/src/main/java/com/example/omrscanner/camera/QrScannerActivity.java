@@ -65,6 +65,7 @@ public class QrScannerActivity extends AppCompatActivity {
     private TextView tvFloatingHint;
     private ExecutorService cameraExecutor;
     private boolean scanned = false;
+    private String pendingUserRole = "Teacher"; // set right before showing the Success dialog
     private OMRRepository repository;
     private final Gson gson = new Gson();
 
@@ -232,8 +233,10 @@ public class QrScannerActivity extends AppCompatActivity {
                 showMessageDialog("Failed", "Could not save — server unreachable.\n" + message);
                 return;
             }
-            repository.insertUserAsActive(user, id -> runOnUiThread(() ->
-                    routeToDashboard(user.role)));
+            repository.insertUserAsActive(user, id -> runOnUiThread(() -> {
+                pendingUserRole = user.role;
+                showMessageDialog("Success", "User provisioned successfully.");
+            }));
         });
     }
 
@@ -345,7 +348,7 @@ public class QrScannerActivity extends AppCompatActivity {
             new com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_OMRScanner_Dialog)
                     .setTitle(title)
                     .setMessage(message)
-                    .setPositiveButton("OK", (dialog, which) -> finish())
+                    .setPositiveButton("OK", (dialog, which) -> routeToDashboard(pendingUserRole))
                     .setCancelable(false)
                     .show();
         } else {
