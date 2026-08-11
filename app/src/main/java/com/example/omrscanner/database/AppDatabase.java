@@ -39,21 +39,22 @@ import com.example.omrscanner.database.entities.UserEntity;
  *   5 → 6: Added assessment_type
  *   13 → 14: Deduped student_lrn and added unique (lrn, className) index
  *   14 → 15: Added scans.key_reference_image_path (in-app only; not exported/backed up)
+ *   15 → 16: Added users.role (Teacher/Student) — drives which dashboard opens after QR scan.
  *
  * Usage:
  * AppDatabase db = AppDatabase.getInstance(context);
  * db.answerKeyDao().getAll();
  */
 @Database(entities = {
-    TeacherEntity.class,
-    ClassEntity.class,
-    AssessmentEntity.class,
-    ScanEntity.class,
-    AnswerEntity.class,
-    AnswerKeyEntity.class,
+        TeacherEntity.class,
+        ClassEntity.class,
+        AssessmentEntity.class,
+        ScanEntity.class,
+        AnswerEntity.class,
+        AnswerKeyEntity.class,
         UserEntity.class,
         StudentLrnEntity.class
-}, version = 15, exportSchema = false)
+}, version = 16, exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase {
 
   private static final String DATABASE_NAME = "omrscanner.db";
@@ -242,6 +243,13 @@ public abstract class AppDatabase extends RoomDatabase {
     }
   };
 
+  private static final Migration MIGRATION_15_16 = new Migration(15, 16) {
+    @Override
+    public void migrate(@NonNull SupportSQLiteDatabase db) {
+      db.execSQL("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'Teacher'");
+    }
+  };
+
   // ── Abstract DAO accessors (Room generates the implementations) ──────────
   public abstract TeacherDao teacherDao();
 
@@ -268,7 +276,7 @@ public abstract class AppDatabase extends RoomDatabase {
               context.getApplicationContext(),
               AppDatabase.class,
               DATABASE_NAME)
-                  .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15)
+                  .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16)
               .build();
         }
       }

@@ -79,6 +79,8 @@ public class QrScannerActivity extends AppCompatActivity {
         String lastName;
         String suffix;
         String schoolName;
+        String role; // "Teacher" / "Student" / etc. — not sent by the backend yet;
+        // defaults to "Teacher" below until it is.
     }
 
     private interface PingCallback {
@@ -220,6 +222,10 @@ public class QrScannerActivity extends AppCompatActivity {
         user.lastName = payload.lastName;
         user.suffix = payload.suffix;
         user.school = payload.schoolName;
+        // Backend doesn't send "role" yet — default to Teacher so nothing
+        // changes in behavior until QrAuthorizationPayloadService adds it.
+        user.role = (payload.role == null || payload.role.trim().isEmpty())
+                ? "Teacher" : payload.role.trim();
 
         pingServer(normalizedHost, (success, message) -> {
             if (!success) {
@@ -227,8 +233,22 @@ public class QrScannerActivity extends AppCompatActivity {
                 return;
             }
             repository.insertUserAsActive(user, id -> runOnUiThread(() ->
-                    showMessageDialog("Success", "User provisioned successfully.")));
+                    routeToDashboard(user.role)));
         });
+    }
+
+    /** Sends the user to the correct dashboard based on their account role. */
+    private void routeToDashboard(String role) {
+        android.content.Intent intent;
+        if ("Student".equalsIgnoreCase(role)) {
+            intent = new android.content.Intent(this,
+                    com.example.omrscanner.StudentDashboardActivity.class);
+        } else {
+            intent = new android.content.Intent(this,
+                    com.example.omrscanner.DashboardActivity.class);
+        }
+        startActivity(intent);
+        finish();
     }
 
     /**

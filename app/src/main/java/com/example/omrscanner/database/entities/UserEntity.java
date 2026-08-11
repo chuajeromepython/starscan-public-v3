@@ -39,4 +39,7 @@ public class UserEntity {
 
     @ColumnInfo(name = "is_active")
     public int isActive = 1;
+
+    @ColumnInfo(name = "role")
+    public String role = "Teacher"; // "Teacher" or "Student" — drives which dashboard opens
 }

@@ -269,6 +269,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private TextView answerKeysAllCount;
     private TextView answerKeysSummaryCount, answerKeysSummarySheetTypes, answerKeysSummaryTeacher;
     private View answerKeysHeaderAddBtn;
+    private View answerKeysSyncRow;
     private LinearLayout answerKeysSheetTabs;
     private LinearLayout answerKeysLinkStatusTabs;
     private LinearLayout answerKeysGroupSwitcher;
@@ -649,6 +650,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         answerKeysSummarySheetTypes = findViewById(R.id.answerKeysSummarySheetTypes);
         answerKeysSummaryTeacher = findViewById(R.id.answerKeysSummaryTeacher);
         answerKeysHeaderAddBtn = findViewById(R.id.answerKeysHeaderAddBtn);
+        answerKeysSyncRow = findViewById(R.id.answerKeysSyncRow);
         classAssessmentsHeaderAddBtn = findViewById(R.id.classAssessmentsHeaderAddBtn);
         assessmentsHeaderAddBtn = findViewById(R.id.assessmentsHeaderAddBtn);
         scanCtaCard = findViewById(R.id.scanCtaCard);
@@ -711,6 +713,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
         answerKeysHeaderAddBtn.setOnClickListener(v ->
                 showDisclaimerThen(() -> dialogs.showNewAnswerKeyDialog(null)));
+
+        // Sync Answer Keys — mirrors homeSyncClassRow / classSyncStudentsRow, but there's
+        // no backend endpoint for it yet (unlike /classrooms/sync and /students/sync), so
+        // the row is wired but dimmed + non-clickable until there's an API to call.
+        answerKeysSyncRow.setEnabled(false);
+        answerKeysSyncRow.setAlpha(0.4f);
+        answerKeysSyncRow.setOnClickListener(v -> onAnswerKeysSyncClicked());
 
         classAssessmentsHeaderAddBtn.setOnClickListener(v -> dialogs.showNewActivityDialog());
 
@@ -1024,6 +1033,16 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             }
             performAssessmentSync(selectedClass.getClassroomId(), user.serverIp);
         });
+    }
+
+    // Sync Answer Keys — same shape as onSyncClicked() / onAssessmentSyncClicked() above.
+    // Waiting on a backend endpoint (e.g. POST /answer-keys/sync) before this can call a
+    // performAnswerKeySync(...) method. The row is disabled in initViews(), so this
+    // handler won't actually fire from a tap yet — it's just scaffolding.
+    private void onAnswerKeysSyncClicked() {
+        // TODO: once the backend exposes an answer-keys sync endpoint, mirror
+        // onSyncClicked() / onAssessmentSyncClicked(): confirm active user + serverIp
+        // via repo.getActiveUser(...), then call performAnswerKeySync(user.serverIp).
     }
 
     private void performAssessmentSync(int classroomId, String serverIp) {

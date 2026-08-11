@@ -1634,6 +1634,49 @@
 
                                     </LinearLayout>
 
+                                    <View
+                                        android:layout_width="match_parent"
+                                        android:layout_height="1dp"
+                                        android:layout_marginTop="8dp"
+                                        android:layout_marginBottom="2dp"
+                                        android:background="#26FFFFFF" />
+
+                                    <LinearLayout
+                                        android:id="@+id/answerKeysSyncRow"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginTop="2dp"
+                                        android:orientation="horizontal"
+                                        android:gravity="center_vertical"
+                                        android:paddingTop="6dp"
+                                        android:paddingBottom="6dp"
+                                        android:background="?attr/selectableItemBackground">
+
+                                        <ImageView
+                                            android:layout_width="18dp"
+                                            android:layout_height="18dp"
+                                            android:src="@drawable/ic_rotate_ccw"
+                                            app:tint="#FFFFFF" />
+
+                                        <TextView
+                                            android:layout_width="0dp"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="1"
+                                            android:layout_marginStart="10dp"
+                                            android:text="Sync Answer Keys"
+                                            android:textColor="#FFFFFF"
+                                            android:textSize="13sp"
+                                            android:textStyle="bold"
+                                            android:fontFamily="@font/poppins_bold" />
+
+                                        <ImageView
+                                            android:layout_width="16dp"
+                                            android:layout_height="16dp"
+                                            android:src="@drawable/ic_chevron_right"
+                                            app:tint="#FFFFFF" />
+
+                                    </LinearLayout>
+
                                 </LinearLayout>
                             </FrameLayout>
                         </com.google.android.material.card.MaterialCardView>
