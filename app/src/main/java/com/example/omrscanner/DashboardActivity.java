@@ -2887,12 +2887,14 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private void showCameraModeDialog() {
         final String[] cameraModes = {
                 "Fixed Mount — Use this for elevated phone mounts where sheets slide underneath automatically.",
-                "Handheld — Auto-detects the sheet's corners in any orientation — no need to line up guide squares or tilt the phone."
+                "Handheld — Auto-detects the sheet's corners in any orientation — no need to line up guide squares or tilt the phone.",
+                "Pro Mode — Calibrate bubble positions yourself by dragging points onto a photo of your sheet. For advanced users fixing misaligned templates."
                 // Flat Scan intentionally omitted from this UI (functionally redundant with
                 // Handheld/Tilt Agnostic Mode — both use the same ArUco identity-based
                 // detection). FlatScanCameraActivity and launchFlatScanCamera() are kept
                 // in the codebase and can be re-added here later if needed.
         };
+        final int PRO_MODE_INDEX = 2;
 
         android.content.SharedPreferences prefs =
                 getSharedPreferences(CAMERA_MODE_PREFS, MODE_PRIVATE);
@@ -2910,6 +2912,15 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 .setTitle("Choose Camera Mode")
                 .setSingleChoiceItems(cameraModeItems, defaultSelection, (dialog, which) -> selectedMode[0] = which)
                 .setPositiveButton("Open Camera", (dialog, which) -> {
+                    if (selectedMode[0] == PRO_MODE_INDEX) {
+                        if (selectedSheetType == null) {
+                            Toast.makeText(this, "Select a sheet type before calibrating.", Toast.LENGTH_LONG).show();
+                            return;
+                        }
+                        startActivity(com.example.omrscanner.ui.ProModeCalibrationActivity
+                                .newIntent(this, selectedSheetType));
+                        return;
+                    }
                     boolean tiltAgnosticMode = selectedMode[0] == 1;
                     prefs.edit()
                             .putBoolean(PREF_TILT_AGNOSTIC_MODE, tiltAgnosticMode)

@@ -13,6 +13,9 @@ import org.opencv.core.Mat;
 import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
 
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -57,6 +60,15 @@ public class TemplateManager {
 
     // ── Asset path ───────────────────────────────────────────────────────────
     private static final String TEMPLATE_DIR = "templates";
+
+    // ── Pro Mode override storage ───────────────────────────────────────────
+    // User-calibrated templates live here (context.getFilesDir()/template_overrides/),
+    // NOT in assets/ -- assets are packaged read-only inside the APK and can
+    // never be written back to at runtime. An override completely replaces
+    // the bundled default for its templateId once present; "reset to
+    // default" is just deleting this file, since the bundled asset is never
+    // touched or overwritten by Pro Mode.
+    private static final String OVERRIDE_DIR = "template_overrides";
 
     // ── Template file names ──────────────────────────────────────────────────
     private static final String[] TEMPLATE_FILES = {
@@ -144,24 +156,143 @@ public class TemplateManager {
      */
     private void loadTemplates(Context context) {
         for (String fileName : TEMPLATE_FILES) {
-            try {
-                String path = TEMPLATE_DIR + "/" + fileName;
-                InputStream is = context.getAssets().open(path);
-                InputStreamReader reader = new InputStreamReader(is, StandardCharsets.UTF_8);
-                OmrTemplate template = gson.fromJson(reader, OmrTemplate.class);
-                reader.close();
+            OmrTemplate template = loadOverrideIfPresent(context, fileName);
+            boolean fromOverride = template != null;
 
-                if (template != null && template.templateId != null) {
-                    templates.put(template.templateId, template);
-                    Log.d(TAG, "Loaded template: " + template);
-                } else {
-                    Log.w(TAG, "Failed to parse template from " + fileName);
+            if (template == null) {
+                try {
+                    String path = TEMPLATE_DIR + "/" + fileName;
+                    InputStream is = context.getAssets().open(path);
+                    InputStreamReader reader = new InputStreamReader(is, StandardCharsets.UTF_8);
+                    template = gson.fromJson(reader, OmrTemplate.class);
+                    reader.close();
+                } catch (IOException e) {
+                    Log.e(TAG, "Error loading bundled template " + fileName, e);
                 }
-            } catch (IOException e) {
-                Log.e(TAG, "Error loading template " + fileName, e);
+            }
+
+            if (template != null && template.templateId != null) {
+                templates.put(template.templateId, template);
+                Log.d(TAG, (fromOverride ? "Loaded PRO MODE OVERRIDE: " : "Loaded template: ") + template);
+            } else {
+                Log.w(TAG, "Failed to parse template from " + fileName);
             }
         }
         Log.d(TAG, "Total templates loaded: " + templates.size());
+    }
+
+    /**
+     * Attempts to load a user-calibrated override for the given bundled
+     * file name. Returns null (never throws) if no override exists or it
+     * failed to parse -- either way the caller falls back to the bundled
+     * asset, so a corrupt override can never brick the app.
+     */
+    @androidx.annotation.Nullable
+    private OmrTemplate loadOverrideIfPresent(Context context, String fileName) {
+        File overrideFile = new File(new File(context.getFilesDir(), OVERRIDE_DIR), fileName);
+        if (!overrideFile.exists()) return null;
+
+        try (FileReader reader = new FileReader(overrideFile)) {
+            OmrTemplate template = gson.fromJson(reader, OmrTemplate.class);
+            String validationError = validateTemplate(template);
+            if (validationError != null) {
+                Log.e(TAG, "Ignoring corrupt override for " + fileName + ": " + validationError);
+                return null;
+            }
+            return template;
+        } catch (IOException | RuntimeException e) {
+            // RuntimeException covers Gson parse failures on malformed JSON --
+            // a hand-edited or partially-written override file shouldn't be
+            // able to take the whole template list down with it.
+            Log.e(TAG, "Ignoring unreadable override for " + fileName, e);
+            return null;
+        }
+    }
+
+    /**
+     * Basic sanity checks before an edited template is trusted, whether it
+     * came from disk on load or is about to be written by Pro Mode. Returns
+     * a human-readable reason string, or null if the template looks sane.
+     */
+    @androidx.annotation.Nullable
+    private String validateTemplate(OmrTemplate t) {
+        if (t == null) return "template is null";
+        if (t.templateId == null || t.templateId.isEmpty()) return "missing template_id";
+        if (t.width <= 0 || t.height <= 0) return "width/height must be positive";
+        if (t.blocks == null || t.blocks.isEmpty()) return "no blocks";
+        for (OmrBlock b : t.blocks) {
+            if (b.label == null || b.label.isEmpty()) return "block missing label";
+            if (b.rows <= 0 || b.cols <= 0) return "block '" + b.label + "' has non-positive rows/cols";
+            if (b.dx == 0.0 || b.dy == 0.0) return "block '" + b.label + "' has zero spacing (dx/dy)";
+            if (b.startX < 0 || b.startY < 0 || b.startX > t.width || b.startY > t.height) {
+                return "block '" + b.label + "' start position falls outside the template canvas";
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Persists a Pro-Mode-calibrated template as an override, validates it
+     * first, and immediately updates the in-memory copy so the new geometry
+     * is used on the very next scan without requiring an app restart.
+     *
+     * @throws IOException on write failure
+     * @throws IllegalArgumentException if the template fails validation --
+     *         callers should show this message to the user rather than
+     *         silently discarding their edits.
+     */
+    public void saveOverrideTemplate(Context context, OmrTemplate template) throws IOException {
+        String validationError = validateTemplate(template);
+        if (validationError != null) {
+            throw new IllegalArgumentException("Calibration not saved: " + validationError);
+        }
+
+        String fileName = template.templateId + ".json";
+        File dir = new File(context.getFilesDir(), OVERRIDE_DIR);
+        if (!dir.exists() && !dir.mkdirs()) {
+            throw new IOException("Could not create override directory: " + dir);
+        }
+
+        File overrideFile = new File(dir, fileName);
+        try (FileWriter writer = new FileWriter(overrideFile)) {
+            writer.write(gson.toJson(template));
+        }
+
+        templates.put(template.templateId, template);
+        Log.d(TAG, "Saved Pro Mode override for " + template.templateId + " -> " + overrideFile);
+    }
+
+    /** True if templateId currently has a user-calibrated override on disk (vs. the bundled default). */
+    public boolean hasOverride(Context context, String templateId) {
+        File overrideFile = new File(new File(context.getFilesDir(), OVERRIDE_DIR), templateId + ".json");
+        return overrideFile.exists();
+    }
+
+    /**
+     * Deletes the override (if any) and reloads the bundled default back
+     * into memory for immediate use. The bundled asset itself is never
+     * modified, so this can never fail to produce a working template.
+     */
+    public void resetToDefault(Context context, String templateId) {
+        File overrideFile = new File(new File(context.getFilesDir(), OVERRIDE_DIR), templateId + ".json");
+        if (overrideFile.exists() && !overrideFile.delete()) {
+            Log.w(TAG, "Could not delete override file: " + overrideFile);
+        }
+
+        String fileName = templateId + ".json";
+        try {
+            String path = TEMPLATE_DIR + "/" + fileName;
+            InputStream is = context.getAssets().open(path);
+            InputStreamReader reader = new InputStreamReader(is, StandardCharsets.UTF_8);
+            OmrTemplate defaultTemplate = gson.fromJson(reader, OmrTemplate.class);
+            reader.close();
+            if (defaultTemplate != null) {
+                templates.put(templateId, defaultTemplate);
+                Log.d(TAG, "Reset " + templateId + " to bundled default");
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "Error reloading bundled default for " + templateId, e);
+        }
     }
 
     // =====================================================================
