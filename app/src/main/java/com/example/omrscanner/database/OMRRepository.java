@@ -762,10 +762,20 @@ public class OMRRepository {
   public void insertStudentLrn(String lrn, String className, Callback<Void> callback) {
     executor.execute(() -> {
       try {
-        StudentLrnEntity student = new StudentLrnEntity();
-        student.lrn = lrn;  // just assign directly, no parseInt
-        student.className = className;
-        db.studentLrnDao().insert(student);
+        // If this (lrn, className) already exists -- e.g. it came down from
+        // a server sync with sectionId/gradeLevelId/classroomId already set
+        // -- just flip hot_sync on and leave every other column alone.
+        // Doing a blind insert(REPLACE) here would delete and recreate the
+        // row, wiping those fields back to null since this call site never
+        // has them to begin with.
+        int updated = db.studentLrnDao().markHotSynced(lrn, className);
+        if (updated == 0) {
+          // No existing row for this student -- genuinely new, not from a sync.
+          StudentLrnEntity student = new StudentLrnEntity();
+          student.lrn = lrn;  // just assign directly, no parseInt
+          student.className = className;
+          db.studentLrnDao().insert(student);
+        }
         if (callback != null)
           callback.onResult(null);
       } catch (Exception e) {

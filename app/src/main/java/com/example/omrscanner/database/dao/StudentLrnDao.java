@@ -32,6 +32,12 @@ public interface StudentLrnDao {
     @Query("SELECT * FROM student_lrn WHERE lrn = :lrn LIMIT 1")
     StudentLrnEntity findByLrn(String lrn);
 
+    // Flips hot_sync on WITHOUT touching sectionId/gradeLevelId/classroomId --
+    // used when a scan comes in for a student already present (e.g. synced
+    // from the server). Returns the number of rows updated (0 if no match).
+    @Query("UPDATE student_lrn SET hot_sync = 1 WHERE lrn = :lrn AND className = :className")
+    int markHotSynced(String lrn, String className);
+
     @Query("SELECT * FROM student_lrn WHERE className = :className")
     List<StudentLrnEntity> findByClass(String className);
 

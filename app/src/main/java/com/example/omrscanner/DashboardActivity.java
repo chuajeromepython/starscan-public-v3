@@ -684,7 +684,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             createBackupFileLauncher.launch(fileName);
         });
         userRestoreRow.setOnClickListener(v -> openBackupFileLauncher.launch(new String[]{"application/zip"}));
-        userCalibrateProModeRow.setOnClickListener(v -> showProModeSheetPicker());
+        userCalibrateProModeRow.setOnClickListener(v -> showProModeCalibrationGuide());
         userResetProModeRow.setOnClickListener(v -> showResetProModeDialog());
 
         navHomeTab.setOnClickListener(v -> selectHomeTab());
@@ -2209,6 +2209,182 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
      * the teacher picks the sheet type directly, since calibration is a
      * one-time setup step per template, not a per-scan choice.
      */
+    // "Why calibrate?" disclaimer carousel, shown before the sheet-type picker.
+    private void showProModeCalibrationGuide() {
+        com.google.android.material.bottomsheet.BottomSheetDialog dialog =
+                new com.google.android.material.bottomsheet.BottomSheetDialog(this);
+        dialog.setCancelable(true);
+        dialog.setCanceledOnTouchOutside(true);
+
+        android.widget.LinearLayout root = ui.buildSheet();
+
+        String[] titles = {
+                "Crumpled or Bent Sheets",
+                "Printer Margin Drift",
+                "Repeated Photocopies",
+                "A Different Sheet from the Master"
+        };
+        String[] descs = {
+                "If your sheets get folded, crumpled, or handled roughly before scanning, bubble positions can shift slightly off the default template.",
+                "Different printers and paper trays can shift margins or scale the page a little differently, so bubbles may not land exactly where the default template expects.",
+                "Sheets that have been photocopied or rescanned multiple times can drift out of alignment. Calibrating against your own printed sheet keeps scans accurate.",
+                "Using a sheet that wasn't printed from the original master template can have slightly different measurements. Calibrate against the sheet you're actually handing out, not just the master."
+        };
+        int[] drawables = {
+                R.drawable.ic_document_text,
+                R.drawable.ic_grid_3x3,
+                R.drawable.ic_zoom_in,
+                R.drawable.ic_file_spreadsheet
+        };
+        final int slideCount = titles.length;
+
+        // Dots
+        android.widget.LinearLayout dotsRow = new android.widget.LinearLayout(this);
+        dotsRow.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+        dotsRow.setGravity(android.view.Gravity.CENTER);
+        android.widget.LinearLayout.LayoutParams dotsLp =
+                new android.widget.LinearLayout.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+        dotsLp.bottomMargin = ui.dp(16);
+        dotsRow.setLayoutParams(dotsLp);
+
+        android.widget.TextView[] dots = new android.widget.TextView[slideCount];
+        for (int i = 0; i < slideCount; i++) {
+            android.widget.TextView dot = new android.widget.TextView(this);
+            dot.setText("●");
+            dot.setTextSize(10);
+            dot.setPadding(ui.dp(4), 0, ui.dp(4), 0);
+            dots[i] = dot;
+            dotsRow.addView(dot);
+        }
+
+        // ViewPager
+        androidx.viewpager2.widget.ViewPager2 viewPager =
+                new androidx.viewpager2.widget.ViewPager2(this);
+        android.widget.LinearLayout.LayoutParams vpLp =
+                new android.widget.LinearLayout.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        ui.dp(240));
+        viewPager.setLayoutParams(vpLp);
+
+        // Adapter
+        androidx.recyclerview.widget.RecyclerView.Adapter<androidx.recyclerview.widget.RecyclerView.ViewHolder> adapter =
+                new androidx.recyclerview.widget.RecyclerView.Adapter<androidx.recyclerview.widget.RecyclerView.ViewHolder>() {
+                    @NonNull
+                    @Override
+                    public androidx.recyclerview.widget.RecyclerView.ViewHolder onCreateViewHolder(
+                            @NonNull android.view.ViewGroup parent, int viewType) {
+                        android.widget.LinearLayout slide = new android.widget.LinearLayout(DashboardActivity.this);
+                        slide.setOrientation(android.widget.LinearLayout.VERTICAL);
+                        slide.setGravity(android.view.Gravity.CENTER);
+                        slide.setPadding(ui.dp(16), ui.dp(8), ui.dp(16), ui.dp(8));
+                        slide.setLayoutParams(new android.widget.LinearLayout.LayoutParams(
+                                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                                android.view.ViewGroup.LayoutParams.MATCH_PARENT));
+
+                        android.widget.ImageView icon = new android.widget.ImageView(DashboardActivity.this);
+                        icon.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+                        android.widget.LinearLayout.LayoutParams iconLp =
+                                new android.widget.LinearLayout.LayoutParams(
+                                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                                        ui.dp(64));
+                        iconLp.bottomMargin = ui.dp(12);
+                        icon.setLayoutParams(iconLp);
+                        icon.setColorFilter(android.graphics.Color.parseColor("#0038A8"));
+                        icon.setTag("icon");
+
+                        android.widget.TextView title = new android.widget.TextView(DashboardActivity.this);
+                        title.setTextSize(16);
+                        title.setTypeface(null, android.graphics.Typeface.BOLD);
+                        title.setTextColor(android.graphics.Color.parseColor("#0038A8"));
+                        title.setGravity(android.view.Gravity.CENTER);
+                        android.widget.LinearLayout.LayoutParams titleLp =
+                                new android.widget.LinearLayout.LayoutParams(
+                                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                                        android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+                        titleLp.bottomMargin = ui.dp(8);
+                        title.setLayoutParams(titleLp);
+                        title.setTag("title");
+
+                        android.widget.TextView desc = new android.widget.TextView(DashboardActivity.this);
+                        desc.setTextSize(14);
+                        desc.setTextColor(android.graphics.Color.parseColor("#475569"));
+                        desc.setGravity(android.view.Gravity.CENTER);
+                        desc.setTag("desc");
+
+                        slide.addView(icon);
+                        slide.addView(title);
+                        slide.addView(desc);
+
+                        return new androidx.recyclerview.widget.RecyclerView.ViewHolder(slide) {
+                        };
+                    }
+
+                    @Override
+                    public void onBindViewHolder(
+                            @NonNull androidx.recyclerview.widget.RecyclerView.ViewHolder holder,
+                            int position) {
+                        android.widget.LinearLayout slide =
+                                (android.widget.LinearLayout) holder.itemView;
+                        android.widget.ImageView iconView = slide.findViewWithTag("icon");
+                        iconView.setImageResource(drawables[position]);
+                        ((android.widget.TextView) slide.findViewWithTag("title")).setText(titles[position]);
+                        ((android.widget.TextView) slide.findViewWithTag("desc")).setText(descs[position]);
+                    }
+
+                    @Override
+                    public int getItemCount() {
+                        return slideCount;
+                    }
+                };
+
+        viewPager.setAdapter(adapter);
+
+        // Dots update on swipe
+        viewPager.registerOnPageChangeCallback(new androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback() {
+            @Override
+            public void onPageSelected(int position) {
+                for (int d = 0; d < slideCount; d++) {
+                    dots[d].setTextColor(android.graphics.Color.parseColor(
+                            d == position ? "#0038A8" : "#CBD5E1"));
+                }
+            }
+        });
+
+        // Proceed button (only visible on last slide) -- leads into the
+        // existing sheet-type picker, unchanged.
+        android.widget.TextView btnProceed = ui.createDialogButton("Continue to Calibration", true);
+        android.widget.LinearLayout.LayoutParams btnLp =
+                new android.widget.LinearLayout.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+        btnLp.topMargin = ui.dp(12);
+        btnProceed.setLayoutParams(btnLp);
+        btnProceed.setVisibility(android.view.View.GONE);
+
+        viewPager.registerOnPageChangeCallback(new androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback() {
+            @Override
+            public void onPageSelected(int position) {
+                btnProceed.setVisibility(position == slideCount - 1
+                        ? android.view.View.VISIBLE : android.view.View.GONE);
+            }
+        });
+
+        btnProceed.setOnClickListener(v -> {
+            dialog.dismiss();
+            showProModeSheetPicker();
+        });
+
+        root.addView(ui.createDialogHandle());
+        root.addView(dotsRow);
+        root.addView(viewPager);
+        root.addView(btnProceed);
+
+        dialog.setContentView(root);
+        dialog.show();
+    }
+
     private void showProModeSheetPicker() {
         final String[] templateIds = {"ZPH40", "ZPH60"};
 
@@ -2236,7 +2412,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             new com.google.android.material.dialog.MaterialAlertDialogBuilder(
                     this, R.style.ThemeOverlay_OMRScanner_Dialog)
                     .setTitle("No calibrations to reset")
-                    .setMessage("None of the sheet types have a Pro Mode calibration saved.")
+                    .setMessage("None of the sheet types have a calibration saved.")
                     .setPositiveButton("OK", null)
                     .show();
             return;
@@ -2245,10 +2421,17 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         String[] items = withOverrides.toArray(new String[0]);
         boolean[] checked = new boolean[items.length];
 
+        CharSequence[] resetItems = new CharSequence[items.length];
+        for (int i = 0; i < items.length; i++) {
+            android.text.SpannableString s = new android.text.SpannableString(items[i]);
+            s.setSpan(new android.text.style.ForegroundColorSpan(Color.BLACK), 0, s.length(), 0);
+            resetItems[i] = s;
+        }
+
         new com.google.android.material.dialog.MaterialAlertDialogBuilder(
                 this, R.style.ThemeOverlay_OMRScanner_Dialog)
-                .setTitle("Reset Pro Mode calibration")
-                .setMultiChoiceItems(items, checked, (dialog, which, isChecked) -> checked[which] = isChecked)
+                .setTitle("Reset calibration")
+                .setMultiChoiceItems(resetItems, checked, (dialog, which, isChecked) -> checked[which] = isChecked)
                 .setPositiveButton("Reset selected", (dialog, which) -> {
                     int resetCount = 0;
                     for (int i = 0; i < items.length; i++) {

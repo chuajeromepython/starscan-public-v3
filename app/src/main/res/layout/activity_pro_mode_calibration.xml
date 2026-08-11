@@ -43,38 +43,48 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
+        android:baselineAligned="false"
         android:background="#000000"
         android:padding="12dp">
 
         <Button
             android:id="@+id/btnResetBlock"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="56dp"
             android:layout_weight="1"
             android:layout_marginEnd="4dp"
             android:text="Reset Block"
             android:textColor="#000000"
+            android:textSize="13sp"
+            android:gravity="center"
+            android:maxLines="2"
             android:backgroundTint="#FFFFFF" />
 
         <Button
             android:id="@+id/btnApplyBlock"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="56dp"
             android:layout_weight="1"
             android:layout_marginStart="4dp"
             android:layout_marginEnd="4dp"
             android:text="Apply Block"
             android:textColor="#000000"
+            android:textSize="13sp"
+            android:gravity="center"
+            android:maxLines="2"
             android:backgroundTint="#FFFFFF" />
 
         <Button
             android:id="@+id/btnSaveCalibration"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="56dp"
             android:layout_weight="1"
             android:layout_marginStart="4dp"
             android:text="Save All"
             android:textColor="#000000"
+            android:textSize="13sp"
+            android:gravity="center"
+            android:maxLines="2"
             android:backgroundTint="#FFFFFF" />
     </LinearLayout>
 </LinearLayout>

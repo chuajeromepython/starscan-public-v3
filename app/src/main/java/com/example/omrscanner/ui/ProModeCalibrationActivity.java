@@ -96,6 +96,10 @@ public class ProModeCalibrationActivity extends AppCompatActivity {
                     android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
             getWindow().setAttributes(lp);
         }
+        // This screen's content is edge-to-edge black; override the app's
+        // default (Material3 purple) status bar color just here, rather than
+        // in the shared theme, so other screens are unaffected.
+        getWindow().setStatusBarColor(android.graphics.Color.BLACK);
 
         // ArucoAnchorDetector calls native OpenCV code (ArucoDetector, Objdetect,
         // Utils.bitmapToMat) as soon as a photo is picked. Every other screen that
@@ -117,21 +121,37 @@ public class ProModeCalibrationActivity extends AppCompatActivity {
         // take up, while letting the black background itself stay edge-to-edge.
         View toolbar = findViewById(R.id.proModeToolbar);
         View actionsBar = findViewById(R.id.proModeActionsBar);
+        // Capture each bar's original (XML-defined) padding ONCE, before any
+        // insets are applied. onApplyWindowInsets can fire more than once
+        // (rotation, focus changes, IME, etc.) -- adding the inset to
+        // getPaddingTop()/getPaddingBottom() each time it fires made the
+        // padding grow a little more on every call, which pushed the
+        // instructions text further and further down the screen and stole
+        // height from the calibration image in the middle. Always compute
+        // padding as basePadding + insets instead of accumulating.
+        final int toolbarBaseLeft = toolbar.getPaddingLeft();
+        final int toolbarBaseTop = toolbar.getPaddingTop();
+        final int toolbarBaseRight = toolbar.getPaddingRight();
+        final int toolbarBaseBottom = toolbar.getPaddingBottom();
+        final int actionsBaseLeft = actionsBar.getPaddingLeft();
+        final int actionsBaseTop = actionsBar.getPaddingTop();
+        final int actionsBaseRight = actionsBar.getPaddingRight();
+        final int actionsBaseBottom = actionsBar.getPaddingBottom();
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(
                 findViewById(R.id.proModeRoot), (v, insets) -> {
                     androidx.core.graphics.Insets bars = insets.getInsets(
                             androidx.core.view.WindowInsetsCompat.Type.systemBars()
                                     | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
                     toolbar.setPadding(
-                            toolbar.getPaddingLeft() + bars.left,
-                            toolbar.getPaddingTop() + bars.top,
-                            toolbar.getPaddingRight() + bars.right,
-                            toolbar.getPaddingBottom());
+                            toolbarBaseLeft + bars.left,
+                            toolbarBaseTop + bars.top,
+                            toolbarBaseRight + bars.right,
+                            toolbarBaseBottom);
                     actionsBar.setPadding(
-                            actionsBar.getPaddingLeft() + bars.left,
-                            actionsBar.getPaddingTop(),
-                            actionsBar.getPaddingRight() + bars.right,
-                            actionsBar.getPaddingBottom() + bars.bottom);
+                            actionsBaseLeft + bars.left,
+                            actionsBaseTop,
+                            actionsBaseRight + bars.right,
+                            actionsBaseBottom + bars.bottom);
                     return insets;
                 });
 
