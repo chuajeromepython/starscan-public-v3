@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/proModeRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
@@ -7,10 +8,11 @@
 
     <!-- Toolbar: block picker + short instructions -->
     <LinearLayout
+        android:id="@+id/proModeToolbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:background="#1A1A1A"
+        android:background="#000000"
         android:padding="12dp">
 
         <TextView
@@ -37,10 +39,11 @@
 
     <!-- Actions -->
     <LinearLayout
+        android:id="@+id/proModeActionsBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:background="#1A1A1A"
+        android:background="#000000"
         android:padding="12dp">
 
         <Button
@@ -49,7 +52,9 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:layout_marginEnd="4dp"
-            android:text="Reset Block" />
+            android:text="Reset Block"
+            android:textColor="#000000"
+            android:backgroundTint="#FFFFFF" />
 
         <Button
             android:id="@+id/btnApplyBlock"
@@ -58,7 +63,9 @@
             android:layout_weight="1"
             android:layout_marginStart="4dp"
             android:layout_marginEnd="4dp"
-            android:text="Apply Block" />
+            android:text="Apply Block"
+            android:textColor="#000000"
+            android:backgroundTint="#FFFFFF" />
 
         <Button
             android:id="@+id/btnSaveCalibration"
@@ -66,6 +73,8 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:layout_marginStart="4dp"
-            android:text="Save All" />
+            android:text="Save All"
+            android:textColor="#000000"
+            android:backgroundTint="#FFFFFF" />
     </LinearLayout>
 </LinearLayout>

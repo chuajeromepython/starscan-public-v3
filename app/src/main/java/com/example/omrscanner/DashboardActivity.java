@@ -232,6 +232,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             userDetailServerIp, userDetailStatus, userDetailMemberSince, userDetailLastUpdated;
     private LinearLayout userRescanRow;
     private LinearLayout userBackupRow, userRestoreRow;
+    private LinearLayout userCalibrateProModeRow, userResetProModeRow;
     private BackupManager backupManager;
     private androidx.activity.result.ActivityResultLauncher<String> createBackupFileLauncher;
     private androidx.activity.result.ActivityResultLauncher<String[]> openBackupFileLauncher;
@@ -575,6 +576,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         userRescanRow = findViewById(R.id.userRescanRow);
         userBackupRow = findViewById(R.id.userBackupRow);
         userRestoreRow = findViewById(R.id.userRestoreRow);
+        userCalibrateProModeRow = findViewById(R.id.userCalibrateProModeRow);
+        userResetProModeRow = findViewById(R.id.userResetProModeRow);
         userStatClasses = findViewById(R.id.userStatClasses);
         userStatAssessments = findViewById(R.id.userStatAssessments);
         userStatScans = findViewById(R.id.userStatScans);
@@ -681,6 +684,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             createBackupFileLauncher.launch(fileName);
         });
         userRestoreRow.setOnClickListener(v -> openBackupFileLauncher.launch(new String[]{"application/zip"}));
+        userCalibrateProModeRow.setOnClickListener(v -> showProModeSheetPicker());
+        userResetProModeRow.setOnClickListener(v -> showResetProModeDialog());
 
         navHomeTab.setOnClickListener(v -> selectHomeTab());
         navUserTab.setOnClickListener(v -> selectUserTab());
@@ -2198,6 +2203,68 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         }));
     }
 
+    /**
+     * User-tab entry point for Pro Mode. Unlike the old camera-mode dialog
+     * flow, this isn't tied to whatever activity happens to be selected --
+     * the teacher picks the sheet type directly, since calibration is a
+     * one-time setup step per template, not a per-scan choice.
+     */
+    private void showProModeSheetPicker() {
+        final String[] templateIds = {"ZPH40", "ZPH60"};
+
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(
+                this, R.style.ThemeOverlay_OMRScanner_Dialog)
+                .setTitle("Calibrate which sheet type?")
+                .setItems(templateIds, (dialog, which) ->
+                        startActivity(com.example.omrscanner.ui.ProModeCalibrationActivity
+                                .newIntent(this, templateIds[which])))
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void showResetProModeDialog() {
+        final String[] templateIds = {"ZPH30", "ZPH40", "ZPH50", "ZPH60"};
+        com.example.omrscanner.omr.TemplateManager tm =
+                new com.example.omrscanner.omr.TemplateManager(this);
+
+        List<String> withOverrides = new ArrayList<>();
+        for (String id : templateIds) {
+            if (tm.hasOverride(this, id)) withOverrides.add(id);
+        }
+
+        if (withOverrides.isEmpty()) {
+            new com.google.android.material.dialog.MaterialAlertDialogBuilder(
+                    this, R.style.ThemeOverlay_OMRScanner_Dialog)
+                    .setTitle("No calibrations to reset")
+                    .setMessage("None of the sheet types have a Pro Mode calibration saved.")
+                    .setPositiveButton("OK", null)
+                    .show();
+            return;
+        }
+
+        String[] items = withOverrides.toArray(new String[0]);
+        boolean[] checked = new boolean[items.length];
+
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(
+                this, R.style.ThemeOverlay_OMRScanner_Dialog)
+                .setTitle("Reset Pro Mode calibration")
+                .setMultiChoiceItems(items, checked, (dialog, which, isChecked) -> checked[which] = isChecked)
+                .setPositiveButton("Reset selected", (dialog, which) -> {
+                    int resetCount = 0;
+                    for (int i = 0; i < items.length; i++) {
+                        if (checked[i]) {
+                            tm.resetToDefault(this, items[i]);
+                            resetCount++;
+                        }
+                    }
+                    Toast.makeText(this,
+                            resetCount > 0 ? resetCount + " template(s) reset to default." : "Nothing selected.",
+                            Toast.LENGTH_LONG).show();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
     private void navigateBack() {
         switch (currentScreen) {
             case SCREEN_CLASS:
@@ -2887,14 +2954,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private void showCameraModeDialog() {
         final String[] cameraModes = {
                 "Fixed Mount — Use this for elevated phone mounts where sheets slide underneath automatically.",
-                "Handheld — Auto-detects the sheet's corners in any orientation — no need to line up guide squares or tilt the phone.",
-                "Pro Mode — Calibrate bubble positions yourself by dragging points onto a photo of your sheet. For advanced users fixing misaligned templates."
+                "Handheld — Auto-detects the sheet's corners in any orientation — no need to line up guide squares or tilt the phone."
                 // Flat Scan intentionally omitted from this UI (functionally redundant with
                 // Handheld/Tilt Agnostic Mode — both use the same ArUco identity-based
                 // detection). FlatScanCameraActivity and launchFlatScanCamera() are kept
                 // in the codebase and can be re-added here later if needed.
         };
-        final int PRO_MODE_INDEX = 2;
 
         android.content.SharedPreferences prefs =
                 getSharedPreferences(CAMERA_MODE_PREFS, MODE_PRIVATE);
@@ -2912,15 +2977,6 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 .setTitle("Choose Camera Mode")
                 .setSingleChoiceItems(cameraModeItems, defaultSelection, (dialog, which) -> selectedMode[0] = which)
                 .setPositiveButton("Open Camera", (dialog, which) -> {
-                    if (selectedMode[0] == PRO_MODE_INDEX) {
-                        if (selectedSheetType == null) {
-                            Toast.makeText(this, "Select a sheet type before calibrating.", Toast.LENGTH_LONG).show();
-                            return;
-                        }
-                        startActivity(com.example.omrscanner.ui.ProModeCalibrationActivity
-                                .newIntent(this, selectedSheetType));
-                        return;
-                    }
                     boolean tiltAgnosticMode = selectedMode[0] == 1;
                     prefs.edit()
                             .putBoolean(PREF_TILT_AGNOSTIC_MODE, tiltAgnosticMode)

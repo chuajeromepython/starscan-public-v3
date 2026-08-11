@@ -84,7 +84,56 @@ public class ProModeCalibrationActivity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Let the black root background draw all the way under the camera
+        // cutout/punch-hole ("camera island") instead of Android reserving a
+        // separate bar there -- without this, the cutout area shows through
+        // as its own strip even once the toolbar/actions bars are pure black.
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            android.view.WindowManager.LayoutParams lp = getWindow().getAttributes();
+            lp.layoutInDisplayCutoutMode =
+                    android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
+            getWindow().setAttributes(lp);
+        }
+
+        // ArucoAnchorDetector calls native OpenCV code (ArucoDetector, Objdetect,
+        // Utils.bitmapToMat) as soon as a photo is picked. Every other screen that
+        // touches OpenCV loads the native library first -- this screen didn't, so
+        // the very first picked photo crashed with UnsatisfiedLinkError before the
+        // image was ever analyzed.
+        if (!org.opencv.android.OpenCVLoader.initDebug()) {
+            Toast.makeText(this, "Failed to load OpenCV", Toast.LENGTH_LONG).show();
+            finish();
+            return;
+        }
+
         setContentView(R.layout.activity_pro_mode_calibration);
+
+        // Drawing edge-to-edge (above) means the toolbar and actions bar are no
+        // longer auto-padded away from the status bar / gesture nav bar, so the
+        // top instructions and bottom buttons were rendering underneath them.
+        // Push just those two bars in by however much the system bars actually
+        // take up, while letting the black background itself stay edge-to-edge.
+        View toolbar = findViewById(R.id.proModeToolbar);
+        View actionsBar = findViewById(R.id.proModeActionsBar);
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(
+                findViewById(R.id.proModeRoot), (v, insets) -> {
+                    androidx.core.graphics.Insets bars = insets.getInsets(
+                            androidx.core.view.WindowInsetsCompat.Type.systemBars()
+                                    | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
+                    toolbar.setPadding(
+                            toolbar.getPaddingLeft() + bars.left,
+                            toolbar.getPaddingTop() + bars.top,
+                            toolbar.getPaddingRight() + bars.right,
+                            toolbar.getPaddingBottom());
+                    actionsBar.setPadding(
+                            actionsBar.getPaddingLeft() + bars.left,
+                            actionsBar.getPaddingTop(),
+                            actionsBar.getPaddingRight() + bars.right,
+                            actionsBar.getPaddingBottom() + bars.bottom);
+                    return insets;
+                });
 
         overlay = findViewById(R.id.calibrationOverlay);
         blockSpinner = findViewById(R.id.blockSpinner);
