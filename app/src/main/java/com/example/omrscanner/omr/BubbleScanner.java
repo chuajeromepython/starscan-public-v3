@@ -18,7 +18,14 @@ public class BubbleScanner {
 
     private static final String TAG = "BubbleScanner";
 
-    private static final double QUESTION_FILL_THRESHOLD = 0.45;
+    // Lowered from 0.45 based on real pencil-scan logcat data: fully-shaded
+    // No.2 pencil marks were landing at ratios as low as 0.208-0.401 (still
+    // clearly the single marked bubble in their row, next to unmarked
+    // columns reading ~0.000-0.048), while genuinely blank bubbles never
+    // exceeded ~0.05 in the same scan. 0.18 sits well above that noise
+    // ceiling with margin to spare, while catching the light-pressure marks
+    // that 0.45 was missing.
+    private static final double QUESTION_FILL_THRESHOLD = 0.18;
     private static final double DEFAULT_INNER_MASK_RADIUS_FACTOR = 0.60;
     private static final double MAX_OFFSET_SPACING_FRACTION = 0.45;
 
@@ -32,8 +39,24 @@ public class BubbleScanner {
 
     private static final char[] CHOICE_LABELS = {'A', 'B', 'C', 'D'};
 
+    // Kept as an explicit 0.45 (not tied to QUESTION_FILL_THRESHOLD) so that
+    // lowering the question-bubble threshold for pencil detection doesn't
+    // also loosen LNR digit detection, which is unrelated and already shows
+    // several double-shaded columns at the current value.
+    // winnerMargin > 0 switches classifyLnrColumn() from "count cells above
+    // a flat threshold" to "compare the winner against the runner-up." The
+    // flat-count rule (winnerMargin=0) breaks down under uneven lighting:
+    // shadow/vignette regions push every blank cell's ratio up together,
+    // so several noisy blanks can independently cross a static cutoff even
+    // though only one cell is a real mark. Margin-based scoring only flags
+    // a column as double-shaded when two cells are both strong AND nearly
+    // tied (see doubleShadeStrongThreshold/doubleShadeTieMargin below);
+    // a single dominant cell reads as detected regardless of how high the
+    // noisy background sits. Genuinely ambiguous columns (no clear winner)
+    // fall through to UNDETECTED and get flagged for manual correction
+    // instead of being guessed.
     private static final LnrReadProfile DEFAULT_LNR_PROFILE = new LnrReadProfile(
-            "default", QUESTION_FILL_THRESHOLD, DEFAULT_INNER_MASK_RADIUS_FACTOR, 0.0, QUESTION_FILL_THRESHOLD, 0.0
+            "default", 0.45, DEFAULT_INNER_MASK_RADIUS_FACTOR, 0.15, 0.60, 0.05
     );
 
     private static final LnrReadProfile ZPH60_LNR_PROFILE = new LnrReadProfile(
@@ -333,29 +356,67 @@ public class BubbleScanner {
         Rect roi = new Rect(x1, y1, w, h);
         Mat patch = gray.submat(roi);
 
+        // No.2 pencil shading is graphite hatching, not a solid fill like
+        // pen/marker — it leaves tiny gaps of visible paper even when the
+        // student has "fully" colored the bubble. Blurring merges the
+        // hatching into a consistent gray region before binarizing.
+        Mat blurredPatch = new Mat();
+        Imgproc.GaussianBlur(patch, blurredPatch, new org.opencv.core.Size(3, 3), 0);
+
         Mat localBinary = new Mat();
-        Imgproc.threshold(patch, localBinary, 0, 255,
+        Imgproc.threshold(blurredPatch, localBinary, 0, 255,
                 Imgproc.THRESH_BINARY_INV | Imgproc.THRESH_OTSU);
 
         int localCx = cx - x1;
         int localCy = cy - y1;
         int innerRadius = Math.max(1, (int) Math.round(radius * innerMaskRadiusFactor));
 
-        Mat mask = Mat.zeros(h, w, CvType.CV_8UC1);
-        Imgproc.circle(mask, new Point(localCx, localCy), innerRadius, new Scalar(255), -1);
+        Mat innerMask = Mat.zeros(h, w, CvType.CV_8UC1);
+        Imgproc.circle(innerMask, new Point(localCx, localCy), innerRadius, new Scalar(255), -1);
 
         Mat maskedInk = new Mat();
-        Core.bitwise_and(localBinary, mask, maskedInk);
+        Core.bitwise_and(localBinary, innerMask, maskedInk);
 
         int foreground = Core.countNonZero(maskedInk);
-        int total = Math.max(1, Core.countNonZero(mask));
+        int total = Math.max(1, Core.countNonZero(innerMask));
+        double otsuRatio = (double) foreground / total;
+
+        // Second signal: how much darker is the bubble's centre than the
+        // paper immediately around it — a ring between the inner
+        // fill-detection circle and the patch edge, sampled from the SAME
+        // small crop as the centre. This replaces an earlier version that
+        // compared against a page-wide/region-wide average brightness,
+        // which broke down under uneven lighting: a shadow gradient shifts
+        // a whole area's brightness together, so blank bubbles under a
+        // shadow could read as "darker than average" with zero real
+        // contrast at bubble scale. Comparing against the immediate ring
+        // sidesteps this — lighting varies over tens/hundreds of pixels,
+        // not over an ~18px bubble radius, so ring and centre are always on
+        // equal lighting footing, wherever the bubble sits on the page.
+        Mat ringMask = Mat.zeros(h, w, CvType.CV_8UC1);
+        Imgproc.circle(ringMask, new Point(localCx, localCy), radius, new Scalar(255), -1);
+        Imgproc.circle(ringMask, new Point(localCx, localCy), innerRadius, new Scalar(0), -1);
+
+        double innerMeanIntensity = Core.mean(blurredPatch, innerMask).val[0];
+        double localBackgroundMean = (Core.countNonZero(ringMask) > 0)
+                ? Core.mean(blurredPatch, ringMask).val[0]
+                : innerMeanIntensity;
+        double darknessRatio = Math.max(0.0,
+                (localBackgroundMean - innerMeanIntensity) / Math.max(1.0, localBackgroundMean));
 
         maskedInk.release();
-        mask.release();
+        innerMask.release();
+        ringMask.release();
         localBinary.release();
+        blurredPatch.release();
         patch.release();
 
-        return (double) foreground / total;
+        double finalRatio = Math.max(otsuRatio, darknessRatio);
+        Log.d(TAG, String.format(
+                "Bubble (%d,%d): otsuRatio=%.3f darknessRatio=%.3f (localBg=%.1f, innerMean=%.1f) -> %.3f",
+                cx, cy, otsuRatio, darknessRatio, localBackgroundMean, innerMeanIntensity, finalRatio));
+
+        return finalRatio;
     }
 
     static LnrReadProfile resolveLnrReadProfile(String templateId) {
