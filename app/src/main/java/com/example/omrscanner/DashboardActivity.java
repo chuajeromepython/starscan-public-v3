@@ -361,7 +361,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     backupManager.restoreBackup(uri, new BackupManager.RestoreCallback() {
                         @Override
                         public void onSuccess(int restoredAssessments, int restoredScans,
-                                              int restoredAnswerKeys, int skippedAssessments) {
+                                              int restoredAnswerKeys, int skippedAssessments,
+                                              int failedExports) {
                             runOnUiThread(() -> {
                                 ui.showToast("Restore complete ✓  (" + restoredAssessments
                                         + " assessment(s), " + restoredScans + " scan(s), "
@@ -370,6 +371,14 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                     ui.showErrorDialog("Some data was skipped",
                                             skippedAssessments + " assessment(s) were skipped because their "
                                                     + "class isn't synced to your account anymore.");
+                                }
+                                if (failedExports > 0) {
+                                    ui.showErrorDialog("Some assessments couldn't be prepared for upload",
+                                            failedExports + " assessment(s) were restored to the database, "
+                                                    + "but the app couldn't rebuild their files in "
+                                                    + "Downloads/OMRScanner (likely a storage permission issue). "
+                                                    + "Check the app's storage/files permission in Settings, "
+                                                    + "then re-open each affected assessment before uploading.");
                                 }
                                 loadDataFromDb(); // refresh UI with restored data
                             });

@@ -4,6 +4,7 @@ import android.content.Context;
 import android.net.Uri;
 import android.util.Log;
 
+import com.example.omrscanner.dashboard.ClassExporter;
 import com.example.omrscanner.database.AppDatabase;
 import com.example.omrscanner.database.entities.AnswerEntity;
 import com.example.omrscanner.database.entities.AnswerKeyEntity;
@@ -91,8 +92,15 @@ public class BackupManager {
     }
 
     public interface RestoreCallback {
-        /** skippedAssessments = assessments whose class isn't synced locally (yet). */
-        void onSuccess(int restoredAssessments, int restoredScans, int restoredAnswerKeys, int skippedAssessments);
+        /**
+         * skippedAssessments = assessments whose class isn't synced locally (yet).
+         * failedExports = assessments whose Downloads/OMRScanner CSV/image
+         * export could not be rebuilt after restore (e.g. storage permission
+         * denied) — DB data for these is still restored fine, but the teacher
+         * will need to resolve storage access before uploading them.
+         */
+        void onSuccess(int restoredAssessments, int restoredScans, int restoredAnswerKeys,
+                       int skippedAssessments, int failedExports);
         void onError(Exception e);
     }
 
@@ -229,6 +237,9 @@ public class BackupManager {
                 int restoredAssessments = 0;
                 int skippedAssessments = 0;
                 Set<String> restoredAssessmentIds = new HashSet<>();
+                // assessmentId -> classId, so we can rebuild the Downloads/OMRScanner
+                // export for every assessment actually restored (see below).
+                Map<String, String> restoredAssessmentClassIds = new HashMap<>();
 
                 JSONArray assessmentsJson = manifest.optJSONArray("assessments");
                 if (assessmentsJson != null) {
@@ -246,6 +257,7 @@ public class BackupManager {
                         AssessmentEntity a = assessmentFromJson(o, localClassId);
                         db.assessmentDao().insert(a); // REPLACE on conflict
                         restoredAssessmentIds.add(a.id);
+                        restoredAssessmentClassIds.put(a.id, localClassId);
                         restoredAssessments++;
                     }
                 }
@@ -280,7 +292,31 @@ public class BackupManager {
                     }
                 }
 
-                callback.onSuccess(restoredAssessments, restoredScans, restoredAnswerKeys, skippedAssessments);
+                // ── Rebuild Downloads/OMRScanner from what we just restored ──
+                //
+                // Restoring only touches the Room DB + the private overlay
+                // images — it never writes anything under the public
+                // Downloads/OMRScanner folder, which is what uploadAssessment()
+                // actually reads. Without this, upload after a restore either
+                // reads a stale pre-restore CSV (if the folder survived the
+                // data clear) or fails outright if the folder is missing.
+                // Re-running the same export used for a normal scan save
+                // fixes both: it re-creates the folder tree via mkdirs() if
+                // missing, and overwrites stale files if present.
+                int failedExports = 0;
+                for (Map.Entry<String, String> entry : restoredAssessmentClassIds.entrySet()) {
+                    String assessmentId = entry.getKey();
+                    String classId = entry.getValue();
+                    try {
+                        ClassExporter.exportAssessmentSync(appContext, classId, assessmentId);
+                    } catch (Exception exportEx) {
+                        failedExports++;
+                        Log.e(TAG, "Post-restore export failed for assessment " + assessmentId, exportEx);
+                    }
+                }
+
+                callback.onSuccess(restoredAssessments, restoredScans, restoredAnswerKeys,
+                        skippedAssessments, failedExports);
             } catch (Exception e) {
                 Log.e(TAG, "Restore failed", e);
                 callback.onError(e);

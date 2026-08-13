@@ -18,6 +18,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -43,27 +44,37 @@ public class ClassExporter {
     public static void autoSaveClassData(android.content.Context context, String classId, String activityId) {
         new Thread(() -> {
             try {
-                OMRRepository r = new OMRRepository(context);
-                ClassEntity ce = r.getClassByIdSync(classId);
-                AssessmentEntity ae = r.getAssessmentByIdSync(activityId);
-                if (ce == null || ae == null) return;
-
-                ActivityFolder af = DataMapper.toActivityFolder(ae);
-                List<ScanEntry> scans = new ArrayList<>();
-                for (ScanEntity se : r.getScansByAssessmentSync(activityId)) {
-                    List<AnswerEntity> answers = r.getAnswersByScanSync(se.id);
-                    scans.add(DataMapper.toScanEntry(se, DataMapper.toAnswerMap(answers)));
-                }
-                af.setScans(scans);
-
-                ClassFolder cf = DataMapper.toClassFolder(ce, "");
-                cf.setActivities(Collections.singletonList(af));
-
-                writeClassFolderPlain(cf);
+                exportAssessmentSync(context, classId, activityId);
             } catch (Exception e) {
                 Log.e(TAG, "Auto-save failed", e);
             }
         }).start();
+    }
+
+    /**
+     * Same export logic as autoSaveClassData, but synchronous and throwing —
+     * for callers (like BackupManager.restoreBackup) that already run on
+     * their own background thread and need to know whether the export
+     * actually succeeded, rather than firing a detached thread and hoping.
+     */
+    public static void exportAssessmentSync(android.content.Context context, String classId, String activityId) throws Exception {
+        OMRRepository r = new OMRRepository(context);
+        ClassEntity ce = r.getClassByIdSync(classId);
+        AssessmentEntity ae = r.getAssessmentByIdSync(activityId);
+        if (ce == null || ae == null) return;
+
+        ActivityFolder af = DataMapper.toActivityFolder(ae);
+        List<ScanEntry> scans = new ArrayList<>();
+        for (ScanEntity se : r.getScansByAssessmentSync(activityId)) {
+            List<AnswerEntity> answers = r.getAnswersByScanSync(se.id);
+            scans.add(DataMapper.toScanEntry(se, DataMapper.toAnswerMap(answers)));
+        }
+        af.setScans(scans);
+
+        ClassFolder cf = DataMapper.toClassFolder(ce, "");
+        cf.setActivities(Collections.singletonList(af));
+
+        writeClassFolderPlain(cf);
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -190,8 +201,22 @@ public class ClassExporter {
         try (FileWriter writer = new FileWriter(tmp)) {
             writer.write(content);
         }
+
+        // If target already exists (e.g. a stale file left over from before a
+        // data clear / restore), scoped storage can silently refuse to rename
+        // a new file over it — tmp.renameTo(target) just returns false, with
+        // no exception. Deleting the stale file first means we're always
+        // renaming into a fresh path, which — like a brand-new scan's first
+        // write — always succeeds.
+        if (target.exists() && !target.delete()) {
+            throw new IOException("Could not remove stale file before rewriting: "
+                    + target.getAbsolutePath()
+                    + " — the app may not have permission to modify files it didn't just create. "
+                    + "Try deleting it manually via a file manager, then retry.");
+        }
+
         if (!tmp.renameTo(target)) {
-            // renameTo can fail across filesystems/edge cases — fall back to copy+delete
+            // renameTo can still fail across filesystems/edge cases — fall back to copy+delete
             try (java.io.FileInputStream in = new java.io.FileInputStream(tmp);
                  java.io.FileOutputStream out = new java.io.FileOutputStream(target)) {
                 byte[] buf = new byte[8192];
@@ -239,6 +264,12 @@ public class ClassExporter {
             }
 
             if (bestBytes == null) return false;
+            // Same stale-file issue as writeTextFile(): delete any existing
+            // file first so this is always a fresh write, not an overwrite.
+            if (destFile.exists() && !destFile.delete()) {
+                throw new IOException("Could not remove stale image before rewriting: "
+                        + destFile.getAbsolutePath());
+            }
             try (FileOutputStream fos = new FileOutputStream(destFile)) { fos.write(bestBytes); }
             return bestBytes.length <= EXPORT_IMAGE_TARGET_BYTES;
         } finally {
