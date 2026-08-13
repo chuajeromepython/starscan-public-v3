@@ -4,6 +4,14 @@
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28"/>
+    <!-- Needed on Android 11+ to reliably read/write/delete the whole
+         Downloads/OMRScanner folder tree (images/, result/, per-class
+         subfolders) using raw File I/O, including files that predate a
+         "Clear app's data" cycle and have lost their scoped-storage
+         ownership attribution. Not a Play Store concern — this app is
+         sideloaded, not distributed there. -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage"/>
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-feature android:name="android.hardware.camera"
         android:required="true"/>

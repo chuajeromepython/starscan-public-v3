@@ -236,6 +236,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private BackupManager backupManager;
     private androidx.activity.result.ActivityResultLauncher<String> createBackupFileLauncher;
     private androidx.activity.result.ActivityResultLauncher<String[]> openBackupFileLauncher;
+    private androidx.activity.result.ActivityResultLauncher<String> storagePermissionLauncher;
+    private androidx.activity.result.ActivityResultLauncher<android.content.Intent> allFilesAccessLauncher;
+    private Runnable pendingStorageAction;
 
     private LinearLayout homeEmpty, homeClassList;
     private TextView homeSummaryClassCount, homeSummaryAssessmentCount;
@@ -353,12 +356,51 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     });
                 });
 
+        // Downloads/OMRScanner CSV/image export+read relies on legacy public-storage
+        // File I/O (see DEVELOPER_GUIDE.md "Storage note"). On Android ≤ 9 that needs
+        // the WRITE_EXTERNAL_STORAGE runtime permission, and "Clear app's data" resets
+        // any previously-granted runtime permission back to denied — so a device that
+        // worked fine before a data clear can start throwing EACCES on export/upload
+        // afterwards purely because the permission grant was silently revoked, even
+        // though the file paths and logic are unchanged. Re-check/re-request before
+        // any operation that touches that folder.
+        storagePermissionLauncher = registerForActivityResult(
+                new androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+                granted -> {
+                    Runnable action = pendingStorageAction;
+                    pendingStorageAction = null;
+                    if (granted) {
+                        if (action != null) action.run();
+                    } else {
+                        ui.showErrorDialog("Storage permission needed",
+                                "STARS needs storage permission to read/write scan files in "
+                                        + "Downloads/OMRScanner. Please grant it in Settings > Apps > STARS "
+                                        + "> Permissions, then try again.");
+                    }
+                });
+
+        allFilesAccessLauncher = registerForActivityResult(
+                new androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    Runnable action = pendingStorageAction;
+                    pendingStorageAction = null;
+                    if (android.os.Environment.isExternalStorageManager()) {
+                        if (action != null) action.run();
+                    } else {
+                        ui.showErrorDialog("Storage permission needed",
+                                "STARS needs \"Allow access to manage all files\" turned on for STARS to "
+                                        + "read/write scan files in Downloads/OMRScanner. Please enable it, "
+                                        + "then try again.");
+                    }
+                });
+
         openBackupFileLauncher = registerForActivityResult(
                 new androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
                 uri -> {
                     if (uri == null) return; // user cancelled the picker
-                    runOnUiThread(() -> Toast.makeText(this, "Restoring…", Toast.LENGTH_SHORT).show());
-                    backupManager.restoreBackup(uri, new BackupManager.RestoreCallback() {
+                    runWithStoragePermission(() -> {
+                        runOnUiThread(() -> Toast.makeText(this, "Restoring…", Toast.LENGTH_SHORT).show());
+                        backupManager.restoreBackup(uri, new BackupManager.RestoreCallback() {
                         @Override
                         public void onSuccess(int restoredAssessments, int restoredScans,
                                               int restoredAnswerKeys, int skippedAssessments,
@@ -384,11 +426,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                             });
                         }
 
-                        @Override
-                        public void onError(Exception e) {
-                            runOnUiThread(() -> ui.showErrorDialog("Restore failed",
-                                    e.getMessage() != null ? e.getMessage() : "Unknown error."));
-                        }
+                            @Override
+                            public void onError(Exception e) {
+                                runOnUiThread(() -> ui.showErrorDialog("Restore failed",
+                                        e.getMessage() != null ? e.getMessage() : "Unknown error."));
+                            }
+                        });
                     });
                 });
 
@@ -1059,6 +1102,46 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         syncStudentsForClass(this, localClassId, classroomId, serverIp);
     }
 
+    /**
+     * Runs {@code action} once storage access to Downloads/OMRScanner is confirmed.
+     * On API 30+ this means MANAGE_EXTERNAL_STORAGE ("All files access") — needed
+     * because a normal runtime permission only covers newly-created files, not
+     * pre-existing files that survived a "Clear app's data" cycle and lost their
+     * ownership attribution (confirmed on Android 14: fresh scans upload fine,
+     * but restored pre-clear files throw EACCES on read even though write
+     * apparently succeeds). On API ≤ 28 it's the WRITE_EXTERNAL_STORAGE runtime
+     * permission instead, which can also be silently revoked by a data clear.
+     */
+    private void runWithStoragePermission(Runnable action) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            if (android.os.Environment.isExternalStorageManager()) {
+                action.run();
+            } else {
+                pendingStorageAction = action;
+                Toast.makeText(this, "Please allow STARS to manage all files", Toast.LENGTH_LONG).show();
+                android.content.Intent intent = new android.content.Intent(
+                        android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                        android.net.Uri.parse("package:" + getPackageName()));
+                allFilesAccessLauncher.launch(intent);
+            }
+            return;
+        }
+        if (android.os.Build.VERSION.SDK_INT <= android.os.Build.VERSION_CODES.P) {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(this,
+                    android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                action.run();
+            } else {
+                pendingStorageAction = action;
+                storagePermissionLauncher.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE);
+            }
+            return;
+        }
+        // Android 10 (API 29) has no clean mechanism here without the legacy
+        // storage manifest flag, which is ignored at targetSdk 36 anyway.
+        action.run();
+    }
+
     // Sends the aggregate data of students along with their LRNs and answers to the system
     @Override
     public void uploadAssessment(ActivityFolder act, ClassFolder cls, int assessmentId) {
@@ -1093,21 +1176,23 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         }
 
 
-        java.io.File csvFile = ClassExporter.getAssessmentCsvFile(cls, act);
-        if (!csvFile.exists() || csvFile.length() == 0) {
-            ui.showErrorDialog("No scans to upload",
-                    "No CSV was found for this assessment yet — scan at least one sheet first.");
-            return;
-        }
-
-        repo.getActiveUser(user -> {
-            if (user == null || user.serverIp == null || user.serverIp.trim().isEmpty()) {
-                runOnUiThread(() -> ui.showErrorDialog("Scan required",
-                        "Please scan your QR code from the website system before uploading."));
+        runWithStoragePermission(() -> {
+            java.io.File csvFile = ClassExporter.getAssessmentCsvFile(cls, act);
+            if (!csvFile.exists() || csvFile.length() == 0) {
+                ui.showErrorDialog("No scans to upload",
+                        "No CSV was found for this assessment yet — scan at least one sheet first.");
                 return;
             }
-            runOnUiThread(() -> Toast.makeText(this, "Uploading…", Toast.LENGTH_SHORT).show());
-            performAssessmentUpload(assessmentId, cls.getClassroomId(), csvFile, user.serverIp);
+
+            repo.getActiveUser(user -> {
+                if (user == null || user.serverIp == null || user.serverIp.trim().isEmpty()) {
+                    runOnUiThread(() -> ui.showErrorDialog("Scan required",
+                            "Please scan your QR code from the website system before uploading."));
+                    return;
+                }
+                runOnUiThread(() -> Toast.makeText(this, "Uploading…", Toast.LENGTH_SHORT).show());
+                performAssessmentUpload(assessmentId, cls.getClassroomId(), csvFile, user.serverIp);
+            });
         });
     }
 
