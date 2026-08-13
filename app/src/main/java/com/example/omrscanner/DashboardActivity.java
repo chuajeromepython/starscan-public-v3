@@ -1178,21 +1178,49 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
         runWithStoragePermission(() -> {
             java.io.File csvFile = ClassExporter.getAssessmentCsvFile(cls, act);
-            if (!csvFile.exists() || csvFile.length() == 0) {
-                ui.showErrorDialog("No scans to upload",
-                        "No CSV was found for this assessment yet — scan at least one sheet first.");
+            if (csvFile.exists() && csvFile.length() > 0) {
+                proceedWithUpload(act, cls, assessmentId, csvFile);
                 return;
             }
 
-            repo.getActiveUser(user -> {
-                if (user == null || user.serverIp == null || user.serverIp.trim().isEmpty()) {
-                    runOnUiThread(() -> ui.showErrorDialog("Scan required",
-                            "Please scan your QR code from the website system before uploading."));
-                    return;
+            // The CSV — or the whole Downloads/OMRScanner folder it lives in — is
+            // missing. That doesn't necessarily mean there's no scan data: the
+            // folder can be deleted/moved outside the app (file manager, "Clear
+            // cache" on some OEM skins, etc.) while the scans themselves are still
+            // safe in the Room DB. Try rebuilding the export before concluding
+            // there's genuinely nothing to upload — same rebuild BackupManager
+            // already does after a restore.
+            syncExecutor.execute(() -> {
+                boolean rebuilt;
+                try {
+                    ClassExporter.exportAssessmentSync(this, cls.getId(), act.getId());
+                    rebuilt = csvFile.exists() && csvFile.length() > 0;
+                } catch (Exception e) {
+                    Log.e(TAG, "Rebuild before upload failed", e);
+                    rebuilt = false;
                 }
-                runOnUiThread(() -> Toast.makeText(this, "Uploading…", Toast.LENGTH_SHORT).show());
-                performAssessmentUpload(assessmentId, cls.getClassroomId(), csvFile, user.serverIp);
+                boolean finalRebuilt = rebuilt;
+                runOnUiThread(() -> {
+                    if (!finalRebuilt) {
+                        ui.showErrorDialog("No scans to upload",
+                                "No CSV was found for this assessment yet — scan at least one sheet first.");
+                        return;
+                    }
+                    proceedWithUpload(act, cls, assessmentId, csvFile);
+                });
             });
+        });
+    }
+
+    private void proceedWithUpload(ActivityFolder act, ClassFolder cls, int assessmentId, java.io.File csvFile) {
+        repo.getActiveUser(user -> {
+            if (user == null || user.serverIp == null || user.serverIp.trim().isEmpty()) {
+                runOnUiThread(() -> ui.showErrorDialog("Scan required",
+                        "Please scan your QR code from the website system before uploading."));
+                return;
+            }
+            runOnUiThread(() -> Toast.makeText(this, "Uploading…", Toast.LENGTH_SHORT).show());
+            performAssessmentUpload(assessmentId, cls.getClassroomId(), csvFile, user.serverIp);
         });
     }
 
