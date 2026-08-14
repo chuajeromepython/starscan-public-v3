@@ -10,6 +10,8 @@ import org.opencv.core.Mat;
 import org.opencv.core.Point;
 import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
+import org.opencv.core.Size;
+import org.opencv.imgproc.CLAHE;
 import org.opencv.imgproc.Imgproc;
 
 import java.util.Map;
@@ -90,6 +92,10 @@ public class BubbleScanner {
 
         Mat gray = new Mat();
         Imgproc.cvtColor(colour, gray, Imgproc.COLOR_BGR2GRAY);
+
+        CLAHE clahe = Imgproc.createCLAHE(2.0, new Size(8, 8));
+        clahe.apply(gray, gray);
+        clahe.collectGarbage();
 
         Mat overlay = colour.clone();
 

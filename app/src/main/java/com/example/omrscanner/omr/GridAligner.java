@@ -42,8 +42,35 @@ public class GridAligner {
      * Half-size of the search window around the expected bubble position.
      * The search ROI will be {@code 2 * SEARCH_MARGIN + templateSize} wide/tall.
      * Increase if the warp shift can be larger; decrease for speed.
+     *
+     * This is a CEILING, not a fixed value — {@link #capMargin} shrinks it per
+     * axis so the window can never reach past a neighboring bubble on a
+     * tightly-packed template. On ZPH40 (row pitch ~82px at canonical scale)
+     * 40px is well inside half the pitch, so nothing changes there. On ZPH60
+     * (row pitch ~40px at canonical scale) an uncapped 40px window is *larger
+     * than the entire row spacing*, meaning the matcher can lock onto the row
+     * above or below instead of the intended one whenever contrast is weak
+     * (e.g. light pencil).
      */
     private static final int SEARCH_MARGIN = 40;
+
+    /**
+     * Fraction of a block's own bubble spacing (dx or dy) that the search
+     * margin is allowed to use, per axis. Keeping this under 0.5 guarantees
+     * the search window's midline never crosses into the neighboring
+     * bubble's territory, no matter how tight the template's packing is.
+     */
+    private static final double MAX_MARGIN_SPACING_FRACTION = 0.4;
+
+    /**
+     * Shrinks {@link #SEARCH_MARGIN} to at most {@code MAX_MARGIN_SPACING_FRACTION}
+     * of the given (already-scaled) spacing, with a small floor so degenerate
+     * 1-row/1-col blocks still get a usable window.
+     */
+    private static int capMargin(int scaledSpacing) {
+        return Math.min(SEARCH_MARGIN,
+                Math.max(4, (int) Math.round(scaledSpacing * MAX_MARGIN_SPACING_FRACTION)));
+    }
 
     /**
      * Minimum acceptable match score. Below this the offset is considered
@@ -108,16 +135,24 @@ public class GridAligner {
         int expectedY = (int) Math.round(block.startY * scaleY);
         int scaledRadius = Math.max(1, (int) Math.round(block.radius * scaleX));
 
+        // Per-axis margin, capped to this block's own spacing (see capMargin) —
+        // this is what stops the window from reaching a neighboring row on
+        // tightly-packed templates like ZPH60.
+        int scaledDx = block.cols > 1 ? Math.max(1, (int) Math.round(Math.abs(block.dx) * scaleX)) : Integer.MAX_VALUE;
+        int scaledDy = block.rows > 1 ? Math.max(1, (int) Math.round(Math.abs(block.dy) * scaleY)) : Integer.MAX_VALUE;
+        int marginX = capMargin(scaledDx == Integer.MAX_VALUE ? SEARCH_MARGIN : scaledDx);
+        int marginY = capMargin(scaledDy == Integer.MAX_VALUE ? SEARCH_MARGIN : scaledDy);
+
         // ── 2. Build (or reuse) the synthetic bubble template ───────────
         Mat bubbleTpl = getBubbleTemplate(scaledRadius);
         int tplW = bubbleTpl.cols();
         int tplH = bubbleTpl.rows();
 
         // ── 3. Define the search ROI ────────────────────────────────────
-        int roiX = Math.max(0, expectedX - SEARCH_MARGIN - tplW / 2);
-        int roiY = Math.max(0, expectedY - SEARCH_MARGIN - tplH / 2);
-        int roiW = tplW + 2 * SEARCH_MARGIN;
-        int roiH = tplH + 2 * SEARCH_MARGIN;
+        int roiX = Math.max(0, expectedX - marginX - tplW / 2);
+        int roiY = Math.max(0, expectedY - marginY - tplH / 2);
+        int roiW = tplW + 2 * marginX;
+        int roiH = tplH + 2 * marginY;
 
         // Clamp to image bounds
         if (roiX + roiW > graySource.cols()) roiW = graySource.cols() - roiX;
@@ -233,6 +268,16 @@ public class GridAligner {
         int scaledRadius = Math.max(1, (int) Math.round(block.radius * scaleX));
         int scaledDx = Math.max(1, (int) Math.round(Math.abs(block.dx) * scaleX));
 
+        // Vertical margin capped to the block's own row spacing: without this,
+        // a tightly-packed template (e.g. ZPH60, row pitch < SEARCH_MARGIN) can
+        // match this SAME row pattern one full pitch up/down, since every row
+        // looks identical — silently corrupting the orientation vote. This is
+        // exactly the failure the offsetY logging below was added to detect,
+        // but that log never actually fed back into the score. Capping the
+        // window closes the hole at the source instead.
+        int scaledDy = block.rows > 1 ? Math.max(1, (int) Math.round(Math.abs(block.dy) * scaleY)) : Integer.MAX_VALUE;
+        int marginY = capMargin(scaledDy == Integer.MAX_VALUE ? SEARCH_MARGIN : scaledDy);
+
         Mat rowTpl = buildRowTemplate(block.cols, scaledRadius, scaledDx);
         int tplW = rowTpl.cols();
         int tplH = rowTpl.rows();
@@ -244,9 +289,9 @@ public class GridAligner {
         // template, so offset the ROI back by that same padding.
         int pad = scaledRadius + 2;
         int roiX = Math.max(0, expectedX - SEARCH_MARGIN - pad);
-        int roiY = Math.max(0, expectedY - SEARCH_MARGIN - pad);
+        int roiY = Math.max(0, expectedY - marginY - pad);
         int roiW = tplW + 2 * SEARCH_MARGIN;
-        int roiH = tplH + 2 * SEARCH_MARGIN;
+        int roiH = tplH + 2 * marginY;
 
         if (roiX + roiW > graySource.cols()) roiW = graySource.cols() - roiX;
         if (roiY + roiH > graySource.rows()) roiH = graySource.rows() - roiY;

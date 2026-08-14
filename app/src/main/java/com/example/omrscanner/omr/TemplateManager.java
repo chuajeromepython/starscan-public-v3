@@ -11,6 +11,8 @@ import org.opencv.android.Utils;
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
 import org.opencv.core.Scalar;
+import org.opencv.core.Size;
+import org.opencv.imgproc.CLAHE;
 import org.opencv.imgproc.Imgproc;
 
 import java.io.File;
@@ -133,6 +135,22 @@ public class TemplateManager {
     // ── State ────────────────────────────────────────────────────────────────
     private final Map<String, OmrTemplate> templates = new HashMap<>();
     private final Gson gson = new Gson();
+
+    /**
+     * Normalizes local contrast on a grayscale image before it's handed to
+     * GridAligner for template/rotation scoring. Glare from an overhead
+     * light source can wash out a printed bubble's outline just as easily
+     * as it washes out a graphite fill mark (see BubbleScanner's matching
+     * fix) — a weak/inconsistent circle edge means a weaker matchTemplate
+     * peak, which is exactly what eats into ZPH60's already thin
+     * correct-vs-wrong score margin (see MIN_ORIENTATION_CONFIDENCE comment
+     * above). Same clip limit / tile size as BubbleScanner for consistency.
+     */
+    private static void applyClahe(Mat gray) {
+        CLAHE clahe = Imgproc.createCLAHE(2.0, new Size(8, 8));
+        clahe.apply(gray, gray);
+        clahe.collectGarbage();
+    }
 
     // =====================================================================
     //  Construction
@@ -406,6 +424,7 @@ public class TemplateManager {
 
         Mat gray = new Mat();
         Imgproc.cvtColor(src, gray, Imgproc.COLOR_BGR2GRAY);
+        applyClahe(gray);
         src.release();
 
         GridAligner aligner = new GridAligner();
@@ -681,6 +700,7 @@ public class TemplateManager {
         Utils.bitmapToMat(warpedBitmap, srcColour);
         Mat srcGray = new Mat();
         Imgproc.cvtColor(srcColour, srcGray, Imgproc.COLOR_BGR2GRAY);
+        applyClahe(srcGray);
         srcColour.release();
 
         // We'll test up to 3 orientations. For each one, track:
@@ -878,6 +898,7 @@ public class TemplateManager {
         Utils.bitmapToMat(warpedBitmap, srcColour);
         Mat srcGray = new Mat();
         Imgproc.cvtColor(srcColour, srcGray, Imgproc.COLOR_BGR2GRAY);
+        applyClahe(srcGray);
         srcColour.release();
 
         List<RotationCandidate> rotationCandidates = new ArrayList<>();

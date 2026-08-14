@@ -24,9 +24,12 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import android.util.Range;
+
 import androidx.camera.core.Camera;
 import androidx.camera.core.CameraControl;
 import androidx.camera.core.CameraInfo;
+import androidx.camera.core.ExposureState;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageCapture;
@@ -474,6 +477,39 @@ public class CameraActivity extends AppCompatActivity {
      * Binds Preview, ImageCapture, AND ImageAnalysis use cases.
      * ImageAnalysis runs anchor detection on each frame for real-time feedback.
      */
+    /**
+     * Biases auto-exposure toward protecting highlights from clipping, at the
+     * cost of shadows reading slightly darker. This is a capture-time fix,
+     * not a post-processing one: once a specular highlight (e.g. overhead
+     * light reflecting off graphite) is clipped to pure white in the raw
+     * sensor data, no amount of CLAHE or thresholding downstream can recover
+     * detail that was never captured. Shadow detail lost by underexposing
+     * slightly is far more recoverable (CLAHE already handles that) than a
+     * blown highlight ever is.
+     */
+    private void applyHighlightProtectionExposure() {
+        if (cameraInfo == null || cameraControl == null) return;
+
+        ExposureState exposureState = cameraInfo.getExposureState();
+        if (!exposureState.isExposureCompensationSupported()) {
+            Log.w(TAG, "Exposure compensation not supported on this device");
+            return;
+        }
+
+        Range<Integer> range = exposureState.getExposureCompensationRange();
+        double step = exposureState.getExposureCompensationStep().doubleValue();
+        if (step <= 0 || range == null) return;
+
+        // Bias by roughly -1 EV to keep highlights from clipping.
+        int targetIndex = (int) Math.round(-1.0 / step);
+        targetIndex = Math.max(range.getLower(), Math.min(range.getUpper(), targetIndex));
+
+        cameraControl.setExposureCompensationIndex(targetIndex);
+        Log.d(TAG, String.format(
+                "Exposure compensation set to index %d (~%.2f EV) to protect highlights",
+                targetIndex, targetIndex * step));
+    }
+
     private void bindCameraUseCases() {
         if (cameraProvider == null) return;
 
@@ -524,6 +560,7 @@ public class CameraActivity extends AppCompatActivity {
 
         cameraControl = camera.getCameraControl();
         cameraInfo    = camera.getCameraInfo();
+        applyHighlightProtectionExposure();
         initializeFixedMountZoomRatios();
         applyFixedMountZoom(true);
 
