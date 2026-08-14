@@ -7,71 +7,71 @@
       "label": "Questions_1_10",
       "rows": 10,
       "cols": 4,
-      "start_x": 99.6,
-      "start_y": 649.9,
-      "dx": 40.8,
-      "dy": 45.1,
-      "radius": 14
+      "start_x": 68.2,
+      "start_y": 648.99,
+      "dx": 42.17,
+      "dy": 44.95,
+      "radius": 16
     },
     {
       "label": "Questions_11_20",
       "rows": 10,
       "cols": 4,
-      "start_x": 353.3,
-      "start_y": 649.9,
-      "dx": 40.8,
-      "dy": 45.1,
-      "radius": 14
+      "start_x": 333.14,
+      "start_y": 648.87,
+      "dx": 42.84,
+      "dy": 45.35,
+      "radius": 16
     },
     {
       "label": "Questions_21_30",
       "rows": 10,
       "cols": 4,
-      "start_x": 611.3,
-      "start_y": 649.9,
-      "dx": 40.8,
-      "dy": 45.1,
-      "radius": 14
+      "start_x": 604.45,
+      "start_y": 648.19,
+      "dx": 43.41,
+      "dy": 45.41,
+      "radius": 16
     },
     {
       "label": "Questions_31_40",
       "rows": 10,
       "cols": 4,
-      "start_x": 872.5,
-      "start_y": 649.9,
-      "dx": 40.8,
-      "dy": 45.1,
-      "radius": 14
+      "start_x": 875.55,
+      "start_y": 647.67,
+      "dx": 43.19,
+      "dy": 45.31,
+      "radius": 16
     },
     {
       "label": "Questions_41_50",
       "rows": 10,
       "cols": 4,
-      "start_x": 1131.0,
-      "start_y": 649.9,
-      "dx": 40.8,
-      "dy": 45.1,
-      "radius": 14
+      "start_x": 1146.09,
+      "start_y": 648.26,
+      "dx": 42.76,
+      "dy": 45.06,
+      "radius": 16
     },
     {
       "label": "Questions_51_60",
       "rows": 10,
       "cols": 4,
-      "start_x": 1388.1,
-      "start_y": 649.9,
-      "dx": 40.8,
-      "dy": 45.1,
-      "radius": 14
+      "start_x": 1412.33,
+      "start_y": 647.7,
+      "dx": 42.38,
+      "dy": 45.04,
+      "radius": 16
     },
     {
       "label": "LNR",
       "rows": 10,
       "cols": 12,
-      "start_x": 1058.6,
-      "start_y": 80.0,
-      "dx": 40.9,
-      "dy": 45.1,
-      "radius": 14
+      "start_x": 1074.06,
+      "start_y": 80.53,
+      "dx": 42.71,
+      "dy": 45.15,
+      "radius": 16
     }
   ]
 }
