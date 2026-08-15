@@ -1037,22 +1037,38 @@ public class TemplateManager {
 
             rotationCandidates.add(new RotationCandidate(rotCode, templateId, bubbleScore));
         } else if (isPortrait) {
-            int rotCode = REQUIRED_PORTRAIT_ROTATION;
-            Mat candidate = new Mat();
-            Core.rotate(srcGray, candidate, rotCode);
+            // REQUIRED_PORTRAIT_ROTATION hardcoded CCW under the assumption
+            // the sheet is always right-side-up and the only ambiguity is
+            // which way the phone was tilted. But that constant's own
+            // tuning notes say CW scores well precisely when the sheet was
+            // placed upside-down -- so hardcoding CCW-only means an
+            // upside-down capture reaching here (geometric/non-ArUco
+            // fallback) could never be corrected; it always got force-
+            // rotated the wrong way. Test both, same as the
+            // isPortrait && arucoResolved branch above, and let the
+            // alignment score pick.
+            int[][] rotations = {
+                    { Core.ROTATE_90_CLOCKWISE },
+                    { Core.ROTATE_90_COUNTERCLOCKWISE }
+            };
+            for (int[] rot : rotations) {
+                int rotCode = rot[0];
+                Mat candidate = new Mat();
+                Core.rotate(srcGray, candidate, rotCode);
 
-            int cw = candidate.cols();
-            int ch = candidate.rows();
-            double scaleX = (double) cw / tpl.width;
-            double scaleY = (double) ch / tpl.height;
+                int cw = candidate.cols();
+                int ch = candidate.rows();
+                double scaleX = (double) cw / tpl.width;
+                double scaleY = (double) ch / tpl.height;
 
-            double bubbleScore = aligner.getAlignmentScore(candidate, tpl, scaleX, scaleY);
+                double bubbleScore = aligner.getAlignmentScore(candidate, tpl, scaleX, scaleY);
 
-            Log.d(TAG, String.format(
-                    "  rot=%d (required), template=%s, score=%.3f", rotCode, templateId, bubbleScore));
+                Log.d(TAG, String.format(
+                        "  rot=%d (portrait geometric, scored), template=%s, score=%.3f", rotCode, templateId, bubbleScore));
 
-            rotationCandidates.add(new RotationCandidate(rotCode, templateId, bubbleScore));
-            candidate.release();
+                rotationCandidates.add(new RotationCandidate(rotCode, templateId, bubbleScore));
+                candidate.release();
+            }
         } else {
             // Bubble-grid alignment alone can't reliably tell 0° from its
             // 180-degree opposite on a repetitive dot grid (same reasoning

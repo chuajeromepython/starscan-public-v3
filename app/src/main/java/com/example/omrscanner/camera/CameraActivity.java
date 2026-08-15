@@ -261,6 +261,15 @@ public class CameraActivity extends AppCompatActivity {
 // upright for the user, the way most camera apps handle landscape.
     private OrientationEventListener orientationEventListener;
     private int currentIconRotation = 0;
+    // True only once OrientationEventListener has fired with a resolvable
+    // (non-UNKNOWN) reading since this Activity instance started. The
+    // accelerometer can't determine yaw when the phone is held nearly flat
+    // (facing straight down at a desk -- exactly Tilt Agnostic Mode's
+    // typical posture), so it reports ORIENTATION_UNKNOWN and we must not
+    // let currentIconRotation's stale/default value pass as a confirmed
+    // "no rotation needed." Gates auto-capture in triggerAutoCapture()
+    // below, scoped to tiltAgnosticMode only.
+    private boolean hasConfirmedOrientationReading = false;
 
     // ── Fixed scanning orientation ──────────────────────────────────
     // This app is only designed to be scanned with the phone tilted to
@@ -1214,6 +1223,21 @@ public class CameraActivity extends AppCompatActivity {
             return false;
         }
 
+        // Tilt Agnostic Mode's whole point is not caring WHICH tilt the
+        // phone is at -- but it still needs SOME real tilt reading to
+        // correctly pre-rotate the raw capture before detection runs.
+        // Without this, a dead-flat hold (no accelerometer signal at all)
+        // silently snapshots the stale/default bucket as if it were a
+        // confirmed "upright, no rotation needed," which is what starts
+        // the chain leading to upside-down scans. A few ms of natural
+        // hand tremor is normally enough to resolve this. Scoped to
+        // tiltAgnosticMode only -- Guide Square and Fixed Mount (which
+        // also call this method) don't depend on this bucket at all.
+        if (tiltAgnosticMode && !hasConfirmedOrientationReading) {
+            Log.d(TAG, "Auto-capture held: no confirmed orientation reading yet (tilt agnostic mode)");
+            return false;
+        }
+
         autoCaptureTriggered = true;
         Log.d(TAG, "Auto-capture triggered after " + consecutiveDetections + " stable detections");
         takePhoto();
@@ -1438,6 +1462,7 @@ public class CameraActivity extends AppCompatActivity {
             @Override
             public void onOrientationChanged(int orientation) {
                 if (orientation == ORIENTATION_UNKNOWN) return;
+                hasConfirmedOrientationReading = true;
                 if (isRotationLocked) return; // frozen — ignore tilt entirely until unlocked
 
                 int rotation;
