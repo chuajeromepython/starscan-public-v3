@@ -314,7 +314,7 @@ public class ResultActivity extends AppCompatActivity {
                 // is already in the orientation the rest of this method
                 // expects — rotating it here would break that already-
                 // correct path.
-                final Bitmap original;
+                final Bitmap preRotated;
                 if (tiltAgnosticMode && captureRotationBucket != 0) {
                     int rotateCode;
                     switch (captureRotationBucket) {
@@ -332,7 +332,7 @@ public class ResultActivity extends AppCompatActivity {
                             break;
                     }
                     if (rotateCode == -1) {
-                        original = rawCapture;
+                        preRotated = rawCapture;
                     } else {
                         Mat rawMat = new Mat();
                         Utils.bitmapToMat(rawCapture, rawMat);
@@ -344,12 +344,12 @@ public class ResultActivity extends AppCompatActivity {
                         rawMat.release();
                         rotatedMat.release();
                         rawCapture.recycle();
-                        original = rotatedBitmap;
+                        preRotated = rotatedBitmap;
                         Log.i(TAG, "Tilt Agnostic Mode: pre-rotated raw capture by bucket="
-                                + captureRotationBucket + " -> " + original.getWidth() + "x" + original.getHeight());
+                                + captureRotationBucket + " -> " + preRotated.getWidth() + "x" + preRotated.getHeight());
                     }
                 } else {
-                    original = rawCapture;
+                    preRotated = rawCapture;
                 }
 
                 Point[] finalAnchors = anchors;
@@ -374,11 +374,16 @@ public class ResultActivity extends AppCompatActivity {
                 // warp flips the sheet and the bubble/LRN regions are missed
                 // entirely. Re-running identity detection here on the actual
                 // full-res capture fixes that for this pipeline only.
+                final Bitmap original;
+
                 if (tiltAgnosticMode && finalAnchors == null) {
-                    finalAnchors = com.example.omrscanner.omr.ArucoAnchorDetector.detectIdentityAnchors(original);
+                    AnchorResolution resolution = resolveTiltAgnosticAnchors(preRotated);
+                    original = resolution.image;
+                    finalAnchors = resolution.anchors;
                     if (finalAnchors != null) {
                         resolvedViaArucoIdentity = true;
-                        Log.d(TAG, "Tilt Agnostic Mode: full-res anchors resolved via ArUco identity detection");
+                        Log.d(TAG, "Tilt Agnostic Mode: full-res anchors resolved via ArUco identity detection"
+                                + (resolution.rotationRetryApplied ? " (after rotation retry)" : ""));
 
                         // ── ORIENTATION DIAGNOSTIC ──────────────────────────────────────
                         // finalAnchors is [TL, TR, BL, BR] by MARKER IDENTITY (not by raw
@@ -427,9 +432,9 @@ public class ResultActivity extends AppCompatActivity {
                         String windingVerdict = windingNormal ? "NORMAL (rotation-only, safe)" : "MIRRORED (no rotation can fix this)";
                         Log.i(TAG, "ARUCO_WINDING_CHECK: " + windingVerdict);
                         // ── END ORIENTATION DIAGNOSTIC ──────────────────────────────────
-                    } else {
-                        Log.w(TAG, "Tilt Agnostic Mode: ArUco identity detection found no markers on full-res capture, falling back to geometric detector");
                     }
+                } else {
+                    original = preRotated;
                 }
 
                 if (finalAnchors == null) {
@@ -499,6 +504,7 @@ public class ResultActivity extends AppCompatActivity {
                 Bitmap scanBitmap;
                 String sheetType;
                 OmrTemplate template;
+                boolean orientationLowConfidence;
 
                 if (selectedSheetType != null) {
                     String baseTemplateId = com.example.omrscanner.models.ActivityFolder.parseBaseTemplateId(selectedSheetType);
@@ -518,6 +524,7 @@ public class ResultActivity extends AppCompatActivity {
                             tm.detectAndOrientWithTemplate(alignedBitmap, baseTemplateId, resolvedViaArucoIdentity);
                     scanBitmap = orient.orientedBitmap;
                     sheetType = baseTemplateId;
+                    orientationLowConfidence = orient.lowConfidence;
 
                     // The scan itself uses a trimmed copy of that template.
                     template = tm.buildTruncatedTemplate(baseTemplateId, itemCount);
@@ -527,7 +534,22 @@ public class ResultActivity extends AppCompatActivity {
                     TemplateManager.OrientationResult orient = tm.detectAndOrient(alignedBitmap, resolvedViaArucoIdentity);
                     scanBitmap = orient.orientedBitmap;
                     sheetType = orient.templateId;
+                    orientationLowConfidence = orient.lowConfidence;
                     template = tm.getTemplate(sheetType);
+                }
+
+                if (tiltAgnosticMode && orientationLowConfidence && !resolvedViaArucoIdentity) {
+                    final Bitmap previewForRetake = alignedBitmap;
+                    runOnUiThread(() -> {
+                        Toast.makeText(
+                                ResultActivity.this,
+                                "⚠ Couldn't confirm sheet orientation. Please retake.",
+                                Toast.LENGTH_LONG
+                        ).show();
+                        imageResult.setImageBitmap(previewForRetake);
+                        showLoading(false);
+                    });
+                    return;
                 }
 
                 // If the oriented bitmap is different from the original, update
@@ -644,6 +666,50 @@ public class ResultActivity extends AppCompatActivity {
                 });
             }
         }).start();
+    }
+
+    private static final class AnchorResolution {
+        final Bitmap image;
+        final Point[] anchors;
+        final boolean rotationRetryApplied;
+
+        AnchorResolution(Bitmap image, Point[] anchors, boolean rotationRetryApplied) {
+            this.image = image;
+            this.anchors = anchors;
+            this.rotationRetryApplied = rotationRetryApplied;
+        }
+    }
+
+    private AnchorResolution resolveTiltAgnosticAnchors(Bitmap image) {
+        Point[] anchors = com.example.omrscanner.omr.ArucoAnchorDetector.detectIdentityAnchors(image);
+        if (anchors != null) {
+            return new AnchorResolution(image, anchors, false);
+        }
+
+        int[] rotateCodes = { Core.ROTATE_90_CLOCKWISE, Core.ROTATE_180, Core.ROTATE_90_COUNTERCLOCKWISE };
+        for (int rotateCode : rotateCodes) {
+            Mat srcMat = new Mat();
+            Utils.bitmapToMat(image, srcMat);
+            Mat rotatedMat = new Mat();
+            Core.rotate(srcMat, rotatedMat, rotateCode);
+            Bitmap rotatedBitmap = Bitmap.createBitmap(
+                    rotatedMat.cols(), rotatedMat.rows(), Bitmap.Config.ARGB_8888);
+            Utils.matToBitmap(rotatedMat, rotatedBitmap);
+            srcMat.release();
+            rotatedMat.release();
+
+            Point[] rotatedAnchors = com.example.omrscanner.omr.ArucoAnchorDetector.detectIdentityAnchors(rotatedBitmap);
+            if (rotatedAnchors != null) {
+                Log.i(TAG, "Tilt Agnostic Mode: ArUco identity detection recovered after rotation retry (rotateCode="
+                        + rotateCode + ") -> " + rotatedBitmap.getWidth() + "x" + rotatedBitmap.getHeight());
+                image.recycle();
+                return new AnchorResolution(rotatedBitmap, rotatedAnchors, true);
+            }
+            rotatedBitmap.recycle();
+        }
+
+        Log.w(TAG, "Tilt Agnostic Mode: ArUco identity detection found no markers at any rotation, falling back to geometric detector");
+        return new AnchorResolution(image, null, false);
     }
 
     // ──────────────────────────────────────────────────────────

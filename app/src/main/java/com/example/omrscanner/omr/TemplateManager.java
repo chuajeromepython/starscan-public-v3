@@ -497,11 +497,17 @@ public class TemplateManager {
         final int rotationCode;
         final String templateId;
         final double score;
+        final double bubbleScore;
 
         RotationCandidate(int rotationCode, String templateId, double score) {
+            this(rotationCode, templateId, score, score);
+        }
+
+        RotationCandidate(int rotationCode, String templateId, double score, double bubbleScore) {
             this.rotationCode = rotationCode;
             this.templateId = templateId;
             this.score = score;
+            this.bubbleScore = bubbleScore;
         }
     }
 
@@ -535,9 +541,32 @@ public class TemplateManager {
             return new RotationDecision(new RotationCandidate(-1, "ZPH50", 0.0), null, false, 0.0);
         }
 
+        // 0 vs 180 disambiguation: headerScore (70% of the blended score)
+        // has been observed to confidently favor the WRONG member of this
+        // pair on real captures -- not just near-ties -- while raw
+        // bubbleScore (pure grid alignment, no header heuristic involved)
+        // has correctly favored the right one every time it's been checked
+        // against a known-bad scan. Don't let header sparsity vote on this
+        // pair at all: pre-resolve it by bubbleScore before ranking.
+        RotationCandidate none = null;
+        RotationCandidate half = null;
+        for (RotationCandidate c : candidates) {
+            if (c.rotationCode == -1) {
+                none = c;
+            } else if (c.rotationCode == Core.ROTATE_180) {
+                half = c;
+            }
+        }
+        List<RotationCandidate> effective = candidates;
+        if (none != null && half != null) {
+            RotationCandidate loser = (none.bubbleScore >= half.bubbleScore) ? half : none;
+            effective = new ArrayList<>(candidates);
+            effective.remove(loser);
+        }
+
         RotationCandidate best = null;
         RotationCandidate second = null;
-        for (RotationCandidate candidate : candidates) {
+        for (RotationCandidate candidate : effective) {
             if (best == null || candidate.score > best.score) {
                 second = best;
                 best = candidate;
@@ -631,6 +660,7 @@ public class TemplateManager {
         return (a == Core.ROTATE_90_CLOCKWISE && b == Core.ROTATE_90_COUNTERCLOCKWISE)
                 || (a == Core.ROTATE_90_COUNTERCLOCKWISE && b == Core.ROTATE_90_CLOCKWISE);
     }
+
 
     /**
      * Human-readable name for a rotation code, for logging only.
@@ -776,6 +806,7 @@ public class TemplateManager {
 
             String rotationBestTemplateId = "ZPH50";
             double rotationBestScore = -1.0;
+            double rotationBestBubbleScore = -1.0;
 
             // Score each template against this orientation
             for (Map.Entry<String, OmrTemplate> entry : templates.entrySet()) {
@@ -797,11 +828,12 @@ public class TemplateManager {
 
                 if (combinedScore > rotationBestScore) {
                     rotationBestScore = combinedScore;
+                    rotationBestBubbleScore = bubbleScore;
                     rotationBestTemplateId = tpl.templateId;
                 }
             }
 
-            rotationCandidates.add(new RotationCandidate(rotCode, rotationBestTemplateId, rotationBestScore));
+            rotationCandidates.add(new RotationCandidate(rotCode, rotationBestTemplateId, rotationBestScore, rotationBestBubbleScore));
 
             // Release rotated Mat (but not the original srcGray)
             if (rotCode != -1) {
@@ -1051,7 +1083,7 @@ public class TemplateManager {
                 Log.d(TAG, String.format(
                         "  rot=%d, template=%s, bubble=%.3f header=%.3f(frac=%.3f) combined=%.3f",
                         rotCode, templateId, bubbleScore, headerScore, headerFraction, combinedScore));
-                rotationCandidates.add(new RotationCandidate(rotCode, templateId, combinedScore));
+                rotationCandidates.add(new RotationCandidate(rotCode, templateId, combinedScore, bubbleScore));
                 if (rotCode != -1) candidate.release();
             }
         }
