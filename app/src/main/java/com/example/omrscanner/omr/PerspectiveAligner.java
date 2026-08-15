@@ -104,6 +104,29 @@ public class PerspectiveAligner {
     }
 
     /**
+     * Measures the detected anchor quad itself to decide landscape vs
+     * portrait canvas shape, instead of trusting a capture-mode flag.
+     * A pure in-plane (roll) rotation of the camera preserves real-world
+     * distances, so TL-TR vs TL-BL raw-pixel length reliably reflects the
+     * sheet's true aspect ratio regardless of how the phone was tilted.
+     * This keeps the warp proportion-correct (no anisotropic squeeze) for
+     * every anchor source -- ArUco identity anchors AND the geometric
+     * frame-position fallback alike.
+     */
+    public static boolean isAnchorQuadLandscape(Point[] anchors) {
+        Point tl = anchors[0], tr = anchors[1], bl = anchors[2], br = anchors[3];
+        double width = (distance(tl, tr) + distance(bl, br)) / 2.0;
+        double height = (distance(tl, bl) + distance(tr, br)) / 2.0;
+        return width >= height;
+    }
+
+    private static double distance(Point a, Point b) {
+        double dx = a.x - b.x;
+        double dy = a.y - b.y;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    /**
      * @param landscapeContent When true, warps into a LANDSCAPE canonical
      *        rectangle (CANONICAL_HEIGHT x CANONICAL_WIDTH) instead of the
      *        default portrait one. ArUco-identity-resolved anchors (Tilt

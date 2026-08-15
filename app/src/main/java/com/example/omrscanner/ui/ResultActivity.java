@@ -93,6 +93,7 @@ public class ResultActivity extends AppCompatActivity {
     private String imageSource;
     private boolean fixedMountMode;
     private boolean tiltAgnosticMode;
+    private int captureRotationBucket;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -154,6 +155,7 @@ public class ResultActivity extends AppCompatActivity {
         imageSource = getIntent().getStringExtra(PreviewActivity.IMAGE_SOURCE);
         fixedMountMode = getIntent().getBooleanExtra(CameraActivity.EXTRA_FIXED_MOUNT_MODE, false);
         tiltAgnosticMode = getIntent().getBooleanExtra(CameraActivity.EXTRA_TILT_AGNOSTIC_MODE, false);
+        captureRotationBucket = getIntent().getIntExtra(CameraActivity.EXTRA_CAPTURE_ROTATION_BUCKET, 0);
 
         Log.d(TAG, "Received sheet type: " + selectedSheetType + ", classId: " + classId + ", activityId: " + activityId);
 
@@ -302,7 +304,53 @@ public class ResultActivity extends AppCompatActivity {
                 // Can now correctly orient the caputured image
                 // 90 degrees CW if the captured image is taken on the left tilt
                 // -90 degrees CCW if the captured image is taken in the right tilt
-                final Bitmap original = rawCapture;
+                //
+                // captureRotationBucket (0 / 90 / -90 / 180) is the tilt
+                // bucket CameraActivity's OrientationEventListener measured
+                // at the exact moment takePhoto() fired (see
+                // EXTRA_CAPTURE_ROTATION_BUCKET). Scoped to Tilt Agnostic
+                // Mode only: every other pipeline is still gated to the one
+                // supported physical tilt at capture time, so its raw JPEG
+                // is already in the orientation the rest of this method
+                // expects — rotating it here would break that already-
+                // correct path.
+                final Bitmap original;
+                if (tiltAgnosticMode && captureRotationBucket != 0) {
+                    int rotateCode;
+                    switch (captureRotationBucket) {
+                        case 90:
+                            rotateCode = Core.ROTATE_90_CLOCKWISE;
+                            break;
+                        case -90:
+                            rotateCode = Core.ROTATE_90_COUNTERCLOCKWISE;
+                            break;
+                        case 180:
+                            rotateCode = Core.ROTATE_180;
+                            break;
+                        default:
+                            rotateCode = -1;
+                            break;
+                    }
+                    if (rotateCode == -1) {
+                        original = rawCapture;
+                    } else {
+                        Mat rawMat = new Mat();
+                        Utils.bitmapToMat(rawCapture, rawMat);
+                        Mat rotatedMat = new Mat();
+                        Core.rotate(rawMat, rotatedMat, rotateCode);
+                        Bitmap rotatedBitmap = Bitmap.createBitmap(
+                                rotatedMat.cols(), rotatedMat.rows(), Bitmap.Config.ARGB_8888);
+                        Utils.matToBitmap(rotatedMat, rotatedBitmap);
+                        rawMat.release();
+                        rotatedMat.release();
+                        rawCapture.recycle();
+                        original = rotatedBitmap;
+                        Log.i(TAG, "Tilt Agnostic Mode: pre-rotated raw capture by bucket="
+                                + captureRotationBucket + " -> " + original.getWidth() + "x" + original.getHeight());
+                    }
+                } else {
+                    original = rawCapture;
+                }
 
                 Point[] finalAnchors = anchors;
                 boolean resolvedViaArucoIdentity = false;
@@ -425,20 +473,17 @@ public class ResultActivity extends AppCompatActivity {
                 }
 
                 // STEP 1: Apply perspective alignment (now maintains correct aspect ratio!)
-                // Landscape canvas is keyed on tiltAgnosticMode, NOT
-                // resolvedViaArucoIdentity: both the ArUco-identity-success
-                // case AND the geometric-fallback-within-Tilt-Agnostic-Mode
-                // case (ArUco found no markers) operate on the SAME
-                // pre-rotated `original` buffer from
-                // rotateToNormalReadingOrientation() above, so both produce
-                // a genuinely landscape-shaped anchor quad. Keying this off
-                // resolvedViaArucoIdentity instead left the fallback case
-                // squeezed into the portrait canvas exactly like before the
-                // original fix -- resolvedViaArucoIdentity now only means
-                // "identity-verified", used below for the mirror check and
-                // TemplateManager's trust-rotation shortcut, not for canvas
-                // shape.
-                alignedBitmap = PerspectiveAligner.alignPerspective(original, finalAnchors, tiltAgnosticMode);
+                // Canvas shape is measured from the anchor quad itself, not
+                // guessed from tiltAgnosticMode. A mode flag can't tell you
+                // whether THIS capture's quad came out landscape- or
+                // portrait-shaped in raw pixels -- only the quad's own
+                // geometry can. This keeps every anchor source (ArUco
+                // identity success AND the geometric frame-position
+                // fallback) proportion-correct, so the fallback case no
+                // longer gets anisotropically squeezed into the wrong
+                // canvas shape.
+                boolean landscapeContent = PerspectiveAligner.isAnchorQuadLandscape(finalAnchors);
+                alignedBitmap = PerspectiveAligner.alignPerspective(original, finalAnchors, landscapeContent);
 
                 if (alignedBitmap == null) {
                     runOnUiThread(() -> {

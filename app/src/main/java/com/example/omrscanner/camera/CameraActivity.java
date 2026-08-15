@@ -1668,6 +1668,7 @@ public class CameraActivity extends AppCompatActivity {
                             intent.putExtra(EXTRA_FIXED_MOUNT_MODE, fixedMountMode);
                             intent.putExtra(EXTRA_TILT_AGNOSTIC_MODE, tiltAgnosticMode);
                             intent.putExtra(EXTRA_GUIDE_CORNER_ROTATION_STEPS, currentLabelRotationSteps);
+                            intent.putExtra(EXTRA_CAPTURE_ROTATION_BUCKET, captureRotationBucket);
                             if (selectedSheetType != null)
                                 intent.putExtra(DashboardActivity.EXTRA_SHEET_TYPE, selectedSheetType);
                             if (classId != null)

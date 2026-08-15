@@ -1022,6 +1022,13 @@ public class TemplateManager {
             rotationCandidates.add(new RotationCandidate(rotCode, templateId, bubbleScore));
             candidate.release();
         } else {
+            // Bubble-grid alignment alone can't reliably tell 0° from its
+            // 180-degree opposite on a repetitive dot grid (same reasoning
+            // as computeHeaderSparsityScore's own doc comment) -- blend in
+            // header sparsity the same way detectAndOrient()'s equivalent
+            // landscape branch already does, so this branch stops silently
+            // accepting upside-down candidates that happen to score
+            // well on bubbles alone.
             int[][] rotations = {
                     { -1 }, { Core.ROTATE_180 },
                     { Core.ROTATE_90_CLOCKWISE }, { Core.ROTATE_90_COUNTERCLOCKWISE }
@@ -1037,8 +1044,14 @@ public class TemplateManager {
                 double scaleY = (double) ch / tpl.height;
                 double bubbleScore = aligner.getAlignmentScore(candidate, tpl, scaleX, scaleY);
 
-                Log.d(TAG, String.format("  rot=%d, template=%s, score=%.3f", rotCode, templateId, bubbleScore));
-                rotationCandidates.add(new RotationCandidate(rotCode, templateId, bubbleScore));
+                double headerFraction = computeHeaderFraction(tpl);
+                double headerScore = computeHeaderSparsityScore(candidate, headerFraction);
+                double combinedScore = (bubbleScore * 0.3) + (headerScore * 0.7);
+
+                Log.d(TAG, String.format(
+                        "  rot=%d, template=%s, bubble=%.3f header=%.3f(frac=%.3f) combined=%.3f",
+                        rotCode, templateId, bubbleScore, headerScore, headerFraction, combinedScore));
+                rotationCandidates.add(new RotationCandidate(rotCode, templateId, combinedScore));
                 if (rotCode != -1) candidate.release();
             }
         }
