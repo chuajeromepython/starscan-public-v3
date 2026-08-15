@@ -93,7 +93,6 @@ public class ResultActivity extends AppCompatActivity {
     private String imageSource;
     private boolean fixedMountMode;
     private boolean tiltAgnosticMode;
-    private int captureRotationBucket;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -155,7 +154,6 @@ public class ResultActivity extends AppCompatActivity {
         imageSource = getIntent().getStringExtra(PreviewActivity.IMAGE_SOURCE);
         fixedMountMode = getIntent().getBooleanExtra(CameraActivity.EXTRA_FIXED_MOUNT_MODE, false);
         tiltAgnosticMode = getIntent().getBooleanExtra(CameraActivity.EXTRA_TILT_AGNOSTIC_MODE, false);
-        captureRotationBucket = getIntent().getIntExtra(CameraActivity.EXTRA_CAPTURE_ROTATION_BUCKET, 0);
 
         Log.d(TAG, "Received sheet type: " + selectedSheetType + ", classId: " + classId + ", activityId: " + activityId);
 
@@ -274,59 +272,6 @@ public class ResultActivity extends AppCompatActivity {
         finish();
     }
 
-    /**
-     * Rotates a raw Tilt Agnostic Mode capture back to normal reading
-     * orientation, using the rotation bucket CameraActivity's orientation
-     * listener reported at the exact moment of capture (0 / -90 / 90 / 180
-     * -- see CameraActivity.EXTRA_CAPTURE_ROTATION_BUCKET).
-     *
-     * Verified empirically against real captures:
-     *   - tilted right (bucket -90) -> raw image needs ROTATE_90_CLOCKWISE
-     *   - tilted left  (bucket  90) -> raw image needs ROTATE_90_COUNTERCLOCKWISE
-     *   - upside-down  (bucket 180) -> raw image needs ROTATE_180
-     *   - bucket 0 (phone held upright/portrait against a landscape sheet)
-     *     isn't a physically sensible capture for this app -- left as a
-     *     no-op rather than guessing.
-     *
-     * Recycles the input bitmap when a new rotated bitmap is produced, so
-     * callers don't need to track/release the pre-rotation bitmap
-     * themselves.
-     */
-    private Bitmap rotateToNormalReadingOrientation(Bitmap raw, int rotationBucket) {
-        int rotateCode;
-        switch (rotationBucket) {
-            case -90:
-                rotateCode = Core.ROTATE_90_CLOCKWISE;
-                break;
-            case 90:
-                rotateCode = Core.ROTATE_90_COUNTERCLOCKWISE;
-                break;
-            case 180:
-                rotateCode = Core.ROTATE_180;
-                break;
-            default:
-                Log.d(TAG, "rotateToNormalReadingOrientation: bucket=" + rotationBucket + ", no correction applied");
-                return raw;
-        }
-
-        Mat src = new Mat();
-        Utils.bitmapToMat(raw, src);
-
-        Mat rotated = new Mat();
-        Core.rotate(src, rotated, rotateCode);
-        src.release();
-
-        Bitmap result = Bitmap.createBitmap(rotated.cols(), rotated.rows(), Bitmap.Config.ARGB_8888);
-        Utils.matToBitmap(rotated, result);
-        rotated.release();
-
-        raw.recycle();
-
-        Log.d(TAG, "rotateToNormalReadingOrientation: bucket=" + rotationBucket
-                + " -> applied " + rotateCode + " -> " + result.getWidth() + "x" + result.getHeight());
-        return result;
-    }
-
     private void processImage(String imagePath, Point[] anchors) {
         showLoading(true);
 
@@ -357,9 +302,7 @@ public class ResultActivity extends AppCompatActivity {
                 // Can now correctly orient the caputured image
                 // 90 degrees CW if the captured image is taken on the left tilt
                 // -90 degrees CCW if the captured image is taken in the right tilt
-                final Bitmap original = tiltAgnosticMode
-                        ? rotateToNormalReadingOrientation(rawCapture, captureRotationBucket)
-                        : rawCapture;
+                final Bitmap original = rawCapture;
 
                 Point[] finalAnchors = anchors;
                 boolean resolvedViaArucoIdentity = false;

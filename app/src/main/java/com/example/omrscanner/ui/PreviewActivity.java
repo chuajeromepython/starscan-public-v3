@@ -118,14 +118,31 @@ public class PreviewActivity extends AppCompatActivity {
                     return;
                 }
 
-                // Detect anchors
-                detectedAnchors = AnchorDetector.detectAnchors(originalBitmap);
+                // Detect anchors -- SKIPPED in Tilt Agnostic Mode. This
+                // position-based AnchorDetector labels TL/TR/BL/BR purely by
+                // where a candidate square lands in the frame, correct only
+                // when the sheet is already right-side-up relative to the
+                // camera. Forwarding its guess as ANCHOR_POINTS meant
+                // ResultActivity's ArUco identity re-detection -- the
+                // actually orientation-safe path -- never ran, since it only
+                // fires when incoming anchors are null. Skipping this call
+                // lets ResultActivity do the real detection fresh.
+                detectedAnchors = tiltAgnosticMode
+                        ? null
+                        : AnchorDetector.detectAnchors(originalBitmap);
 
                 // Update UI on main thread
                 runOnUiThread(() -> {
                     showLoading(false);
 
-                    if (detectedAnchors != null) {
+                    if (tiltAgnosticMode) {
+                        // No preview-stage detection in this mode -- just
+                        // show the raw capture. ResultActivity resolves the
+                        // real corners via ArUco identity detection and
+                        // prompts a retake there if that fails.
+                        imagePreview.setImageBitmap(originalBitmap);
+                        btnScan.setEnabled(true);
+                    } else if (detectedAnchors != null) {
                         // Draw anchors for visual feedback
                         Bitmap debugBitmap = AnchorDetector.drawAnchors(
                                 originalBitmap.copy(originalBitmap.getConfig(), true),
@@ -184,7 +201,10 @@ public class PreviewActivity extends AppCompatActivity {
     }
 
     private void proceedToAlignment() {
-        if (detectedAnchors == null) {
+        // Tilt Agnostic Mode never has preview-stage anchors (detection is
+        // skipped above, deferred to ResultActivity's ArUco identity pass),
+        // so only require detectedAnchors for the other modes.
+        if (!tiltAgnosticMode && detectedAnchors == null) {
             Toast.makeText(
                     this,
                     "Cannot proceed - anchors not detected",
@@ -197,13 +217,18 @@ public class PreviewActivity extends AppCompatActivity {
         Intent intent = new Intent(this, ResultActivity.class);
         intent.putExtra(IMAGE_PATH, imagePath);
 
-        // Convert Point[] to double[] for passing via Intent
-        double[] anchorData = new double[8]; // 4 points × 2 coordinates
-        for (int i = 0; i < 4; i++) {
-            anchorData[i * 2] = detectedAnchors[i].x;
-            anchorData[i * 2 + 1] = detectedAnchors[i].y;
+        // Convert Point[] to double[] for passing via Intent -- only when we
+        // actually have preview-stage anchors. Tilt Agnostic Mode leaves
+        // this unset so ResultActivity's finalAnchors starts null and its
+        // ArUco identity re-detection actually runs.
+        if (detectedAnchors != null) {
+            double[] anchorData = new double[8]; // 4 points × 2 coordinates
+            for (int i = 0; i < 4; i++) {
+                anchorData[i * 2] = detectedAnchors[i].x;
+                anchorData[i * 2 + 1] = detectedAnchors[i].y;
+            }
+            intent.putExtra(ANCHOR_POINTS, anchorData);
         }
-        intent.putExtra(ANCHOR_POINTS, anchorData);
 
         // Pass the selected sheet type
         if (selectedSheetType != null) {
@@ -225,7 +250,7 @@ public class PreviewActivity extends AppCompatActivity {
     private void showLoading(boolean show) {
         progressBar.setVisibility(show ? View.VISIBLE : View.GONE);
         btnRetake.setEnabled(!show);
-        btnScan.setEnabled(!show && detectedAnchors != null);
+        btnScan.setEnabled(!show && (detectedAnchors != null || tiltAgnosticMode));
     }
 
     @Override
