@@ -59,9 +59,13 @@ import com.example.omrscanner.ui.PreviewActivity;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import org.opencv.android.OpenCVLoader;
+import org.opencv.core.Core;
+import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfDouble;
 import org.opencv.core.Point;
 import org.opencv.core.Rect;
+import org.opencv.imgproc.Imgproc;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -238,10 +242,28 @@ public class CameraActivity extends AppCompatActivity {
     // being pulled out of the guide box, should.
     private static final long GUIDE_LOCK_GRACE_PERIOD_MS = 1000L;
 
+    // ⚠ LOGGING-ONLY PLACEHOLDER — 0.0 means every frame passes, so this
+    // currently has NO effect on capture behavior. Laplacian-variance
+    // sharpness values are logged (see SHARPNESS_TAG) on every locked
+    // frame so a real threshold can be set from actual handheld logcat
+    // data instead of a guess. Once we have logs from real scans (sharp
+    // captures vs. known-blurry ones), raise this to the value that
+    // actually separates them.
+    private static final double SHARPNESS_VARIANCE_THRESHOLD = 0.0;
+
+    // Safety ceiling: if all 4 corners are locked but the frame keeps
+    // failing the sharpness check, capture anyway after this many
+    // consecutive locked-but-blurry frames rather than stalling forever
+    // (e.g. for a persistent hand tremor).
+    private static final int SHARPNESS_MAX_WAIT_FRAMES = 15;
+
+    private static final String SHARPNESS_TAG = "StarScanSharpness";
+
     private RectF[] guideSquaresViewSpace = null; // computed once overlay is laid out
     private boolean guideLandscapeMode = false;
     private final int[] guideConsecutiveHits = new int[4];
     private final long[] guideLastSeenTimestamp = new long[4];
+    private int lockedBlurryFrameCounter = 0;
 
     // ── Intent extras ─────────────────────────────────────────────
     private String selectedSheetType = null;
@@ -722,6 +744,8 @@ public class CameraActivity extends AppCompatActivity {
                 : AnchorDetector.LiveDetectionMode.HANDHELD;
 
         boolean allLocked = true;
+        double lockedFrameSharpness = -1;
+        Rect[] cornerImageRois = new Rect[4];
         try {
             long now = System.currentTimeMillis();
             for (int i = 0; i < 4; i++) {
@@ -732,6 +756,7 @@ public class CameraActivity extends AppCompatActivity {
                 // anchor being pulled back out of the box.
                 Rect imageRoi = viewRectToImageRect(
                         guideSquaresViewSpace[i], imageWidth, imageHeight, rotation);
+                cornerImageRois[i] = imageRoi;
                 boolean found = AnchorDetector.detectAnchorInRegion(gray, imageRoi, mode);
 
                 if (found) {
@@ -762,6 +787,10 @@ public class CameraActivity extends AppCompatActivity {
                     allLocked = false;
                 }
             }
+
+            if (allLocked) {
+                lockedFrameSharpness = computeGuideRegionSharpness(gray, cornerImageRois);
+            }
         } finally {
             gray.release();
         }
@@ -787,9 +816,75 @@ public class CameraActivity extends AppCompatActivity {
         });
 
         if (allLocked && !autoCaptureTriggered) {
-            autoCaptureTriggered = true;
-            mainHandler.post(this::takePhoto);
+            boolean sharpEnough = lockedFrameSharpness >= SHARPNESS_VARIANCE_THRESHOLD;
+            lockedBlurryFrameCounter = sharpEnough ? 0 : lockedBlurryFrameCounter + 1;
+
+            Log.d(SHARPNESS_TAG, String.format(
+                    "locked frame sharpness=%.2f threshold=%.2f sharpEnough=%b blurryStreak=%d",
+                    lockedFrameSharpness, SHARPNESS_VARIANCE_THRESHOLD, sharpEnough,
+                    lockedBlurryFrameCounter));
+
+            if (sharpEnough || lockedBlurryFrameCounter >= SHARPNESS_MAX_WAIT_FRAMES) {
+                autoCaptureTriggered = true;
+                lockedBlurryFrameCounter = 0;
+                mainHandler.post(this::takePhoto);
+            } else {
+                mainHandler.post(() -> {
+                    if (anchorStatusText != null) {
+                        anchorStatusText.setText("Hold steady…");
+                    }
+                });
+            }
+        } else if (!allLocked) {
+            lockedBlurryFrameCounter = 0;
         }
+    }
+
+    /**
+     * Laplacian-variance blur metric, averaged over the 4 guide-square
+     * corner regions (not the whole frame — background clutter outside
+     * the squares is irrelevant to whether the anchors themselves are
+     * sharp). Higher = sharper. Currently logging-only; see
+     * SHARPNESS_VARIANCE_THRESHOLD.
+     */
+    private double computeGuideRegionSharpness(Mat gray, Rect[] rois) {
+        double totalVariance = 0;
+        int sampled = 0;
+
+        for (Rect roi : rois) {
+            if (roi == null) continue;
+
+            Rect clamped = new Rect(
+                    Math.max(0, roi.x),
+                    Math.max(0, roi.y),
+                    Math.min(roi.width, gray.cols() - Math.max(0, roi.x)),
+                    Math.min(roi.height, gray.rows() - Math.max(0, roi.y))
+            );
+            if (clamped.width <= 0 || clamped.height <= 0) continue;
+
+            Mat region = null;
+            Mat laplacian = null;
+            MatOfDouble mean = null;
+            MatOfDouble stddev = null;
+            try {
+                region = new Mat(gray, clamped);
+                laplacian = new Mat();
+                Imgproc.Laplacian(region, laplacian, CvType.CV_64F);
+                mean = new MatOfDouble();
+                stddev = new MatOfDouble();
+                Core.meanStdDev(laplacian, mean, stddev);
+                double sd = stddev.get(0, 0)[0];
+                totalVariance += sd * sd;
+                sampled++;
+            } finally {
+                if (region != null) region.release();
+                if (laplacian != null) laplacian.release();
+                if (mean != null) mean.release();
+                if (stddev != null) stddev.release();
+            }
+        }
+
+        return sampled > 0 ? totalVariance / sampled : -1;
     }
 
     /**
@@ -1748,6 +1843,7 @@ public class CameraActivity extends AppCompatActivity {
         // paused instance left in the back stack after capture).
         java.util.Arrays.fill(guideConsecutiveHits, 0);
         java.util.Arrays.fill(guideLastSeenTimestamp, 0L);
+        lockedBlurryFrameCounter = 0;
         if (anchorOverlay != null) {
             anchorOverlay.resetProgress();
         }
