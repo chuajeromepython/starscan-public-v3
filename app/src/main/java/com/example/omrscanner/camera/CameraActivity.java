@@ -259,6 +259,14 @@ public class CameraActivity extends AppCompatActivity {
 
     private static final String SHARPNESS_TAG = "StarScanSharpness";
 
+    // Half-width (px) of the sampled box centered on each ArUco anchor
+    // point in Tilt Agnostic Mode, used for the sharpness check there
+    // (no fixed guide squares exist in this mode, so we sample around
+    // wherever the anchors were actually found this frame).
+    private static final int SHARPNESS_ANCHOR_ROI_HALF_SIZE = 40;
+
+    private int tiltAgnosticBlurryFrameCounter = 0;
+
     private RectF[] guideSquaresViewSpace = null; // computed once overlay is laid out
     private boolean guideLandscapeMode = false;
     private final int[] guideConsecutiveHits = new int[4];
@@ -678,12 +686,17 @@ public class CameraActivity extends AppCompatActivity {
 
         Map<Integer, Point[]> quadsById;
         Point[] anchors;
+        double lockedFrameSharpness = -1;
         try {
             // Single detection pass per frame: quadsById drives the live
             // "searching" boxes for whatever markers are currently visible,
             // anchors is non-null only once all 4 identity markers are found.
             quadsById = ArucoAnchorDetector.detectMarkerQuads(gray);
             anchors = ArucoAnchorDetector.identityAnchorsFromQuads(quadsById);
+            if (anchors != null) {
+                lockedFrameSharpness = computeGuideRegionSharpness(
+                        gray, anchorPointsToSharpnessRois(anchors));
+            }
         } finally {
             gray.release();
         }
@@ -698,15 +711,51 @@ public class CameraActivity extends AppCompatActivity {
 
             boolean captureStarted = false;
             if (consecutiveDetections >= REQUIRED_CONSECUTIVE_DETECTIONS_TILT_AGNOSTIC) {
-                captureStarted = triggerAutoCapture();
-                if (captureStarted) {
-                    updateStatusTextForCaptureStarted();
+                boolean sharpEnough = lockedFrameSharpness < 0
+                        || lockedFrameSharpness >= SHARPNESS_VARIANCE_THRESHOLD;
+                tiltAgnosticBlurryFrameCounter = sharpEnough ? 0 : tiltAgnosticBlurryFrameCounter + 1;
+
+                Log.d(SHARPNESS_TAG, String.format(
+                        "[tiltAgnostic] sharpness=%.2f threshold=%.2f sharpEnough=%b blurryStreak=%d",
+                        lockedFrameSharpness, SHARPNESS_VARIANCE_THRESHOLD, sharpEnough,
+                        tiltAgnosticBlurryFrameCounter));
+
+                if (sharpEnough || tiltAgnosticBlurryFrameCounter >= SHARPNESS_MAX_WAIT_FRAMES) {
+                    tiltAgnosticBlurryFrameCounter = 0;
+                    captureStarted = triggerAutoCapture();
+                    if (captureStarted) {
+                        updateStatusTextForCaptureStarted();
+                    }
+                } else {
+                    mainHandler.post(() -> {
+                        if (anchorStatusText != null) {
+                            anchorStatusText.setText("Hold steady…");
+                        }
+                    });
                 }
             }
         } else {
             onDetectionMiss();
             onAnchorsNotDetected();
+            tiltAgnosticBlurryFrameCounter = 0;
         }
+    }
+
+    /**
+     * Builds small sampling boxes centered on each detected ArUco anchor
+     * point, for the sharpness check in Tilt Agnostic Mode. There are no
+     * fixed guide squares in this mode, so we sample around wherever the
+     * anchors actually landed this frame instead.
+     */
+    private Rect[] anchorPointsToSharpnessRois(Point[] anchors) {
+        Rect[] rois = new Rect[anchors.length];
+        for (int i = 0; i < anchors.length; i++) {
+            Point p = anchors[i];
+            int x = (int) Math.round(p.x) - SHARPNESS_ANCHOR_ROI_HALF_SIZE;
+            int y = (int) Math.round(p.y) - SHARPNESS_ANCHOR_ROI_HALF_SIZE;
+            rois[i] = new Rect(x, y, SHARPNESS_ANCHOR_ROI_HALF_SIZE * 2, SHARPNESS_ANCHOR_ROI_HALF_SIZE * 2);
+        }
+        return rois;
     }
 
     /**
@@ -816,7 +865,8 @@ public class CameraActivity extends AppCompatActivity {
         });
 
         if (allLocked && !autoCaptureTriggered) {
-            boolean sharpEnough = lockedFrameSharpness >= SHARPNESS_VARIANCE_THRESHOLD;
+            boolean sharpEnough = lockedFrameSharpness < 0
+                    || lockedFrameSharpness >= SHARPNESS_VARIANCE_THRESHOLD;
             lockedBlurryFrameCounter = sharpEnough ? 0 : lockedBlurryFrameCounter + 1;
 
             Log.d(SHARPNESS_TAG, String.format(
@@ -1844,6 +1894,7 @@ public class CameraActivity extends AppCompatActivity {
         java.util.Arrays.fill(guideConsecutiveHits, 0);
         java.util.Arrays.fill(guideLastSeenTimestamp, 0L);
         lockedBlurryFrameCounter = 0;
+        tiltAgnosticBlurryFrameCounter = 0;
         if (anchorOverlay != null) {
             anchorOverlay.resetProgress();
         }
