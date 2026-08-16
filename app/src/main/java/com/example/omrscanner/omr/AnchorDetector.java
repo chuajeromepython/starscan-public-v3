@@ -28,7 +28,7 @@ import java.util.Set;
 
 /**
  * Detects the 4 corner anchor squares on an OMR sheet using contour analysis.
- * Live camera detection uses profile-specific thresholds so the same pipeline
+ * Live camera detection uses profile-specific thresholds so hbv the same pipeline
  * can support both close handheld scans and fixed elevated mounts.
  */
 public class AnchorDetector {
