@@ -1330,21 +1330,6 @@ public class CameraActivity extends AppCompatActivity {
             return false;
         }
 
-        // Tilt Agnostic Mode's whole point is not caring WHICH tilt the
-        // phone is at -- but it still needs SOME real tilt reading to
-        // correctly pre-rotate the raw capture before detection runs.
-        // Without this, a dead-flat hold (no accelerometer signal at all)
-        // silently snapshots the stale/default bucket as if it were a
-        // confirmed "upright, no rotation needed," which is what starts
-        // the chain leading to upside-down scans. A few ms of natural
-        // hand tremor is normally enough to resolve this. Scoped to
-        // tiltAgnosticMode only -- Guide Square and Fixed Mount (which
-        // also call this method) don't depend on this bucket at all.
-        if (tiltAgnosticMode && !hasConfirmedOrientationReading) {
-            Log.d(TAG, "Auto-capture held: no confirmed orientation reading yet (tilt agnostic mode)");
-            return false;
-        }
-
         autoCaptureTriggered = true;
         Log.d(TAG, "Auto-capture triggered after " + consecutiveDetections + " stable detections");
         takePhoto();
@@ -1565,6 +1550,15 @@ public class CameraActivity extends AppCompatActivity {
 // ─────────────────────────────────────────────────────────────
 
     private void setupOrientationListener() {
+        // Tilt Agnostic Mode never reads the accelerometer, full stop --
+        // same reasoning as FlatScanCameraActivity: the sensor can't
+        // reliably resolve yaw for this posture, and since this Activity
+        // is portrait-locked in the manifest the raw capture's pixel
+        // orientation never actually changes with physical tilt anyway.
+        if (tiltAgnosticMode) {
+            return;
+        }
+
         orientationEventListener = new OrientationEventListener(this) {
             @Override
             public void onOrientationChanged(int orientation) {
@@ -1583,14 +1577,7 @@ public class CameraActivity extends AppCompatActivity {
                     rotation = 90;    // rotated so the left edge is "up"
                 }
 
-                // Tilt Agnostic Mode never blocks capture on orientation --
-                // it still needs currentIconRotation tracked below (that's
-                // the bucket takePhoto() snapshots into
-                // EXTRA_CAPTURE_ROTATION_BUCKET), it just must never disable
-                // btnCapture or show the "wrong tilt" warning over it.
-                if (!tiltAgnosticMode) {
-                    updateTiltGate(rotation);
-                }
+                updateTiltGate(rotation);
 
                 if (rotation != currentIconRotation) {
                     currentIconRotation = rotation;
@@ -1781,10 +1768,10 @@ public class CameraActivity extends AppCompatActivity {
 
         File photoFile = new File(getExternalFilesDir(null), "omr_capture.jpg");
 
-        // Snapshot NOW, not inside the onImageSaved callback -- the phone
-        // can keep tilting during the capture/save round-trip, and we need
-        // the bucket that was true at the moment the shot was actually taken.
-        final int captureRotationBucket = currentIconRotation;
+        // Tilt Agnostic Mode no longer reads the accelerometer at all, so
+        // there's nothing for a sensor bucket to correctly "undo." Guide
+        // Square / Fixed Mount still compute a real bucket via currentIconRotation.
+        final int captureRotationBucket = tiltAgnosticMode ? 0 : currentIconRotation;
 
         ImageCapture.OutputFileOptions options =
                 new ImageCapture.OutputFileOptions.Builder(photoFile).build();
@@ -1865,11 +1852,8 @@ public class CameraActivity extends AppCompatActivity {
             anchorOverlay.resetProgress();
         }
 
-        // Tilt Agnostic Mode doesn't gate capture on phone orientation, but
-        // it still needs the listener running to know currentIconRotation
-        // at capture time (see EXTRA_CAPTURE_ROTATION_BUCKET) -- the gating
-        // itself (tilt warning / capture-blocking) is skipped inside
-        // onOrientationChanged above, not by disabling the listener here.
+        // Tilt Agnostic Mode: setupOrientationListener() is a no-op for
+        // this mode now (returns immediately, listener stays null).
         if (orientationEventListener == null) {
             setupOrientationListener();
         } else {

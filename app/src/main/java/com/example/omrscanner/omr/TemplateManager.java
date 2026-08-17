@@ -738,13 +738,13 @@ public class TemplateManager {
         //   - the rotation code (-1 = none)
         //   - whether we need to release the Mat afterwards
         int[][] rotations;
-        if (arucoResolved && !isPortrait) {
-            // See the matching comment in detectAndOrientWithTemplate: ArUco
-            // identity anchors + the mirror/winding check already guarantee
-            // this warp is correctly oriented by construction. Don't let the
-            // generic bubble-grid heuristic guess override a provably-correct
-            // result -- OMR grids are regular enough that a wrong rotation
-            // can sometimes outscore the correct one.
+        if (arucoResolved) {
+            // ArUco identity anchors + the mirror/winding check already
+            // guarantee this warp is correctly oriented by construction,
+            // regardless of whether the canvas measures portrait or
+            // landscape. Don't let the generic bubble-grid CW/CCW guess
+            // run here -- those two candidates are 180 degrees apart, so
+            // a wrong guess flips an already-correct capture upside-down.
             rotations = new int[][] { { -1 } };
         } else if (isPortrait) {
             // Portrait input from PerspectiveAligner is the normal scan path.
@@ -759,18 +759,8 @@ public class TemplateManager {
             // both and let the alignment score (with the tie-break bias
             // below) pick the one that actually matches the grid.
             //
-            // This also covers the arucoResolved (Tilt Agnostic Mode) case.
-            // ArUco establishes canonical paper-space TL/TR/BL/BR, but we
-            // don't yet have an empirically-verified fixed content rotation
-            // for that reference frame the way REQUIRED_PORTRAIT_ROTATION
-            // was verified for the geometric/handheld path (see comment on
-            // ARUCO_RESOLVED_CONTENT_ROTATION -- it's still an unconfirmed
-            // placeholder). Trusting it blindly means every tilt-agnostic
-            // scan could be wrong the same way, so this copies handheld's
-            // proven score-and-pick scheme instead. Once logs from real
-            // ArUco captures confirm one direction always wins, this can
-            // be split back into its own branch with a fixed rotation, the
-            // same way REQUIRED_PORTRAIT_ROTATION was derived.
+            // This branch never runs for arucoResolved captures (see
+            // above) -- only the geometric/non-ArUco fallback.
             rotations = new int[][] {
                     { Core.ROTATE_90_CLOCKWISE },
                     { Core.ROTATE_90_COUNTERCLOCKWISE }
@@ -983,35 +973,7 @@ public class TemplateManager {
                     candidate.release();
                 }
             }
-        } else if (isPortrait && arucoResolved) {
-            // Same reasoning as detectAndOrient's arucoResolved branch:
-            // ARUCO_RESOLVED_CONTENT_ROTATION is still an unverified
-            // placeholder, so don't trust it blindly here either. Copy
-            // handheld's score-and-pick scheme instead of forcing a
-            // single fixed rotation.
-            int[][] rotations = {
-                    { Core.ROTATE_90_CLOCKWISE },
-                    { Core.ROTATE_90_COUNTERCLOCKWISE }
-            };
-            for (int[] rot : rotations) {
-                int rotCode = rot[0];
-                Mat candidate = new Mat();
-                Core.rotate(srcGray, candidate, rotCode);
-
-                int cw = candidate.cols();
-                int ch = candidate.rows();
-                double scaleX = (double) cw / tpl.width;
-                double scaleY = (double) ch / tpl.height;
-
-                double bubbleScore = aligner.getAlignmentScore(candidate, tpl, scaleX, scaleY);
-
-                Log.d(TAG, String.format(
-                        "  rot=%d (aruco-resolved, scored), template=%s, score=%.3f", rotCode, templateId, bubbleScore));
-
-                rotationCandidates.add(new RotationCandidate(rotCode, templateId, bubbleScore));
-                candidate.release();
-            }
-        } else if (!isPortrait && arucoResolved) {
+        } else if (arucoResolved) {
             // ArUco identity anchors + the mirror/winding check already
             // GUARANTEE this warp is correctly oriented by construction --
             // finalAnchors[0] (the physical TL marker) was mapped straight
@@ -1044,9 +1006,9 @@ public class TemplateManager {
             // placed upside-down -- so hardcoding CCW-only means an
             // upside-down capture reaching here (geometric/non-ArUco
             // fallback) could never be corrected; it always got force-
-            // rotated the wrong way. Test both, same as the
-            // isPortrait && arucoResolved branch above, and let the
-            // alignment score pick.
+            // rotated the wrong way. Test both and let the alignment
+            // score pick. This branch never runs for arucoResolved
+            // captures (see above) -- only the geometric fallback.
             int[][] rotations = {
                     { Core.ROTATE_90_CLOCKWISE },
                     { Core.ROTATE_90_COUNTERCLOCKWISE }

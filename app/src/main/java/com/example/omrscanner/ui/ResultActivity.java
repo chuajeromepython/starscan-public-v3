@@ -290,30 +290,12 @@ public class ResultActivity extends AppCompatActivity {
                     return;
                 }
 
-                // Tilt Agnostic Mode has no gate forcing one physical
-                // orientation at capture time, so the raw JPEG can come in
-                // rotated depending on which way the phone was tilted.
-                // Undo that now, using the bucket CameraActivity snapshotted
-                // at the moment of takePhoto(), so everything below this
-                // point (AnchorDetector, PerspectiveAligner, etc.) sees the
-                // same normal-reading-orientation image handheld mode
-                // always produced. Assigned exactly once into a new
-                // variable (rather than reassigning rawCapture) so it stays
-                // effectively final and can still be captured by the
-                // runOnUiThread lambdas further down.
-                // Can now correctly orient the caputured image
-                // 90 degrees CW if the captured image is taken on the left tilt
-                // -90 degrees CCW if the captured image is taken in the right tilt
-                //
-                // captureRotationBucket (0 / 90 / -90 / 180) is the tilt
-                // bucket CameraActivity's OrientationEventListener measured
-                // at the exact moment takePhoto() fired (see
-                // EXTRA_CAPTURE_ROTATION_BUCKET). Scoped to Tilt Agnostic
-                // Mode only: every other pipeline is still gated to the one
-                // supported physical tilt at capture time, so its raw JPEG
-                // is already in the orientation the rest of this method
-                // expects — rotating it here would break that already-
-                // correct path.
+                // NOTE: Tilt Agnostic Mode no longer reads the
+                // accelerometer, so captureRotationBucket is hardcoded to 0
+                // for that mode (see takePhoto()) and this block is a
+                // permanent no-op (preRotated == rawCapture) for it. Left
+                // in place because Guide Square / Fixed Mount still pass a
+                // real non-zero bucket through this same path.
                 final Bitmap preRotated;
                 if (tiltAgnosticMode && captureRotationBucket != 0) {
                     int rotateCode;
