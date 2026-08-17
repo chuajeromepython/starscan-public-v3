@@ -460,16 +460,19 @@ public class ResultActivity extends AppCompatActivity {
                 }
 
                 // STEP 1: Apply perspective alignment (now maintains correct aspect ratio!)
-                // Canvas shape is measured from the anchor quad itself, not
-                // guessed from tiltAgnosticMode. A mode flag can't tell you
-                // whether THIS capture's quad came out landscape- or
-                // portrait-shaped in raw pixels -- only the quad's own
-                // geometry can. This keeps every anchor source (ArUco
-                // identity success AND the geometric frame-position
-                // fallback) proportion-correct, so the fallback case no
-                // longer gets anisotropically squeezed into the wrong
-                // canvas shape.
-                boolean landscapeContent = PerspectiveAligner.isAnchorQuadLandscape(finalAnchors);
+                // Canvas shape is measured from the anchor quad itself for
+                // the geometric fallback, since that path has no verified
+                // corner identity to lean on. ArUco-resolved captures skip
+                // the measurement entirely: every template this app
+                // supports is landscape by construction, and measuring
+                // pixel distance between identity-confirmed corners is
+                // exactly the step that perspective foreshortening (a
+                // steeply angled capture) can bias -- a landscape sheet's
+                // TL-BL edge can measure LONGER than its TL-TR edge in raw
+                // pixels, flipping this to "portrait" even though the
+                // corners themselves are all correctly identified.
+                boolean landscapeContent = resolvedViaArucoIdentity
+                        || PerspectiveAligner.isAnchorQuadLandscape(finalAnchors);
                 alignedBitmap = PerspectiveAligner.alignPerspective(original, finalAnchors, landscapeContent);
 
                 if (alignedBitmap == null) {
@@ -532,6 +535,34 @@ public class ResultActivity extends AppCompatActivity {
                         showLoading(false);
                     });
                     return;
+                }
+
+                // Safety net: even with the landscapeContent fix above, a
+                // genuinely bad ArUco read (correct winding, correct area,
+                // but a marker centroid detected in the wrong place) can
+                // still produce a scanBitmap whose shape doesn't match the
+                // template it's about to be scored against. Compare shapes
+                // and refuse to scan silently-garbage bubble positions.
+                if (template != null) {
+                    boolean scanIsLandscape = scanBitmap.getWidth() >= scanBitmap.getHeight();
+                    boolean templateIsLandscape = template.width >= template.height;
+                    if (scanIsLandscape != templateIsLandscape) {
+                        Log.w(TAG, "Shape mismatch: scanBitmap " + scanBitmap.getWidth() + "x"
+                                + scanBitmap.getHeight() + " (landscape=" + scanIsLandscape
+                                + ") vs template " + sheetType + " " + template.width + "x"
+                                + template.height + " (landscape=" + templateIsLandscape + ")");
+                        final Bitmap previewForRetake = alignedBitmap;
+                        runOnUiThread(() -> {
+                            Toast.makeText(
+                                    ResultActivity.this,
+                                    "⚠ Captured sheet shape doesn't match the template. Please retake.",
+                                    Toast.LENGTH_LONG
+                            ).show();
+                            imageResult.setImageBitmap(previewForRetake);
+                            showLoading(false);
+                        });
+                        return;
+                    }
                 }
 
                 // If the oriented bitmap is different from the original, update
