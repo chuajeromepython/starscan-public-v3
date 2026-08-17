@@ -64,13 +64,78 @@ public class ArucoAnchorDetector {
                 local = detectorInstance;
                 if (local == null) {
                     Dictionary dictionary = Objdetect.getPredefinedDictionary(DICTIONARY_ID);
-                    DetectorParameters params = new DetectorParameters();
+                    DetectorParameters params = buildHandheldTunedParameters();
                     local = new ArucoDetector(dictionary, params);
                     detectorInstance = local;
                 }
             }
         }
         return local;
+    }
+
+    /**
+     * OpenCV's default DetectorParameters are tuned for reasonably still,
+     * well-lit input, not handheld motion blur on small printed markers.
+     * On the 4x4_50 dictionary specifically, each marker's ID is only 16
+     * bits, so blur doesn't just make a marker look "soft" -- it tends to
+     * corrupt enough bits that the ID fails to decode at all, which is
+     * what was driving markers to blip in and out of detectMarkerQuads()
+     * even when clearly visible on screen.
+     *
+     * ⚠ Starting values below are reasoned from what motion blur does to
+     * marker geometry/bit contrast, not yet empirically calibrated against
+     * real handheld captures the way SHARPNESS_VARIANCE_THRESHOLD is being
+     * calibrated. Validate against real scans (especially in dim
+     * classroom lighting, where exposure time -- and therefore blur --
+     * goes up) before treating these as final.
+     */
+    @NonNull
+    private static DetectorParameters buildHandheldTunedParameters() {
+        DetectorParameters params = new DetectorParameters();
+
+        // Default adaptive-threshold window sizes tried are {3, 13, 23}.
+        // Widening the top end and shrinking the step tries more window
+        // sizes per frame, which matters when markers vary in apparent
+        // size (distance/tilt) and blur softens their edges differently
+        // at each scale. Costs more per-frame CPU on the live-preview
+        // hot path -- worth profiling if frame rate visibly drops.
+        params.set_adaptiveThreshWinSizeMin(3);
+        params.set_adaptiveThreshWinSizeMax(35);
+        params.set_adaptiveThreshWinSizeStep(6);
+
+        // Default 0.03 rejects candidate quads smaller than 3% of the
+        // image perimeter -- too strict once the sheet is held a bit
+        // farther back or at an angle that foreshortens a corner marker.
+        params.set_minMarkerPerimeterRate(0.02);
+
+        // Default 0.03 is a tight tolerance for how closely a candidate
+        // contour must match a clean quadrilateral. Motion blur smears
+        // marker edges, distorting the fitted polygon -- relaxing this
+        // gives blurred quads more room to still pass as valid squares.
+        params.set_polygonalApproxAccuracyRate(0.05);
+
+        // Default 0.6. This is the fraction of a marker's bits allowed
+        // to be wrong and still get corrected/accepted. Blur is exactly
+        // the kind of noise this exists to absorb; raising it trades a
+        // bit of false-accept risk (irrelevant here since only 4 known
+        // IDs are ever acted on) for meaningfully better tolerance of
+        // blur-corrupted bits.
+        params.set_errorCorrectionRate(0.8);
+
+        // Default 5.0. Blur reduces local contrast at the marker's
+        // black/white cell boundaries, which can fail the Otsu contrast
+        // check before bit-decoding even gets a chance to run. Lowering
+        // this lets lower-contrast (blurrier) candidates still attempt
+        // decoding rather than being thrown out early.
+        params.set_minOtsuStdDev(3.0);
+
+        // Default NONE. SUBPIX refinement doesn't rescue a marker that
+        // failed to decode, but it tightens the corner positions of ones
+        // that DID decode -- which matters here since anchor centers feed
+        // directly into PerspectiveAligner's homography.
+        params.set_cornerRefinementMethod(Objdetect.CORNER_REFINE_SUBPIX);
+
+        return params;
     }
 
     /**

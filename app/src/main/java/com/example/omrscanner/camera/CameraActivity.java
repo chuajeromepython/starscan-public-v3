@@ -103,7 +103,16 @@ public class CameraActivity extends AppCompatActivity {
     //private static final int REQUIRED_CONSECUTIVE_DETECTIONS = 5;
     //private static final int REQUIRED_CONSECUTIVE_DETECTIONS = 8;
     private static final int REQUIRED_CONSECUTIVE_DETECTIONS = 1;
-    private static final int REQUIRED_CONSECUTIVE_DETECTIONS_TILT_AGNOSTIC = 15;
+    // Was 15. With per-marker locking (see updateArucoMarkerLocks), each of
+    // the 4 markers already has to survive its own ARUCO_LOCK_REQUIRED_
+    // CONSECUTIVE_HITS streak before anchors ever go non-null here, and
+    // smoothedAnchors is seeded at the exact measured position on the
+    // first non-null frame (no EMA lag to wait out). 15 more frames on
+    // top of that was re-proving stability that per-marker locking
+    // already guarantees -- this now only needs to be a short de-jitter
+    // buffer against a single-frame fluke, same order as the legacy
+    // ~150-200ms figure above.
+    private static final int REQUIRED_CONSECUTIVE_DETECTIONS_TILT_AGNOSTIC = 5;
 
     // How long each hint stays visible before cycling (milliseconds)
     private static final long HINT_DISPLAY_DURATION_MS = 5000;
@@ -242,6 +251,25 @@ public class CameraActivity extends AppCompatActivity {
     private boolean guideLandscapeMode = false;
     private final int[] guideConsecutiveHits = new int[4];
     private final long[] guideLastSeenTimestamp = new long[4];
+
+    // ── Tilt Agnostic Mode Per-Marker Lock State ──────────────────
+    // identityAnchorsFromQuads() only succeeds when all 4 ArUco IDs decode
+    // in the SAME raw frame. Handheld shake/motion-blur makes individual
+    // markers blur out semi-independently, so demanding a single frame
+    // with all 4 clean at once is a much higher bar than it looks -- if
+    // each marker decodes cleanly 80% of frames, needing all 4 together
+    // only happens ~41% of frames. This mirrors Guide Square mode's
+    // per-corner lock/decay/grace tracking instead: each of the 4 marker
+    // IDs accumulates its own consecutive-hit count, survives a brief
+    // grace period if it drops out for a frame or two, and once ALL 4
+    // are independently locked we build the anchor set from each
+    // marker's last known center -- even if this exact frame didn't
+    // re-detect every single one of them.
+    private static final int ARUCO_LOCK_REQUIRED_CONSECUTIVE_HITS = 8;
+    private static final long ARUCO_LOCK_GRACE_PERIOD_MS = 1000L;
+    private final int[] arucoConsecutiveHits = new int[4];
+    private final long[] arucoLastSeenTimestamp = new long[4];
+    private final Point[] arucoLastKnownCenter = new Point[4];
 
     // ── Intent extras ─────────────────────────────────────────────
     private String selectedSheetType = null;
@@ -655,18 +683,19 @@ public class CameraActivity extends AppCompatActivity {
         android.graphics.Rect cropRect = imageProxy.getCropRect();
 
         Map<Integer, Point[]> quadsById;
-        Point[] anchors;
         try {
-            // Single detection pass per frame: quadsById drives the live
-            // "searching" boxes for whatever markers are currently visible,
-            // anchors is non-null only once all 4 identity markers are found.
+            // Single raw detection pass per frame: quadsById drives the live
+            // "searching" boxes for whatever markers are currently visible.
+            // Anchor locking itself is handled per-marker below rather than
+            // requiring all 4 IDs to land in this exact frame together.
             quadsById = ArucoAnchorDetector.detectMarkerQuads(gray);
-            anchors = ArucoAnchorDetector.identityAnchorsFromQuads(quadsById);
         } finally {
             gray.release();
         }
 
         updateTrackedMarkerOverlay(quadsById, imageWidth, imageHeight, rotationDegrees, cropRect);
+
+        Point[] anchors = updateArucoMarkerLocks(quadsById);
 
         if (anchors != null) {
             onDetectionSuccess();
@@ -685,6 +714,84 @@ public class CameraActivity extends AppCompatActivity {
             onDetectionMiss();
             onAnchorsNotDetected();
         }
+    }
+
+    /**
+     * Per-marker lock tracking for Tilt Agnostic Mode, mirroring Guide
+     * Square mode's per-corner lock/decay/grace pattern (see
+     * analyzeFrameGuideSquareMode) but keyed by ArUco marker ID instead of
+     * screen position. Each of the 4 identity markers accumulates its own
+     * consecutive-hit count and survives a brief drop-out (motion blur, a
+     * stray glare, hand shake) via a grace period before its lock resets.
+     *
+     * Returns the [TL, TR, BL, BR] anchor points -- built from each
+     * marker's last known center, not necessarily this exact frame's raw
+     * detections -- once all 4 are independently locked. Returns null
+     * otherwise.
+     */
+    @Nullable
+    private Point[] updateArucoMarkerLocks(@NonNull Map<Integer, Point[]> quadsById) {
+        int[] markerIds = {
+                ArucoAnchorDetector.MARKER_ID_TOP_LEFT,
+                ArucoAnchorDetector.MARKER_ID_TOP_RIGHT,
+                ArucoAnchorDetector.MARKER_ID_BOTTOM_LEFT,
+                ArucoAnchorDetector.MARKER_ID_BOTTOM_RIGHT
+        };
+
+        long now = System.currentTimeMillis();
+        boolean allLocked = true;
+
+        for (int i = 0; i < 4; i++) {
+            int markerId = markerIds[i];
+            boolean wasLocked = arucoConsecutiveHits[i] >= ARUCO_LOCK_REQUIRED_CONSECUTIVE_HITS;
+            Point[] quad = quadsById.get(markerId);
+
+            if (quad != null) {
+                arucoConsecutiveHits[i] = Math.min(
+                        ARUCO_LOCK_REQUIRED_CONSECUTIVE_HITS, arucoConsecutiveHits[i] + 1);
+                arucoLastSeenTimestamp[i] = now;
+                arucoLastKnownCenter[i] = centerOfArucoQuad(quad);
+            } else if (wasLocked) {
+                // Grace period: a single missed frame on an already-locked
+                // marker (motion blur, brief occlusion) shouldn't throw
+                // away the lock. Only a sustained absence drops it.
+                if (now - arucoLastSeenTimestamp[i] >= ARUCO_LOCK_GRACE_PERIOD_MS) {
+                    arucoConsecutiveHits[i] = 0;
+                    arucoLastKnownCenter[i] = null;
+                }
+            } else {
+                // Not yet locked -- decay rather than hard-reset, so sparse
+                // real hits (natural hand shake) aren't punished as harshly
+                // as a full restart, while sparse false positives still
+                // can't quietly accumulate into a false lock over time.
+                arucoConsecutiveHits[i] = Math.max(0, arucoConsecutiveHits[i] - 3);
+            }
+
+            if (arucoConsecutiveHits[i] < ARUCO_LOCK_REQUIRED_CONSECUTIVE_HITS
+                    || arucoLastKnownCenter[i] == null) {
+                allLocked = false;
+            }
+        }
+
+        if (!allLocked) {
+            return null;
+        }
+
+        return new Point[] {
+                arucoLastKnownCenter[0],
+                arucoLastKnownCenter[1],
+                arucoLastKnownCenter[2],
+                arucoLastKnownCenter[3]
+        };
+    }
+
+    private static Point centerOfArucoQuad(Point[] quad) {
+        double sumX = 0, sumY = 0;
+        for (Point p : quad) {
+            sumX += p.x;
+            sumY += p.y;
+        }
+        return new Point(sumX / 4.0, sumY / 4.0);
     }
 
     /**
@@ -1748,6 +1855,12 @@ public class CameraActivity extends AppCompatActivity {
         // paused instance left in the back stack after capture).
         java.util.Arrays.fill(guideConsecutiveHits, 0);
         java.util.Arrays.fill(guideLastSeenTimestamp, 0L);
+
+        // Reset Tilt Agnostic per-marker lock state for the same reason --
+        // a paused/reused CameraActivity shouldn't start already "locked."
+        java.util.Arrays.fill(arucoConsecutiveHits, 0);
+        java.util.Arrays.fill(arucoLastSeenTimestamp, 0L);
+        java.util.Arrays.fill(arucoLastKnownCenter, null);
         if (anchorOverlay != null) {
             anchorOverlay.resetProgress();
         }
