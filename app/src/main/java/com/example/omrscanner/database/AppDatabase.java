@@ -272,13 +272,38 @@ public abstract class AppDatabase extends RoomDatabase {
   private static final Migration MIGRATION_17_18 = new Migration(17, 18) {
     @Override
     public void migrate(@NonNull SupportSQLiteDatabase db) {
-      db.execSQL("ALTER TABLE student_lrn ADD COLUMN teacher_id INTEGER");
-      // className stores the owning class's UUID, so backfill teacher_id
-      // from that class's teacher_id rather than leaving existing rows
-      // unscoped.
-      db.execSQL("UPDATE student_lrn SET teacher_id = "
-              + "(SELECT teacher_id FROM classes WHERE classes.id = student_lrn.className) "
-              + "WHERE teacher_id IS NULL");
+      // SQLite's ALTER TABLE ADD COLUMN can only add a plain column -- it
+      // cannot attach a new FOREIGN KEY constraint to an existing table.
+      // Room verifies the real schema (via sqlite_master) against the
+      // entity's declared FK on every open, so a plain ADD COLUMN here
+      // would pass this migration but crash on the very next launch with
+      // a schema-mismatch IllegalStateException. The table has to be
+      // rebuilt (SQLite's standard recreate-table pattern).
+      db.execSQL("CREATE TABLE student_lrn_new ("
+              + "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, "
+              + "teacher_id INTEGER, "
+              + "lrn TEXT, "
+              + "className TEXT, "
+              + "sectionId INTEGER, "
+              + "gradeLevelId INTEGER, "
+              + "classroomId INTEGER, "
+              + "hot_sync INTEGER NOT NULL DEFAULT 0, "
+              + "FOREIGN KEY(teacher_id) REFERENCES teachers(id) ON DELETE CASCADE)");
+
+      // Copy every existing row across, backfilling teacher_id from each
+      // row's owning class (className stores the class UUID).
+      db.execSQL("INSERT INTO student_lrn_new "
+              + "(id, teacher_id, lrn, className, sectionId, gradeLevelId, classroomId, hot_sync) "
+              + "SELECT s.id, "
+              + "(SELECT c.teacher_id FROM classes c WHERE c.id = s.className), "
+              + "s.lrn, s.className, s.sectionId, s.gradeLevelId, s.classroomId, s.hot_sync "
+              + "FROM student_lrn s");
+
+      db.execSQL("DROP TABLE student_lrn");
+      db.execSQL("ALTER TABLE student_lrn_new RENAME TO student_lrn");
+
+      db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_student_lrn_lrn_className "
+              + "ON student_lrn(lrn, className)");
       db.execSQL("CREATE INDEX IF NOT EXISTS index_student_lrn_teacher_id "
               + "ON student_lrn(teacher_id)");
     }
