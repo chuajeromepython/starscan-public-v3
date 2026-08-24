@@ -66,6 +66,7 @@ public final class DataMapper {
         cls.setSection(entity.section);
         cls.setSchoolYear(entity.schoolYear);
         cls.setClassroomId(entity.classroomId);
+        cls.setTeacherClassId(entity.teacherClassId);
         cls.setCreatedAt(entity.createdAt);
         return cls;
     }

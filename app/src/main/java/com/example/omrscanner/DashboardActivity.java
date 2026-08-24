@@ -1145,9 +1145,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     // Sends the aggregate data of students along with their LRNs and answers to the system
     @Override
     public void uploadAssessment(ActivityFolder act, ClassFolder cls, int assessmentId) {
-        if (cls.getClassroomId() == null) {
-            ui.showErrorDialog("Missing classroom ID",
-                    "This class wasn't synced from the server, so it has no classroom ID to upload against.");
+        if (cls.getTeacherClassId() == null) {
+            ui.showErrorDialog("Missing class ID",
+                    "This class wasn't synced from the server, so it has no class ID to upload against.");
             return;
         }
 
@@ -1220,7 +1220,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 return;
             }
             runOnUiThread(() -> Toast.makeText(this, "Uploading…", Toast.LENGTH_SHORT).show());
-            performAssessmentUpload(assessmentId, cls.getClassroomId(), csvFile, user.serverIp);
+            performAssessmentUpload(assessmentId, cls.getTeacherClassId(), csvFile, user.serverIp);
         });
     }
 
@@ -3472,15 +3472,21 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             callback.onResult(currentTeacherId);
             return;
         }
-        String fallbackName = globalTeacherName != null ? globalTeacherName : "";
-        repo.upsertTeacher(fallbackName, teacher -> {
-            if (teacher != null) {
-                currentTeacherId = teacher.id;
-                globalTeacherName = teacher.name != null ? teacher.name : "";
-                callback.onResult(currentTeacherId);
-            } else {
+        repo.getActiveUser(user -> {
+            if (user == null || user.userId == null) {
                 callback.onResult(-1);
+                return;
             }
+            String fallbackName = globalTeacherName != null ? globalTeacherName : "";
+            repo.upsertTeacher(user.userId, fallbackName, teacher -> {
+                if (teacher != null) {
+                    currentTeacherId = teacher.id;
+                    globalTeacherName = teacher.name != null ? teacher.name : "";
+                    callback.onResult(currentTeacherId);
+                } else {
+                    callback.onResult(-1);
+                }
+            });
         });
     }
 

@@ -16,6 +16,7 @@ public class ClassFolder {
     private String schoolYear;
 
     private Integer classroomId;
+    private Integer teacherClassId;
     private List<ActivityFolder> activities;
     private long createdAt;
 
@@ -108,6 +109,14 @@ public class ClassFolder {
 
     public void setClassroomId(Integer classroomId) {
         this.classroomId = classroomId;
+    }
+
+    public Integer getTeacherClassId() {
+        return teacherClassId;
+    }
+
+    public void setTeacherClassId(Integer teacherClassId) {
+        this.teacherClassId = teacherClassId;
     }
 
     public int getTotalScans() {

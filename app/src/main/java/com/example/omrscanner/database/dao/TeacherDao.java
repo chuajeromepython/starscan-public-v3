@@ -38,4 +38,8 @@ public interface TeacherDao {
   /** Returns the first (and usually only) teacher row, or null if none. */
   @Query("SELECT * FROM teachers ORDER BY id ASC LIMIT 1")
   TeacherEntity getFirst();
+
+  /** One row per server account — this is what account switching should key off of. */
+  @Query("SELECT * FROM teachers WHERE user_id = :userId LIMIT 1")
+  TeacherEntity getByUserId(int userId);
 }

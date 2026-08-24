@@ -15,6 +15,9 @@ public class TeacherEntity {
   @ColumnInfo(name = "id")
   public int id;
 
+  @ColumnInfo(name = "user_id")
+  public Integer userId; // server-side tbl_users.id — one local TeacherEntity per account
+
   @ColumnInfo(name = "name")
   public String name;
 

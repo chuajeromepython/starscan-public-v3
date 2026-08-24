@@ -281,7 +281,7 @@ public class OMRRepository {
   public void upsertClassFromSync(ClassEntity incoming, Callback<Void> callback) {
     executor.execute(() -> {
       ClassEntity existing = (incoming.classroomId != null)
-              ? db.classDao().getByClassroomId(incoming.classroomId) : null;
+              ? db.classDao().getByClassroomIdAndTeacher(incoming.classroomId, incoming.teacherId) : null;
       if (existing != null) {
         incoming.id = existing.id;
         incoming.createdAt = existing.createdAt;
@@ -480,11 +480,12 @@ public class OMRRepository {
    * If no teacher row exists yet one is created; otherwise the existing
    * row is updated in-place. Returns the final TeacherEntity.
    */
-  public void upsertTeacher(String name, Callback<TeacherEntity> callback) {
+  public void upsertTeacher(int userId, String name, Callback<TeacherEntity> callback) {
     executor.execute(() -> {
-      TeacherEntity existing = db.teacherDao().getFirst();
+      TeacherEntity existing = db.teacherDao().getByUserId(userId);
       if (existing == null) {
         existing = new TeacherEntity(name);
+        existing.userId = userId;
         long newId = db.teacherDao().insert(existing);
         existing.id = (int) newId;
       } else {
