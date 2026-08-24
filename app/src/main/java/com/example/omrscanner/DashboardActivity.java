@@ -486,7 +486,6 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         initViews();
         initBackHandler();
         loadDataFromDb();
-        checkServerReachability();
     }
 
     @Override
