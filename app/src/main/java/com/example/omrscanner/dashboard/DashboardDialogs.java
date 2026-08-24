@@ -125,17 +125,20 @@ public class DashboardDialogs {
                 return;
             }
 
-            Runnable saveAction = () -> repo.upsertTeacher(newName, savedTeacher ->
-                    activity.runOnUiThread(() -> {
-                        String saved = (savedTeacher != null && savedTeacher.name != null)
-                                ? savedTeacher.name : newName;
-                        host.setGlobalTeacherName(saved);
-                        if (savedTeacher != null) host.setCurrentTeacherId(savedTeacher.id);
-                        for (ClassFolder cls : host.getClassFolders()) cls.setTeacher(saved);
-                        dialog.dismiss();
-                        ui.showToast("Teacher name updated ✓");
-                        host.loadDataFromDb();
-                    }));
+            Runnable saveAction = () -> repo.getActiveUser(activeUser -> {
+                int userId = (activeUser != null && activeUser.userId != null) ? activeUser.userId : 0;
+                repo.upsertTeacher(userId, newName, savedTeacher ->
+                        activity.runOnUiThread(() -> {
+                            String saved = (savedTeacher != null && savedTeacher.name != null)
+                                    ? savedTeacher.name : newName;
+                            host.setGlobalTeacherName(saved);
+                            if (savedTeacher != null) host.setCurrentTeacherId(savedTeacher.id);
+                            for (ClassFolder cls : host.getClassFolders()) cls.setTeacher(saved);
+                            dialog.dismiss();
+                            ui.showToast("Teacher name updated ✓");
+                            host.loadDataFromDb();
+                        }));
+            });
 
             if (host.getGlobalTeacherName() == null || host.getGlobalTeacherName().trim().isEmpty()) {
                 saveAction.run();

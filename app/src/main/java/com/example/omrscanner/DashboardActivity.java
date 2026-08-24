@@ -3379,7 +3379,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 loadClassesFromDb(prevClassId, prevActivityId, prevScreen);
                 return;
             }
-            repo.upsertTeacher("", ensuredTeacher -> {
+            repo.upsertTeacher(0, "", ensuredTeacher -> {
                 if (ensuredTeacher != null) {
                     if (!hasScannedName) {
                         globalTeacherName = ensuredTeacher.name != null ? ensuredTeacher.name : "";

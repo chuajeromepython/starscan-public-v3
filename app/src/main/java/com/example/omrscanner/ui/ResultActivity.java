@@ -977,7 +977,7 @@ public class ResultActivity extends AppCompatActivity {
         new Thread(() -> {
             com.example.omrscanner.database.OMRRepository repo =
                     new com.example.omrscanner.database.OMRRepository(ResultActivity.this);
-            boolean lrnFoundInStudentLrn = repo.isLrnInStudentLrnTableSync(scanResult.lnr);
+            boolean lrnFoundInStudentLrn = repo.isLrnInStudentLrnTableSync(scanResult.lnr, classId);
             boolean recentlySynced = !lrnFoundInStudentLrn
                     && DashboardActivity.hasSyncedStudentsRecently(ResultActivity.this, classId);
 

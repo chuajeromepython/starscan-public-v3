@@ -43,6 +43,9 @@ import com.example.omrscanner.database.entities.UserEntity;
  *   16 → 17: Added teachers.user_id — ties each local teacher row to a server
  *            account so switching accounts on one device no longer shares
  *            one global teacher/roster.
+ *   17 → 18: Added student_lrn.teacher_id (FK -> teachers.id, CASCADE) so a
+ *            roster row can no longer be matched across teachers sharing one
+ *            device. Backfilled from each row's class owner.
  *
  *
  * Usage:
@@ -58,7 +61,7 @@ import com.example.omrscanner.database.entities.UserEntity;
         AnswerKeyEntity.class,
         UserEntity.class,
         StudentLrnEntity.class
-}, version = 17, exportSchema = false)
+}, version = 18, exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase {
 
   private static final String DATABASE_NAME = "omrscanner.db";
@@ -266,6 +269,21 @@ public abstract class AppDatabase extends RoomDatabase {
     }
   };
 
+  private static final Migration MIGRATION_17_18 = new Migration(17, 18) {
+    @Override
+    public void migrate(@NonNull SupportSQLiteDatabase db) {
+      db.execSQL("ALTER TABLE student_lrn ADD COLUMN teacher_id INTEGER");
+      // className stores the owning class's UUID, so backfill teacher_id
+      // from that class's teacher_id rather than leaving existing rows
+      // unscoped.
+      db.execSQL("UPDATE student_lrn SET teacher_id = "
+              + "(SELECT teacher_id FROM classes WHERE classes.id = student_lrn.className) "
+              + "WHERE teacher_id IS NULL");
+      db.execSQL("CREATE INDEX IF NOT EXISTS index_student_lrn_teacher_id "
+              + "ON student_lrn(teacher_id)");
+    }
+  };
+
   // ── Abstract DAO accessors (Room generates the implementations) ──────────
   public abstract TeacherDao teacherDao();
 
@@ -292,7 +310,7 @@ public abstract class AppDatabase extends RoomDatabase {
               context.getApplicationContext(),
               AppDatabase.class,
               DATABASE_NAME)
-                  .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
+                  .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18)
               .build();
         }
       }

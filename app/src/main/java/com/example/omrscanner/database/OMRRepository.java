@@ -57,8 +57,8 @@ public class OMRRepository {
    * Used by ResultActivity: a scan may only be saved if its LRN is found
    * here (i.e. it belongs to a recognized/enrolled student).
    */
-  public boolean isLrnInStudentLrnTableSync(String lrn) {
-    return db.studentLrnDao().findByLrn(lrn) != null;
+  public boolean isLrnInStudentLrnTableSync(String lrn, String classId) {
+    return db.studentLrnDao().findByLrnAndClass(lrn, classId) != null;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -683,6 +683,19 @@ public class OMRRepository {
   public void insertStudentLrnBatch(List<StudentLrnEntity> students, Callback<Void> callback) {
     executor.execute(() -> {
       try {
+        // Resolve each row's teacher_id from its class, caching lookups
+        // since a batch is normally all one class (one sync call).
+        java.util.Map<String, Integer> teacherIdByClass = new java.util.HashMap<>();
+        for (StudentLrnEntity student : students) {
+          if (student.className == null) continue;
+          Integer teacherId = teacherIdByClass.get(student.className);
+          if (teacherId == null && !teacherIdByClass.containsKey(student.className)) {
+            ClassEntity owningClass = db.classDao().getById(student.className);
+            teacherId = (owningClass != null) ? owningClass.teacherId : null;
+            teacherIdByClass.put(student.className, teacherId);
+          }
+          student.teacherId = teacherId;
+        }
         db.studentLrnDao().insertAll(students);
       } catch (Exception e) {
         Log.e("StudentLRN", "Failed to insert synced student batch", e);
@@ -702,6 +715,8 @@ public class OMRRepository {
         student.sectionId = sectionId;
         student.gradeLevelId = gradeLevelId;
         student.classroomId = classroomId;
+        ClassEntity owningClass = db.classDao().getById(classId);
+        student.teacherId = (owningClass != null) ? owningClass.teacherId : null;
         db.studentLrnDao().insert(student);
         if (callback != null) callback.onResult(null);
       } catch (Exception e) {
@@ -775,6 +790,8 @@ public class OMRRepository {
           StudentLrnEntity student = new StudentLrnEntity();
           student.lrn = lrn;  // just assign directly, no parseInt
           student.className = className;
+          ClassEntity owningClass = db.classDao().getById(className);
+          student.teacherId = (owningClass != null) ? owningClass.teacherId : null;
           db.studentLrnDao().insert(student);
         }
         if (callback != null)
