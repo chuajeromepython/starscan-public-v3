@@ -61,7 +61,7 @@ import com.example.omrscanner.database.entities.UserEntity;
         AnswerKeyEntity.class,
         UserEntity.class,
         StudentLrnEntity.class
-}, version = 18, exportSchema = false)
+}, version = 19, exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase {
 
   private static final String DATABASE_NAME = "omrscanner.db";
@@ -309,6 +309,17 @@ public abstract class AppDatabase extends RoomDatabase {
     }
   };
 
+  private static final Migration MIGRATION_18_19 = new Migration(18, 19) {
+    @Override
+    public void migrate(@NonNull SupportSQLiteDatabase db) {
+      // Stores the numeric assessment ID from the STARS backend so a
+      // re-sync updates the existing local assessment/answer key instead
+      // of duplicating it, and so a future upload could reuse the ID
+      // without the teacher retyping it.
+      db.execSQL("ALTER TABLE assessments ADD COLUMN server_assessment_id INTEGER");
+    }
+  };
+
   // ── Abstract DAO accessors (Room generates the implementations) ──────────
   public abstract TeacherDao teacherDao();
 
@@ -335,7 +346,7 @@ public abstract class AppDatabase extends RoomDatabase {
               context.getApplicationContext(),
               AppDatabase.class,
               DATABASE_NAME)
-                  .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18)
+                  .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19)
               .build();
         }
       }

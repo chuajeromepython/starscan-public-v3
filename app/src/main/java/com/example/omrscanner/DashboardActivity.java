@@ -272,7 +272,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private TextView answerKeysAllCount;
     private TextView answerKeysSummaryCount, answerKeysSummarySheetTypes, answerKeysSummaryTeacher;
     private View answerKeysHeaderAddBtn;
-    private View answerKeysSyncRow;
+    private View classSyncAssessmentsRow;
     private LinearLayout answerKeysSheetTabs;
     private LinearLayout answerKeysLinkStatusTabs;
     private LinearLayout answerKeysGroupSwitcher;
@@ -310,6 +310,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             java.util.concurrent.Executors.newSingleThreadExecutor();
     private static final String SYNC_PATH = "/api/classrooms/sync"; // route to the STARS system (classes)
     private static final String ASSESSMENT_SYNC_PATH = "/api/students/sync"; // (student_lrn)
+    private static final String ASSESSMENTS_SYNC_PATH = "/api/assessment/sync"; // pulls a teacher's assessments + answer keys (user_id)
     private static final String UPLOAD_ASSESSMENT_PATH = "/api/upload/assessment"; // multipart CSV upload
     /** Matches Toast.LENGTH_SHORT's on-screen duration — used to delay a UI refresh until the sync toast has finished showing. */
     private static final long TOAST_SHORT_DELAY_MS = 2000;
@@ -701,7 +702,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         answerKeysSummarySheetTypes = findViewById(R.id.answerKeysSummarySheetTypes);
         answerKeysSummaryTeacher = findViewById(R.id.answerKeysSummaryTeacher);
         answerKeysHeaderAddBtn = findViewById(R.id.answerKeysHeaderAddBtn);
-        answerKeysSyncRow = findViewById(R.id.answerKeysSyncRow);
+        classSyncAssessmentsRow = findViewById(R.id.classSyncAssessmentsRow);
         classAssessmentsHeaderAddBtn = findViewById(R.id.classAssessmentsHeaderAddBtn);
         assessmentsHeaderAddBtn = findViewById(R.id.assessmentsHeaderAddBtn);
         scanCtaCard = findViewById(R.id.scanCtaCard);
@@ -765,12 +766,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         answerKeysHeaderAddBtn.setOnClickListener(v ->
                 showDisclaimerThen(() -> dialogs.showNewAnswerKeyDialog(null)));
 
-        // Sync Answer Keys — mirrors homeSyncClassRow / classSyncStudentsRow, but there's
-        // no backend endpoint for it yet (unlike /classrooms/sync and /students/sync), so
-        // the row is wired but dimmed + non-clickable until there's an API to call.
-        answerKeysSyncRow.setEnabled(false);
-        answerKeysSyncRow.setAlpha(0.4f);
-        answerKeysSyncRow.setOnClickListener(v -> onAnswerKeysSyncClicked());
+        classSyncAssessmentsRow.setOnClickListener(v -> onClassAssessmentsSyncClicked());
 
         classAssessmentsHeaderAddBtn.setOnClickListener(v -> dialogs.showNewActivityDialog());
 
@@ -1086,14 +1082,218 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         });
     }
 
-    // Sync Answer Keys — same shape as onSyncClicked() / onAssessmentSyncClicked() above.
-    // Waiting on a backend endpoint (e.g. POST /answer-keys/sync) before this can call a
-    // performAnswerKeySync(...) method. The row is disabled in initViews(), so this
-    // handler won't actually fire from a tap yet — it's just scaffolding.
-    private void onAnswerKeysSyncClicked() {
-        // TODO: once the backend exposes an answer-keys sync endpoint, mirror
-        // onSyncClicked() / onAssessmentSyncClicked(): confirm active user + serverIp
-        // via repo.getActiveUser(...), then call performAnswerKeySync(user.serverIp).
+    private void onClassAssessmentsSyncClicked() {
+        if (selectedClass == null) {
+            ui.showErrorDialog("No class selected", "Open a class before syncing its assessments.");
+            return;
+        }
+        dialogs.showSyncAssessmentsDialog(selectedClass);
+    }
+
+    // Sync Assessments — pulls this class's assessments + answer keys down from the
+    // STARS backend, filtered to this class's grade level (the endpoint isn't
+    // classroom-scoped, so filtering happens on the app side).
+    @Override
+    public void syncAssessmentsForClass(ClassFolder cls, int userId) {
+        if (cls == null) {
+            ui.showErrorDialog("No class selected", "Open a class before syncing its assessments.");
+            return;
+        }
+        repo.getActiveUser(user -> {
+            if (user == null || user.serverIp == null || user.serverIp.trim().isEmpty()) {
+                runOnUiThread(() -> ui.showErrorDialog("Scan required",
+                        "Please scan your QR code from the website system before syncing."));
+                return;
+            }
+            syncAssessmentsForClass(this, cls.getId(), cls.getGrade(), userId, user.serverIp);
+        });
+    }
+
+    /**
+     * Refreshes the class screen (assessment cards) after a background
+     * assessments sync finishes. Safe to call from anywhere — no-ops if the
+     * class screen isn't showing.
+     */
+    public void refreshAfterAssessmentsSync() {
+        if (!SCREEN_CLASS.equals(currentScreen) || selectedClass == null) return;
+        renderClassScreen();
+    }
+
+    /** Picks the smallest real template (ZPH30/40/50/60) that fits n items, e.g. 25 -> "ZPH30 (25 Items)". */
+    private static String buildSheetTypeForItemCount(int n) {
+        String base = n <= 30 ? "ZPH30" : n <= 40 ? "ZPH40" : n <= 50 ? "ZPH50" : "ZPH60";
+        int max = Integer.parseInt(base.substring(3));
+        return (n == max) ? base : base + " (" + n + " Items)";
+    }
+
+    /**
+     * Static worker mirroring syncStudentsForClass above: pulls the teacher's
+     * full assessment list (with embedded answer keys) from the backend,
+     * keeps only the ones matching this class's grade level, then
+     * creates/updates local AnswerKeyEntity + AssessmentEntity rows for them.
+     * Re-syncing updates existing rows in place (matched by server_assessment_id)
+     * instead of duplicating cards.
+     */
+    public static void syncAssessmentsForClass(android.content.Context context, String localClassId,
+                                               String classGradeLevel, int userId, String serverIp) {
+        android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+        mainHandler.post(() -> android.widget.Toast.makeText(context, "Syncing assessments…", android.widget.Toast.LENGTH_SHORT).show());
+
+        new Thread(() -> {
+            java.net.HttpURLConnection conn = null;
+            try {
+                java.net.URL url = new java.net.URL(serverIp + ASSESSMENTS_SYNC_PATH);
+                conn = (java.net.HttpURLConnection) url.openConnection();
+                conn.setConnectTimeout(8000);
+                conn.setReadTimeout(15000);
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/json");
+                conn.setRequestProperty("Accept", "application/json");
+                conn.setDoOutput(true);
+
+                org.json.JSONObject body = new org.json.JSONObject();
+                body.put("user_id", userId);
+
+                try (java.io.OutputStream os = conn.getOutputStream()) {
+                    os.write(body.toString().getBytes("UTF-8"));
+                }
+
+                int code = conn.getResponseCode();
+                java.io.InputStream is = (code >= 200 && code < 300)
+                        ? conn.getInputStream() : conn.getErrorStream();
+
+                StringBuilder sb = new StringBuilder();
+                try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(is, "UTF-8"))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) sb.append(line);
+                }
+
+                String responseBody = sb.toString();
+                android.util.Log.d("OMR_ASSESSMENT_SYNC", "HTTP " + code + " — user_id=" + userId + " — raw response: " + responseBody);
+
+                org.json.JSONObject root = new org.json.JSONObject(responseBody);
+                if (!root.optBoolean("success", false)) {
+                    String message = root.optString("message", "Sync failed.");
+                    mainHandler.post(() -> new com.google.android.material.dialog.MaterialAlertDialogBuilder(context, R.style.ThemeOverlay_OMRScanner_Dialog)
+                            .setTitle("Sync failed")
+                            .setMessage(message)
+                            .setPositiveButton("OK", null)
+                            .show());
+                    return;
+                }
+
+                org.json.JSONObject data = root.optJSONObject("data");
+                org.json.JSONArray assessments = (data != null) ? data.optJSONArray("assessments") : null;
+
+                com.example.omrscanner.database.AppDatabase db =
+                        com.example.omrscanner.database.AppDatabase.getInstance(context);
+
+                int savedCount = 0;
+                if (assessments != null) {
+                    for (int i = 0; i < assessments.length(); i++) {
+                        org.json.JSONObject a = assessments.getJSONObject(i);
+                        String level = a.optString("level", "");
+                        if (classGradeLevel == null || !classGradeLevel.trim().equalsIgnoreCase(level.trim()))
+                            continue; // not this class's grade level — skip
+
+                        int serverId = a.optInt("id", -1);
+                        if (serverId < 0) continue;
+
+                        int numItems = a.optInt("number_of_items", 30);
+                        String sheetType = buildSheetTypeForItemCount(numItems);
+
+                        // Build the comma-separated letter answer string from whichever
+                        // option in each question has is_correct = true.
+                        StringBuilder answers = new StringBuilder();
+                        org.json.JSONArray keys = a.optJSONArray("assessment_keys");
+                        if (keys != null) {
+                            for (int k = 0; k < keys.length(); k++) {
+                                org.json.JSONArray options = keys.getJSONObject(k).optJSONArray("options");
+                                char letter = '?';
+                                if (options != null) {
+                                    for (int o = 0; o < options.length(); o++) {
+                                        if (options.getJSONObject(o).optBoolean("is_correct", false)) {
+                                            letter = (char) ('A' + o);
+                                            break;
+                                        }
+                                    }
+                                }
+                                if (answers.length() > 0) answers.append(",");
+                                answers.append(letter);
+                            }
+                        }
+
+                        String title = a.optString("title", "Untitled Assessment");
+                        String assessmentType = a.optString("type", null);
+                        String schoolYear = a.optString("from", "") + "-" + a.optString("to", "");
+
+                        com.example.omrscanner.database.entities.AssessmentEntity existing =
+                                db.assessmentDao().getByServerIdAndClass(localClassId, serverId);
+
+                        if (existing != null) {
+                            existing.name = title;
+                            existing.sheetType = sheetType;
+                            existing.assessmentType = assessmentType;
+                            existing.updatedAt = System.currentTimeMillis();
+                            db.assessmentDao().update(existing);
+
+                            if (existing.answerKeyId != null) {
+                                com.example.omrscanner.database.entities.AnswerKeyEntity key =
+                                        db.answerKeyDao().getById(existing.answerKeyId);
+                                if (key != null) {
+                                    key.name = title;
+                                    key.schoolYear = schoolYear;
+                                    key.sheetType = sheetType;
+                                    key.answers = answers.toString();
+                                    key.updatedAt = System.currentTimeMillis();
+                                    db.answerKeyDao().update(key);
+                                }
+                            }
+                        } else {
+                            String keyId = java.util.UUID.randomUUID().toString().substring(0, 7).toUpperCase();
+                            com.example.omrscanner.database.entities.AnswerKeyEntity key =
+                                    new com.example.omrscanner.database.entities.AnswerKeyEntity(
+                                            keyId, title, schoolYear, sheetType, answers.toString());
+                            db.answerKeyDao().insert(key);
+
+                            String assessmentId = java.util.UUID.randomUUID().toString().substring(0, 7).toUpperCase();
+                            com.example.omrscanner.database.entities.AssessmentEntity assessment =
+                                    new com.example.omrscanner.database.entities.AssessmentEntity(
+                                            assessmentId, localClassId, title, sheetType, null);
+                            assessment.assessmentType = assessmentType;
+                            assessment.answerKeyId = keyId;
+                            assessment.serverAssessmentId = serverId;
+                            db.assessmentDao().insert(assessment);
+                        }
+                        savedCount++;
+                    }
+                }
+
+                final int finalSavedCount = savedCount;
+                mainHandler.post(() -> {
+                    android.widget.Toast.makeText(context,
+                            finalSavedCount > 0
+                                    ? ("Synced " + finalSavedCount + " assessment" + (finalSavedCount != 1 ? "s" : ""))
+                                    : "No matching assessments found for this class.",
+                            android.widget.Toast.LENGTH_SHORT).show();
+                    if (context instanceof DashboardActivity) {
+                        DashboardActivity dash = (DashboardActivity) context;
+                        dash.loadDataFromDb();
+                        mainHandler.postDelayed(dash::refreshAfterAssessmentsSync, TOAST_SHORT_DELAY_MS);
+                    }
+                });
+            } catch (Exception e) {
+                android.util.Log.e("OMR_ASSESSMENT_SYNC", "Sync failed: " + e.getClass().getSimpleName() + ": " + e.getMessage(), e);
+                mainHandler.post(() -> new com.google.android.material.dialog.MaterialAlertDialogBuilder(context, R.style.ThemeOverlay_OMRScanner_Dialog)
+                        .setTitle("Sync failed")
+                        .setMessage("Could not sync assessments: " + e.getMessage())
+                        .setPositiveButton("OK", null)
+                        .show());
+            } finally {
+                if (conn != null) conn.disconnect();
+            }
+        }).start();
     }
 
     private void performAssessmentSync(int classroomId, String serverIp) {

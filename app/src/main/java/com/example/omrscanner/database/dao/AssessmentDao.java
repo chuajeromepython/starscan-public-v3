@@ -36,6 +36,10 @@ public interface AssessmentDao {
   @Query("SELECT * FROM assessments WHERE class_id = :classId AND sheet_type = :sheetType ORDER BY created_at DESC")
   List<AssessmentEntity> getByClassAndSheetType(String classId, String sheetType);
 
+  /** Used by assessment sync to find an already-synced local copy so re-syncing updates it instead of duplicating it. */
+  @Query("SELECT * FROM assessments WHERE class_id = :classId AND server_assessment_id = :serverAssessmentId LIMIT 1")
+  AssessmentEntity getByServerIdAndClass(String classId, int serverAssessmentId);
+
   @Query("SELECT COUNT(*) FROM assessments WHERE class_id = :classId")
   int countByClass(String classId);
 

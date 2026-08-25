@@ -57,6 +57,11 @@ public class AssessmentEntity {
   @ColumnInfo(name = "hot_sync")
   public int hotSync = 0;
 
+  /** Server's numeric assessment ID, once this card has been synced or uploaded. */
+  @Nullable
+  @ColumnInfo(name = "server_assessment_id")
+  public Integer serverAssessmentId;
+
   public AssessmentEntity() {
   }
 
