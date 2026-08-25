@@ -681,7 +681,11 @@ public class ClassScreenRenderer {
                 badgeRow.addView(classBadge);
             }
 
-            if (hasKeyBadge) {
+            final int KEY_BADGE_WRAP_THRESHOLD = 18; // chars, tuned for 11sp italic text
+            boolean longKeyBadge = hasKeyBadge
+                    && row.answerKeyName.length() > KEY_BADGE_WRAP_THRESHOLD;
+
+            if (hasKeyBadge && !longKeyBadge) {
                 TextView keyBadge = new TextView(activity);
                 keyBadge.setText("🗝 " + row.answerKeyName);
                 keyBadge.setTextColor(Color.parseColor("#059669"));
@@ -701,6 +705,31 @@ public class ClassScreenRenderer {
             }
 
             badgesContainer.addView(badgeRow);
+
+            if (longKeyBadge) {
+                LinearLayout keyBadgeRow = new LinearLayout(activity);
+                keyBadgeRow.setOrientation(LinearLayout.HORIZONTAL);
+                keyBadgeRow.setGravity(Gravity.CENTER_VERTICAL);
+                LinearLayout.LayoutParams keyBadgeRowLp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                keyBadgeRowLp.topMargin = ui.dp(6);
+                keyBadgeRow.setLayoutParams(keyBadgeRowLp);
+
+                TextView keyBadge = new TextView(activity);
+                keyBadge.setText("🗝 " + row.answerKeyName);
+                keyBadge.setTextColor(Color.parseColor("#059669"));
+                keyBadge.setTextSize(11);
+                keyBadge.setTypeface(null, Typeface.ITALIC);
+                GradientDrawable badgeBg = new GradientDrawable();
+                badgeBg.setColor(Color.parseColor("#ECFDF5"));
+                badgeBg.setCornerRadius(ui.dp(8));
+                badgeBg.setStroke(ui.dp(1), Color.parseColor("#A7F3D0"));
+                keyBadge.setBackground(badgeBg);
+                keyBadge.setPadding(ui.dp(8), ui.dp(3), ui.dp(8), ui.dp(3));
+                keyBadgeRow.addView(keyBadge);
+
+                badgesContainer.addView(keyBadgeRow);
+            }
 
             // "Needs correction" badge — its own row below the main badge
             // row (same pattern as the "no answer key" row below), so it
@@ -907,6 +936,10 @@ public class ClassScreenRenderer {
         linkBadgeRow.setLayoutParams(linkBadgeRowLp);
 
         boolean isLinked = link != null && link.linkedAssessmentName != null;
+        final int LINK_NAME_WRAP_THRESHOLD = 18; // chars, tuned for 11sp italic text
+        boolean longLinkName = isLinked
+                && link.linkedAssessmentName.length() > LINK_NAME_WRAP_THRESHOLD;
+
         if (isLinked) {
             String extra = link.linkedCount > 1 ? " (+" + (link.linkedCount - 1) + " more)" : "";
 
@@ -946,7 +979,7 @@ public class ClassScreenRenderer {
             });
             linkBadgeRow.addView(nameBadge);
 
-            if (link.linkedSheetType != null) {
+            if (link.linkedSheetType != null && !longLinkName) {
                 TextView typeBadge = new TextView(activity);
                 typeBadge.setText(link.linkedSheetType);
                 typeBadge.setTextColor(Color.parseColor("#1D4ED8"));
@@ -979,6 +1012,32 @@ public class ClassScreenRenderer {
             linkBadgeRow.addView(notLinkedBadge);
         }
         cardBody.addView(linkBadgeRow);
+
+        // Linked assessment name was too long to share a row with the sheet-type
+        // badge — render the sheet-type badge on its own row underneath instead.
+        if (longLinkName && link.linkedSheetType != null) {
+            LinearLayout typeBadgeRow = new LinearLayout(activity);
+            typeBadgeRow.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams typeBadgeRowLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            typeBadgeRowLp.topMargin = ui.dp(6);
+            typeBadgeRow.setLayoutParams(typeBadgeRowLp);
+
+            TextView typeBadge = new TextView(activity);
+            typeBadge.setText(link.linkedSheetType);
+            typeBadge.setTextColor(Color.parseColor("#1D4ED8"));
+            typeBadge.setTextSize(11);
+            typeBadge.setTypeface(null, Typeface.ITALIC);
+            GradientDrawable typeBadgeBg = new GradientDrawable();
+            typeBadgeBg.setCornerRadius(ui.dp(8));
+            typeBadgeBg.setColor(Color.parseColor("#EFF6FF"));
+            typeBadgeBg.setStroke(ui.dp(1), Color.parseColor("#BFDBFE"));
+            typeBadge.setBackground(typeBadgeBg);
+            typeBadge.setPadding(ui.dp(8), ui.dp(3), ui.dp(8), ui.dp(3));
+            typeBadgeRow.addView(typeBadge);
+
+            cardBody.addView(typeBadgeRow);
+        }
 
         // Meta
         TextView meta = new TextView(activity);

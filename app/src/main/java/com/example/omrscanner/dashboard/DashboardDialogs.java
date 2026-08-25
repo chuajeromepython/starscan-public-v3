@@ -59,7 +59,7 @@ public class DashboardDialogs {
         /** Uploads a completed assessment's CSV to the STARS backend. */
         void uploadAssessment(ActivityFolder act, ClassFolder cls, int assessmentId);
         /** Pulls this class's assessments + answer keys down from the STARS backend. */
-        void syncAssessmentsForClass(ClassFolder cls, int userId);
+        void syncAssessmentsForClass(ClassFolder cls);
     }
 
     private final AppCompatActivity activity;
@@ -808,63 +808,9 @@ public class DashboardDialogs {
     // ─────────────────────────────────────────────────────────────
     // Sync assessments (pull assessments + answer keys from STARS backend)
     // ─────────────────────────────────────────────────────────────
-
-    public void showSyncAssessmentsDialog(ClassFolder cls) {
-        Dialog dialog = new Dialog(activity);
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
-        dialog.setCancelable(true);
-
-        LinearLayout root = ui.buildSheet();
-        root.addView(ui.createDialogHandle());
-        root.addView(ui.buildSheetTitle("🔄 Sync Assessments", "#0038A8", Gravity.START, 16));
-
-        TextView note = new TextView(activity);
-        note.setText("Pulls assessments and answer keys for \"" + cls.getDisplayName()
-                + "\" from the STARS system.");
-        note.setTextColor(Color.parseColor("#64748B"));
-        note.setTextSize(13);
-        LinearLayout.LayoutParams noteLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        noteLp.bottomMargin = ui.dp(16);
-        note.setLayoutParams(noteLp);
-        root.addView(note);
-
-        root.addView(ui.createFieldLabel("USER ID *"));
-        EditText idInput = ui.createLightInput("e.g. 74");
-        idInput.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-        root.addView(idInput);
-
-        LinearLayout actions = ui.buildActionsRow(ui.dp(20));
-        TextView btnCancel = ui.createDialogButton("Cancel", false);
-        TextView btnSync = ui.createDialogButton("Sync", true);
-        actions.addView(btnCancel);
-        actions.addView(ui.spacer(ui.dp(10)));
-        actions.addView(btnSync);
-        root.addView(actions);
-
-        btnCancel.setOnClickListener(v -> dialog.dismiss());
-        btnSync.setOnClickListener(v -> {
-            String raw = idInput.getText().toString().trim();
-            if (raw.isEmpty()) {
-                ui.showErrorDialog("User ID Required", "Please enter your user ID.");
-                return;
-            }
-            int userId;
-            try {
-                userId = Integer.parseInt(raw);
-            } catch (NumberFormatException e) {
-                ui.showErrorDialog("Invalid User ID", "User ID must be a whole number.");
-                return;
-            }
-
-            dialog.dismiss();
-            host.syncAssessmentsForClass(cls, userId);
-        });
-
-        dialog.setContentView(root);
-        ui.configureBottomDialog(dialog);
-        dialog.show();
-    }
+    // Previously this showed a dialog prompting for a User ID to sync with.
+    // The user ID is now taken automatically from the active user record,
+    // so there's no dialog here anymore — see DashboardActivity#syncAssessmentsForClass.
 
     public void showDeleteActivityConfirmation(ActivityFolder act) {
         Dialog dialog = new Dialog(activity);

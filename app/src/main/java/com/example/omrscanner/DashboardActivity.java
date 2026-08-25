@@ -1087,25 +1087,30 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             ui.showErrorDialog("No class selected", "Open a class before syncing its assessments.");
             return;
         }
-        dialogs.showSyncAssessmentsDialog(selectedClass);
+        syncAssessmentsForClass(selectedClass);
     }
 
     // Sync Assessments — pulls this class's assessments + answer keys down from the
     // STARS backend, filtered to this class's grade level (the endpoint isn't
     // classroom-scoped, so filtering happens on the app side).
     @Override
-    public void syncAssessmentsForClass(ClassFolder cls, int userId) {
+    public void syncAssessmentsForClass(ClassFolder cls) {
         if (cls == null) {
             ui.showErrorDialog("No class selected", "Open a class before syncing its assessments.");
             return;
         }
         repo.getActiveUser(user -> {
-            if (user == null || user.serverIp == null || user.serverIp.trim().isEmpty()) {
+            if (user == null || user.userId == null) {
+                runOnUiThread(() -> ui.showErrorDialog("Sign-in required",
+                        "Please sign in before syncing assessments."));
+                return;
+            }
+            if (user.serverIp == null || user.serverIp.trim().isEmpty()) {
                 runOnUiThread(() -> ui.showErrorDialog("Scan required",
                         "Please scan your QR code from the website system before syncing."));
                 return;
             }
-            syncAssessmentsForClass(this, cls.getId(), cls.getGrade(), userId, user.serverIp);
+            syncAssessmentsForClass(this, cls.getId(), cls.getGrade(), user.userId, user.serverIp);
         });
     }
 
@@ -1119,9 +1124,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         renderClassScreen();
     }
 
-    /** Picks the smallest real template (ZPH30/40/50/60) that fits n items, e.g. 25 -> "ZPH30 (25 Items)". */
+    /** Picks ZPH40 for n < 41 items, otherwise ZPH60, e.g. 25 -> "ZPH40 (25 Items)". */
     private static String buildSheetTypeForItemCount(int n) {
-        String base = n <= 30 ? "ZPH30" : n <= 40 ? "ZPH40" : n <= 50 ? "ZPH50" : "ZPH60";
+        String base = n < 41 ? "ZPH40" : "ZPH60";
         int max = Integer.parseInt(base.substring(3));
         return (n == max) ? base : base + " (" + n + " Items)";
     }
