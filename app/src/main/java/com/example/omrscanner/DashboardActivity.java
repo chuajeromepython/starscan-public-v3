@@ -2679,7 +2679,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         String activeYearFilter = "YEAR".equals(homeGroupBy) ? selectedClassSchoolYearFilter : null;
 
         final int requestId = ++homeQueryGeneration;
-        repo.queryClassList(classSearchQuery, activeGradeFilter,
+        ensureTeacherId(teacherId -> repo.queryClassList(teacherId, classSearchQuery, activeGradeFilter,
                 activeYearFilter, selectedClassSort, rows -> runOnUiThread(() -> {
                     if (requestId != homeQueryGeneration || !SCREEN_HOME.equals(currentScreen))
                         return;
@@ -2735,7 +2735,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                     showScreen(SCREEN_CLASS);
                                 }));
                     }
-                }));
+                })));
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -3396,7 +3396,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     }
 
     private void loadClassesFromDb(String prevClassId, String prevActivityId, String prevScreen) {
-        repo.getAllClasses(classEntities -> {
+        ensureTeacherId(teacherId -> repo.getClassesByTeacher(teacherId, classEntities -> {
             List<ClassFolder> loadedClasses = new ArrayList<>();
             if (classEntities == null || classEntities.isEmpty()) {
                 publishResult(loadedClasses, prevClassId, prevActivityId, prevScreen);
@@ -3461,18 +3461,20 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     }
                 });
             }
-        });
+        }));
     }
 
     @Override
     public void ensureTeacherId(OMRRepository.Callback<Integer> callback) {
         if (callback == null) return;
-        if (currentTeacherId > 0) {
-            callback.onResult(currentTeacherId);
-            return;
-        }
+        // Always re-resolve against the currently active user instead of trusting a
+        // cached currentTeacherId — the cache goes stale the moment a different
+        // teacher scans in without this Activity instance being fully recreated,
+        // which previously caused the new teacher's screen to keep showing the
+        // old teacher's classes under the new teacher's name.
         repo.getActiveUser(user -> {
             if (user == null || user.userId == null) {
+                currentTeacherId = -1;
                 callback.onResult(-1);
                 return;
             }
@@ -3483,6 +3485,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     globalTeacherName = teacher.name != null ? teacher.name : "";
                     callback.onResult(currentTeacherId);
                 } else {
+                    currentTeacherId = -1;
                     callback.onResult(-1);
                 }
             });

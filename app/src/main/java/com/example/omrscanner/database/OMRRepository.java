@@ -164,11 +164,11 @@ public class OMRRepository {
     });
   }
 
-  public void queryClassList(String search, String gradeFilter, String schoolYearFilter, String sortKey,
-      Callback<List<ClassListRow>> callback) {
+  public void queryClassList(int teacherId, String search, String gradeFilter, String schoolYearFilter, String sortKey,
+                             Callback<List<ClassListRow>> callback) {
     executor.execute(() -> {
-      List<ClassListRow> list = db.classDao().queryClassList(search, gradeFilter, schoolYearFilter,
-          sortKey);
+      List<ClassListRow> list = db.classDao().queryClassList(teacherId, search, gradeFilter, schoolYearFilter,
+              sortKey);
       if (callback != null)
         callback.onResult(list);
     });
