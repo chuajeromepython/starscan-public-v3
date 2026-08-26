@@ -222,4 +222,44 @@ public final class DataMapper {
         }
         return sb.toString();
     }
+
+    /**
+     * Formats a student's name as "Lastname, Firstname Middlename" for display.
+     * Degrades gracefully if any part is missing. Returns "" if student is null
+     * or has no usable name parts.
+     */
+    public static String formatStudentFullName(com.example.omrscanner.database.entities.StudentLrnEntity student) {
+        if (student == null) return "";
+        String last = (student.lastName != null) ? student.lastName.trim() : "";
+        String first = (student.firstName != null) ? student.firstName.trim() : "";
+        String middle = (student.middleName != null) ? student.middleName.trim() : "";
+
+        StringBuilder given = new StringBuilder();
+        if (!first.isEmpty()) given.append(first);
+        if (!middle.isEmpty()) given.append(given.length() > 0 ? " " : "").append(middle);
+
+        if (!last.isEmpty() && given.length() > 0) return last + ", " + given;
+        if (!last.isEmpty()) return last;
+        return given.toString();
+    }
+
+    /**
+     * Assigns a stable, permanent number to each scan in an assessment based on
+     * insertion order (ascending auto-increment id — i.e. the order they were
+     * actually scanned in), independent of whatever order the list is displayed
+     * in (e.g. newest-first). The first sheet ever scanned is always 1, no
+     * matter how many newer scans get added later.
+     *
+     * @return map of scan DB id -> permanent scan number (1-based).
+     */
+    public static Map<Integer, Integer> computeScanNumbers(List<ScanEntity> scans) {
+        Map<Integer, Integer> numbers = new LinkedHashMap<>();
+        if (scans == null) return numbers;
+        List<ScanEntity> byInsertionOrder = new java.util.ArrayList<>(scans);
+        byInsertionOrder.sort((a, b) -> Integer.compare(a.id, b.id));
+        for (int i = 0; i < byInsertionOrder.size(); i++) {
+            numbers.put(byInsertionOrder.get(i).id, i + 1);
+        }
+        return numbers;
+    }
 }

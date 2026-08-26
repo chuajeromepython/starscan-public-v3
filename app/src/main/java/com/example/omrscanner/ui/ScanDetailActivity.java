@@ -41,6 +41,10 @@ public class ScanDetailActivity extends AppCompatActivity {
     public static final String EXTRA_CLASS_ID = "class_id";
     public static final String EXTRA_ACTIVITY_ID = "activity_id";
     public static final String EXTRA_SCAN_INDEX = "scan_index";
+    /** Permanent scan number (see DataMapper.computeScanNumbers) — passed in
+     *  directly so the title doesn't depend on the scan's position in a
+     *  newest-first list, which shifts every time a new scan is added. */
+    public static final String EXTRA_SCAN_NUMBER = "scan_number";
     /** Alternative lookup key: open a scan directly by its DB id (used by the cross-class Scans tab). */
     public static final String EXTRA_SCAN_ID = "scan_id";
     /** When true, hides all edit affordances — the scan is shown but cannot be modified. */
@@ -65,6 +69,7 @@ public class ScanDetailActivity extends AppCompatActivity {
     // ── State ──────────────────────────────────────────────────
     private String classId, activityId;
     private int scanIndex;
+    private int scanNumber = -1;
     private int scanId = -1;
     private boolean readOnly = false;
 
@@ -82,6 +87,7 @@ public class ScanDetailActivity extends AppCompatActivity {
     private ImageView scanImage;
     private TextView imgPlaceholder;
     private EditText etLrn;
+    private TextView tvStudentName;
     private TextView tvScore, tvDate, tvAnswerCount, tvScoreBadge;
     private LinearLayout answersContainer;
     private TextView btnEditToggle, topBarTitle, topBarBadge;
@@ -117,6 +123,7 @@ public class ScanDetailActivity extends AppCompatActivity {
             classId = getIntent().getStringExtra(EXTRA_CLASS_ID);
             activityId = getIntent().getStringExtra(EXTRA_ACTIVITY_ID);
             scanIndex = getIntent().getIntExtra(EXTRA_SCAN_INDEX, -1);
+            scanNumber = getIntent().getIntExtra(EXTRA_SCAN_NUMBER, -1);
             scanId = getIntent().getIntExtra(EXTRA_SCAN_ID, -1);
             readOnly = getIntent().getBooleanExtra(EXTRA_READ_ONLY, false);
         }
@@ -134,6 +141,7 @@ public class ScanDetailActivity extends AppCompatActivity {
         scanImage = findViewById(R.id.scanImage);
         imgPlaceholder = findViewById(R.id.imgPlaceholder);
         etLrn = findViewById(R.id.etLrn);
+        tvStudentName = findViewById(R.id.tvStudentName);
         tvScore = findViewById(R.id.tvScore);
         tvDate = findViewById(R.id.tvDate);
         tvAnswerCount = findViewById(R.id.tvAnswerCount);
@@ -205,7 +213,14 @@ public class ScanDetailActivity extends AppCompatActivity {
                 editedAnswers.putAll(currentScan.getAnswers());
             }
 
-            runOnUiThread(this::populateUI);
+            if (classId != null && currentScan.getLrn() != null && !currentScan.getLrn().isEmpty()) {
+                repo.getStudentByLrnAndClass(currentScan.getLrn(), classId, student -> {
+                    currentScan.setStudentName(DataMapper.formatStudentFullName(student));
+                    runOnUiThread(this::populateUI);
+                });
+            } else {
+                runOnUiThread(this::populateUI);
+            }
         });
     }
 
@@ -255,18 +270,14 @@ public class ScanDetailActivity extends AppCompatActivity {
                         }
 
                         currentScanEntity = scanEntities.get(scanIndex);
+                        if (scanNumber < 0) {
+                            // Fallback for older intents that didn't pass a stable number.
+                            Map<Integer, Integer> numbers = DataMapper.computeScanNumbers(scanEntities);
+                            Integer n = numbers.get(currentScanEntity.id);
+                            scanNumber = (n != null) ? n : (scanIndex + 1);
+                        }
 
-                        repo.getAnswersByScan(currentScanEntity.id, answerEntities -> {
-                            Map<Integer, String> answers = DataMapper.toAnswerMap(answerEntities);
-                            currentScan = DataMapper.toScanEntry(currentScanEntity, answers);
-
-                            editedAnswers.clear();
-                            if (currentScan.getAnswers() != null) {
-                                editedAnswers.putAll(currentScan.getAnswers());
-                            }
-
-                            runOnUiThread(this::populateUI);
-                        });
+                        loadAnswersAndPopulate();
                     });
                 });
             });
@@ -275,7 +286,7 @@ public class ScanDetailActivity extends AppCompatActivity {
 
     private void populateUI() {
         if (scanIndex >= 0) {
-            topBarTitle.setText("Scan #" + (scanIndex + 1));
+            topBarTitle.setText("Scan #" + (scanNumber >= 0 ? scanNumber : (scanIndex + 1)));
         } else {
             // Opened by scan id (e.g. from the read-only Scans tab) — there's no
             // meaningful "Nth scan in this assessment" position to show, so fall
@@ -295,6 +306,12 @@ public class ScanDetailActivity extends AppCompatActivity {
         updateDetailImageView();
 
         etLrn.setText(currentScan.getLrn());
+        String studentName = currentScan.getStudentName();
+        boolean hasStudentName = studentName != null && !studentName.trim().isEmpty();
+        if (tvStudentName != null) {
+            tvStudentName.setVisibility(hasStudentName ? View.VISIBLE : View.GONE);
+            if (hasStudentName) tvStudentName.setText(studentName);
+        }
         // DETECTED always shows raw bubble count in green
         tvScore.setText(currentScanEntity.detectedBubbles + "/" + currentScan.getNumItems());
         tvScore.setTextColor(Color.parseColor("#059669"));

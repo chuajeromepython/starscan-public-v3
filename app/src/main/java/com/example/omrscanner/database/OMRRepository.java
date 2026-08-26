@@ -813,6 +813,32 @@ public class OMRRepository {
     });
   }
 
+  /**
+   * Single roster lookup by LRN + class — used to show the real student name
+   * on the scan-detail screen. Returns null if the LRN isn't recognized in
+   * this class (unenrolled/unsynced student) — caller should fall back to
+   * showing just the LRN.
+   */
+  public void getStudentByLrnAndClass(String lrn, String classId, Callback<StudentLrnEntity> callback) {
+    executor.execute(() -> {
+      StudentLrnEntity result = db.studentLrnDao().findByLrnAndClass(lrn, classId);
+      if (callback != null)
+        callback.onResult(result);
+    });
+  }
+
+  /**
+   * Full roster (with names) for a single class — one query, reused for every
+   * scan card in that class instead of hitting the DB per-scan.
+   */
+  public void getStudentsByClass(String classId, Callback<List<StudentLrnEntity>> callback) {
+    executor.execute(() -> {
+      List<StudentLrnEntity> list = db.studentLrnDao().findByClass(classId);
+      if (callback != null)
+        callback.onResult(list);
+    });
+  }
+
   public void getAllStudentLrns(Callback<List<StudentLrnEntity>> callback) {
     executor.execute(() -> {
       List<StudentLrnEntity> list = db.studentLrnDao().getAll();

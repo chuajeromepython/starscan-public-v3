@@ -9,6 +9,14 @@ import java.util.Map;
  */
 public class ScanEntry {
     private String lrn;
+    /** Real name of the student this LRN belongs to, looked up from the local
+     *  student_lrn roster table. Null/empty when the LRN isn't recognized
+     *  (e.g. unenrolled/unsynced student) — callers should fall back to the LRN. */
+    private String studentName;
+    /** Permanent scan number (1 = first sheet ever scanned for this assessment),
+     *  based on insertion order — stays fixed regardless of display sort order
+     *  or how many newer scans get added. 0/unset if not computed. */
+    private int scanNumber;
     private Map<Integer, String> answers; // question number -> answer (A/B/C/D or blank)
     private int score;
     private int numItems;
@@ -57,6 +65,12 @@ public class ScanEntry {
     // Getters and Setters
     public String getLrn() { return lrn; }
     public void setLrn(String lrn) { this.lrn = lrn; }
+
+    public String getStudentName() { return studentName; }
+    public void setStudentName(String studentName) { this.studentName = studentName; }
+
+    public int getScanNumber() { return scanNumber; }
+    public void setScanNumber(int scanNumber) { this.scanNumber = scanNumber; }
 
     public Map<Integer, String> getAnswers() { return answers; }
     public void setAnswers(Map<Integer, String> answers) { this.answers = answers; }

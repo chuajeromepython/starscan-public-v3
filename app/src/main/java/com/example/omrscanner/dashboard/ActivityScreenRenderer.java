@@ -131,13 +131,32 @@ public class ActivityScreenRenderer {
         info.setLayoutParams(new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
+        boolean hasName = scan.getStudentName() != null && !scan.getStudentName().trim().isEmpty();
+        if (hasName) {
+            TextView studentName = new TextView(activity);
+            studentName.setText(scan.getStudentName());
+            studentName.setTextColor(Color.parseColor("#1E293B"));
+            studentName.setTextSize(14);
+            studentName.setTypeface(null, Typeface.BOLD);
+            studentName.setClickable(false);
+            studentName.setMaxLines(1);
+            studentName.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            info.addView(studentName);
+        }
+
         TextView lrn = new TextView(activity);
         lrn.setText("LRN: " + (scan.getLrn() != null && !scan.getLrn().isEmpty()
                 ? scan.getLrn() : "Unknown"));
-        lrn.setTextColor(Color.parseColor("#1E293B"));
-        lrn.setTextSize(13);
-        lrn.setTypeface(null, Typeface.BOLD);
+        lrn.setTextColor(hasName ? Color.parseColor("#64748B") : Color.parseColor("#1E293B"));
+        lrn.setTextSize(hasName ? 12 : 13);
+        lrn.setTypeface(null, hasName ? Typeface.NORMAL : Typeface.BOLD);
         lrn.setClickable(false);
+        if (hasName) {
+            LinearLayout.LayoutParams lrnLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lrnLp.topMargin = ui.dp(1);
+            lrn.setLayoutParams(lrnLp);
+        }
         info.addView(lrn);
 
         if (needsCorrection) {
@@ -155,7 +174,8 @@ public class ActivityScreenRenderer {
         }
 
         TextView detail = new TextView(activity);
-        detail.setText("Student #" + (index + 1) + " · " + selectedActivity.getSheetType());
+        int stableNumber = scan.getScanNumber() > 0 ? scan.getScanNumber() : (index + 1);
+        detail.setText("Student #" + stableNumber + " · " + selectedActivity.getSheetType());
         detail.setTextColor(Color.parseColor("#64748B"));
         detail.setTextSize(12);
         detail.setClickable(false);
@@ -192,6 +212,7 @@ public class ActivityScreenRenderer {
             intent.putExtra(ScanDetailActivity.EXTRA_CLASS_ID, classId);
             intent.putExtra(ScanDetailActivity.EXTRA_ACTIVITY_ID, activityId);
             intent.putExtra(ScanDetailActivity.EXTRA_SCAN_INDEX, index);
+            intent.putExtra(ScanDetailActivity.EXTRA_SCAN_NUMBER, stableNumber);
             activity.startActivity(intent);
         });
 

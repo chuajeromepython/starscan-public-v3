@@ -3619,7 +3619,33 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                         ? (activeUserFirstName + (activeUserLastName != null && !activeUserLastName.isEmpty() ? " " + activeUserLastName : ""))
                         : globalTeacherName;
                 ClassFolder cf = DataMapper.toClassFolder(ce, displayTeacherName);
-                repo.getAssessmentsByClass(ce.id, assessmentEntities -> {
+                repo.getStudentsByClass(ce.id, rosterEntities -> {
+                    Map<String, String> lrnToName = new java.util.HashMap<>();
+                    if (rosterEntities != null) {
+                        for (com.example.omrscanner.database.entities.StudentLrnEntity s : rosterEntities) {
+                            if (s.lrn == null) continue;
+                            // "Lastname, Firstname Middlename"
+                            String last = (s.lastName != null) ? s.lastName.trim() : "";
+                            String first = (s.firstName != null) ? s.firstName.trim() : "";
+                            String middle = (s.middleName != null) ? s.middleName.trim() : "";
+
+                            StringBuilder given = new StringBuilder();
+                            if (!first.isEmpty()) given.append(first);
+                            if (!middle.isEmpty()) given.append(given.length() > 0 ? " " : "").append(middle);
+
+                            String fullName;
+                            if (!last.isEmpty() && given.length() > 0) {
+                                fullName = last + ", " + given;
+                            } else if (!last.isEmpty()) {
+                                fullName = last;
+                            } else {
+                                fullName = given.toString();
+                            }
+
+                            if (!fullName.trim().isEmpty()) lrnToName.put(s.lrn, fullName.trim());
+                        }
+                    }
+                    repo.getAssessmentsByClass(ce.id, assessmentEntities -> {
                     List<ActivityFolder> activities = new ArrayList<>();
                     if (assessmentEntities == null || assessmentEntities.isEmpty()) {
                         cf.setActivities(activities);
@@ -3634,6 +3660,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                         af.setAnswerKeyId(ae.answerKeyId); // carry the soft-link into the in-memory model
                         repo.getScansByAssessment(ae.id, scanEntities -> {
                             List<ScanEntry> scanEntries = new ArrayList<>();
+                            Map<Integer, Integer> scanNumbers = DataMapper.computeScanNumbers(scanEntities);
                             if (scanEntities == null || scanEntities.isEmpty()) {
                                 af.setScans(scanEntries);
                                 activities.add(af);
@@ -3649,7 +3676,11 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                             for (ScanEntity se : scanEntities) {
                                 repo.getAnswersByScan(se.id, answerEntities -> {
                                     Map<Integer, String> answers = DataMapper.toAnswerMap(answerEntities);
-                                    scanEntries.add(DataMapper.toScanEntry(se, answers));
+                                    ScanEntry scanEntry = DataMapper.toScanEntry(se, answers);
+                                    scanEntry.setStudentName(lrnToName.get(se.studentLrn));
+                                    Integer num = scanNumbers.get(se.id);
+                                    scanEntry.setScanNumber(num != null ? num : 0);
+                                    scanEntries.add(scanEntry);
                                     if (scanCountdown.decrementAndGet() == 0) {
                                         af.setScans(scanEntries);
                                         activities.add(af);
@@ -3664,6 +3695,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                             }
                         });
                     }
+                    });
                 });
             }
         }));
