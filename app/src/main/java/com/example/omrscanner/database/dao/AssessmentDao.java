@@ -40,6 +40,18 @@ public interface AssessmentDao {
   @Query("SELECT * FROM assessments WHERE class_id = :classId AND server_assessment_id = :serverAssessmentId LIMIT 1")
   AssessmentEntity getByServerIdAndClass(String classId, int serverAssessmentId);
 
+  /**
+   * Fallback match for assessments that don't have a server_assessment_id yet —
+   * either created locally in-app, or restored from a backup taken before this
+   * field existed. Matched by title + sheet type within the same class so a
+   * sync recognizes them as the same assessment instead of inserting a
+   * duplicate card. Once matched, the caller should backfill server_assessment_id
+   * so future syncs use the reliable id-based match instead.
+   */
+  @Query("SELECT * FROM assessments WHERE class_id = :classId AND server_assessment_id IS NULL "
+          + "AND name = :name AND sheet_type = :sheetType LIMIT 1")
+  AssessmentEntity getUnlinkedByNameAndClass(String classId, String name, String sheetType);
+
   @Query("SELECT COUNT(*) FROM assessments WHERE class_id = :classId")
   int countByClass(String classId);
 

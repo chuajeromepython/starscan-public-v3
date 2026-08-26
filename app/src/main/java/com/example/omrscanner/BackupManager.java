@@ -218,7 +218,28 @@ public class BackupManager {
     public void restoreBackup(Uri source, RestoreCallback callback) {
         executor.execute(() -> {
             try {
-                List<ClassEntity> localClasses = db.classDao().getAll();
+                // Scope restore to the CURRENTLY signed-in teacher's classes only —
+                // never trust an unscoped "all classes in the DB" query here. On a
+                // shared device, another teacher's classes/assessments can still be
+                // sitting in local storage from a previous session, and matching a
+                // restored assessment's classroomId against those would attach it
+                // to the wrong teacher's class. Mirrors DashboardActivity#ensureTeacherId,
+                // which re-resolves against the active user for the same reason.
+                com.example.omrscanner.database.entities.UserEntity activeUser = db.userDao().getActiveUser();
+                if (activeUser == null || activeUser.userId == null) {
+                    callback.onError(new IllegalStateException(
+                            "Please sign in before restoring a backup."));
+                    return;
+                }
+                com.example.omrscanner.database.entities.TeacherEntity activeTeacher =
+                        db.teacherDao().getByUserId(activeUser.userId);
+                if (activeTeacher == null) {
+                    callback.onError(new IllegalStateException(
+                            "No classes found yet. Scan your QR code and sync your classes first, " +
+                                    "then restore the backup."));
+                    return;
+                }
+                List<ClassEntity> localClasses = db.classDao().getByTeacher(activeTeacher.id);
                 if (localClasses.isEmpty()) {
                     callback.onError(new IllegalStateException(
                             "No classes found yet. Scan your QR code and sync your classes first, " +
@@ -263,22 +284,34 @@ public class BackupManager {
                 }
 
                 int restoredScans = 0;
+                Set<Integer> restoredScanIds = new HashSet<>();
                 JSONArray scansJson = manifest.optJSONArray("scans");
                 if (scansJson != null) {
                     for (int i = 0; i < scansJson.length(); i++) {
                         JSONObject o = scansJson.getJSONObject(i);
                         String assessmentId = o.optString("assessmentId", null);
                         if (assessmentId == null || !restoredAssessmentIds.contains(assessmentId)) continue;
-                        db.scanDao().insert(scanFromJson(o));
+                        ScanEntity scan = scanFromJson(o);
+                        db.scanDao().insert(scan);
+                        restoredScanIds.add(scan.id);
                         restoredScans++;
                     }
                 }
 
+                // Only keep answers whose parent scan actually got restored above —
+                // answers.scan_id has a FOREIGN KEY (ON DELETE CASCADE) to scans.id,
+                // so inserting an answer for a scan that was skipped (e.g. its
+                // assessment's class isn't synced locally) throws a foreign key
+                // constraint failure and aborts the WHOLE restore, even though
+                // assessments/scans/keys were already committed successfully.
                 JSONArray answersJson = manifest.optJSONArray("answers");
                 if (answersJson != null) {
                     List<AnswerEntity> batch = new ArrayList<>();
                     for (int i = 0; i < answersJson.length(); i++) {
-                        batch.add(answerFromJson(answersJson.getJSONObject(i)));
+                        JSONObject o = answersJson.getJSONObject(i);
+                        int scanId = o.optInt("scanId", -1);
+                        if (!restoredScanIds.contains(scanId)) continue;
+                        batch.add(answerFromJson(o));
                     }
                     if (!batch.isEmpty()) db.answerDao().insertAll(batch);
                 }

@@ -1236,10 +1236,19 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                         com.example.omrscanner.database.entities.AssessmentEntity existing =
                                 db.assessmentDao().getByServerIdAndClass(localClassId, serverId);
 
+                        if (existing == null) {
+                            // Not linked by server id yet — could be a locally-created
+                            // assessment, or one restored from a backup taken before
+                            // server_assessment_id existed. Fall back to matching by
+                            // title + sheet type so we don't insert a duplicate card.
+                            existing = db.assessmentDao().getUnlinkedByNameAndClass(localClassId, title, sheetType);
+                        }
+
                         if (existing != null) {
                             existing.name = title;
                             existing.sheetType = sheetType;
                             existing.assessmentType = assessmentType;
+                            existing.serverAssessmentId = serverId; // backfill so future syncs match by id
                             existing.updatedAt = System.currentTimeMillis();
                             db.assessmentDao().update(existing);
 
