@@ -3930,6 +3930,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                         com.example.omrscanner.database.entities.StudentLrnEntity student =
                                 new com.example.omrscanner.database.entities.StudentLrnEntity();
                         student.lrn = lrn;
+                        student.firstName = s.optString("first_name", null);
+                        student.middleName = s.optString("middle_name", null);
+                        student.lastName = s.optString("last_name", null);
                         student.className = localClassId;
                         student.sectionId = s.optInt("sectionId");
                         student.gradeLevelId = s.optInt("gradeLevelId");

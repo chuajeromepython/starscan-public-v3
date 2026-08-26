@@ -26,6 +26,15 @@ public class StudentLrnEntity {
     @ColumnInfo(name = "lrn")
     public String lrn;
 
+    @ColumnInfo(name = "first_name")
+    public String firstName;
+
+    @ColumnInfo(name = "middle_name")
+    public String middleName;
+
+    @ColumnInfo(name = "last_name")
+    public String lastName;
+
     @ColumnInfo(name = "className")
     public String className;
 

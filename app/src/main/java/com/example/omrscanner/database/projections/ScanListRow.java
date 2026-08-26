@@ -29,6 +29,9 @@ public class ScanListRow {
     @ColumnInfo(name = "studentLrn")
     public String studentLrn;
 
+    @ColumnInfo(name = "studentName")
+    public String studentName;
+
     @ColumnInfo(name = "score")
     public Integer score;
 

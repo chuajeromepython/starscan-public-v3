@@ -90,12 +90,20 @@ public class ScansScreenRenderer {
         info.setLayoutParams(new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
+        TextView name = new TextView(activity);
+        name.setText(row.studentName != null && !row.studentName.trim().isEmpty()
+                ? row.studentName.trim() : "Unnamed Student");
+        name.setTextColor(Color.parseColor("#1E293B"));
+        name.setTextSize(14);
+        name.setTypeface(null, Typeface.BOLD);
+        info.addView(name);
+
         TextView lrn = new TextView(activity);
         lrn.setText("LRN: " + (row.studentLrn != null && !row.studentLrn.isEmpty()
                 ? row.studentLrn : "Unknown"));
-        lrn.setTextColor(Color.parseColor("#1E293B"));
-        lrn.setTextSize(13);
-        lrn.setTypeface(null, Typeface.BOLD);
+        lrn.setTextColor(Color.parseColor("#64748B"));
+        lrn.setTextSize(12);
+        lrn.setTypeface(null, Typeface.NORMAL);
         info.addView(lrn);
 
         TextView detail = new TextView(activity);

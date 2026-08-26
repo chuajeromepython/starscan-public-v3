@@ -90,13 +90,16 @@ public interface ScanDao {
    */
   @Query("SELECT s.id AS id, s.assessment_id AS assessmentId, a.class_id AS classId, " +
           "(c.grade || ' \u2014 ' || c.section) AS className, a.name AS assessmentName, " +
-          "a.sheet_type AS sheetType, s.student_lrn AS studentLrn, s.score AS score, " +
+          "a.sheet_type AS sheetType, s.student_lrn AS studentLrn, " +
+          "TRIM(COALESCE(sl.first_name || ' ', '') || COALESCE(sl.middle_name || ' ', '') || COALESCE(sl.last_name, '')) AS studentName, " +
+          "s.score AS score, " +
           "s.detected_bubbles AS detectedBubbles, s.num_items AS numItems, " +
           "s.timestamp AS timestamp, (a.answer_key_id IS NOT NULL) AS isGraded, " +
           "EXISTS(SELECT 1 FROM answers ans WHERE ans.scan_id = s.id AND LENGTH(ans.answer) > 1) AS needsCorrection " +
           "FROM scans s " +
           "JOIN assessments a ON a.id = s.assessment_id " +
           "LEFT JOIN classes c ON c.id = a.class_id " +
+          "LEFT JOIN student_lrn sl ON sl.lrn = s.student_lrn AND sl.className = a.class_id " +
           "WHERE (:classIdFilter IS NULL OR :classIdFilter = '' OR a.class_id = :classIdFilter) " +
           "AND (:assessmentIdFilter IS NULL OR :assessmentIdFilter = '' OR a.id = :assessmentIdFilter) " +
           "AND (:sheetTypeFilter IS NULL OR :sheetTypeFilter = '' OR a.sheet_type = :sheetTypeFilter) " +
