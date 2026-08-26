@@ -290,9 +290,10 @@ public class ScanDetailActivity extends AppCompatActivity {
         } else {
             // Opened by scan id (e.g. from the read-only Scans tab) — there's no
             // meaningful "Nth scan in this assessment" position to show, so fall
-            // back to the LRN, which is more useful here anyway.
-            String lrn = currentScan.getLrn();
-            topBarTitle.setText((lrn != null && !lrn.isEmpty()) ? lrn : "Scan Details");
+            // back to the student's name, which is more useful here anyway.
+            String studentName = currentScan.getStudentName();
+            topBarTitle.setText((studentName != null && !studentName.trim().isEmpty())
+                    ? studentName.trim() : "Scan Details");
         }
 
         // Image — toggle-aware: plain scan result (overlay, falling back to
