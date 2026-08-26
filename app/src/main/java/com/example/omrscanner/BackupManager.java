@@ -377,6 +377,10 @@ public class BackupManager {
         o.put("answerKeyId", a.answerKeyId);
         o.put("assessmentType", a.assessmentType);
         o.put("hotSync", a.hotSync);
+        // Preserve the server's assessment id so a post-restore "Sync Assessments"
+        // recognizes this as the same assessment (matched by classId + this field)
+        // and updates it in place instead of inserting a duplicate card.
+        if (a.serverAssessmentId != null) o.put("serverAssessmentId", a.serverAssessmentId);
         return o;
     }
 
@@ -392,6 +396,8 @@ public class BackupManager {
         a.answerKeyId = o.isNull("answerKeyId") ? null : o.optString("answerKeyId", null);
         a.assessmentType = o.isNull("assessmentType") ? null : o.optString("assessmentType", null);
         a.hotSync = o.optInt("hotSync", 0);
+        a.serverAssessmentId = o.has("serverAssessmentId") && !o.isNull("serverAssessmentId")
+                ? o.optInt("serverAssessmentId") : null;
         return a;
     }
 
