@@ -115,8 +115,18 @@ public class BackupManager {
     public void exportBackup(Uri destination, ExportCallback callback) {
         executor.execute(() -> {
             try {
+                // Resolve the active teacher so this export only ever contains
+                // their own data, even if other teachers have used this device.
+                com.example.omrscanner.database.entities.UserEntity activeUser = db.userDao().getActiveUser();
+                int teacherId = -1;
+                if (activeUser != null && activeUser.userId != null) {
+                    com.example.omrscanner.database.entities.TeacherEntity teacher =
+                            db.teacherDao().getByUserId(activeUser.userId);
+                    if (teacher != null) teacherId = teacher.id;
+                }
+
                 Map<String, Integer> classIdToClassroomId = new HashMap<>();
-                for (ClassEntity c : db.classDao().getAll()) {
+                for (ClassEntity c : db.classDao().getByTeacher(teacherId)) {
                     if (c.classroomId != null) {
                         classIdToClassroomId.put(c.id, c.classroomId);
                     }
@@ -127,20 +137,21 @@ public class BackupManager {
                 manifest.put("exportedAt", System.currentTimeMillis());
 
                 Set<String> keptAssessmentIds = new HashSet<>();
+                Set<String> keptAnswerKeyIds = new HashSet<>();
                 JSONArray assessmentsJson = new JSONArray();
                 int skippedNoClassroom = 0;
                 for (AssessmentEntity a : db.assessmentDao().getAllSync()) {
                     Integer classroomId = classIdToClassroomId.get(a.classId);
                     if (classroomId == null) {
-                        // Class isn't a synced (server) class — no stable id to
-                        // restore against later. Shouldn't happen now that
-                        // classes can only come from the system, but skip
-                        // defensively rather than write an unrestoreable row.
+                        // Not one of the active teacher's classes (or not a
+                        // synced/server class) — skip defensively rather than
+                        // write an unrestoreable or cross-teacher row.
                         skippedNoClassroom++;
                         continue;
                     }
                     assessmentsJson.put(assessmentToJson(a, classroomId));
                     keptAssessmentIds.add(a.id);
+                    if (a.answerKeyId != null) keptAnswerKeyIds.add(a.answerKeyId);
                 }
                 if (skippedNoClassroom > 0) {
                     Log.w(TAG, "Skipped " + skippedNoClassroom + " assessment(s) with no synced classroom_id");
@@ -165,6 +176,10 @@ public class BackupManager {
 
                 JSONArray keysJson = new JSONArray();
                 for (AnswerKeyEntity k : db.answerKeyDao().getAll()) {
+                    // answer_keys is a shared/global bank (no teacher_id column),
+                    // so scope the export to keys this teacher's kept assessments
+                    // actually reference, rather than dumping the whole bank.
+                    if (!keptAnswerKeyIds.contains(k.id)) continue;
                     keysJson.put(answerKeyToJson(k));
                 }
                 manifest.put("answerKeys", keysJson);
