@@ -410,30 +410,30 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     runWithStoragePermission(() -> {
                         runOnUiThread(() -> Toast.makeText(this, "Restoring…", Toast.LENGTH_SHORT).show());
                         backupManager.restoreBackup(uri, new BackupManager.RestoreCallback() {
-                        @Override
-                        public void onSuccess(int restoredAssessments, int restoredScans,
-                                              int restoredAnswerKeys, int skippedAssessments,
-                                              int failedExports) {
-                            runOnUiThread(() -> {
-                                ui.showToast("Restore complete ✓  (" + restoredAssessments
-                                        + " assessment(s), " + restoredScans + " scan(s), "
-                                        + restoredAnswerKeys + " answer key(s))");
-                                if (skippedAssessments > 0) {
-                                    ui.showErrorDialog("Some data was skipped",
-                                            skippedAssessments + " assessment(s) were skipped because their "
-                                                    + "class isn't synced to your account anymore.");
-                                }
-                                if (failedExports > 0) {
-                                    ui.showErrorDialog("Some assessments couldn't be prepared for upload",
-                                            failedExports + " assessment(s) were restored to the database, "
-                                                    + "but the app couldn't rebuild their files in "
-                                                    + "Downloads/OMRScanner (likely a storage permission issue). "
-                                                    + "Check the app's storage/files permission in Settings, "
-                                                    + "then re-open each affected assessment before uploading.");
-                                }
-                                loadDataFromDb(); // refresh UI with restored data
-                            });
-                        }
+                            @Override
+                            public void onSuccess(int restoredAssessments, int restoredScans,
+                                                  int restoredAnswerKeys, int skippedAssessments,
+                                                  int failedExports) {
+                                runOnUiThread(() -> {
+                                    ui.showToast("Restore complete ✓  (" + restoredAssessments
+                                            + " assessment(s), " + restoredScans + " scan(s), "
+                                            + restoredAnswerKeys + " answer key(s))");
+                                    if (skippedAssessments > 0) {
+                                        ui.showErrorDialog("Some data was skipped",
+                                                skippedAssessments + " assessment(s) were skipped because their "
+                                                        + "class isn't synced to your account anymore.");
+                                    }
+                                    if (failedExports > 0) {
+                                        ui.showErrorDialog("Some assessments couldn't be prepared for upload",
+                                                failedExports + " assessment(s) were restored to the database, "
+                                                        + "but the app couldn't rebuild their files in "
+                                                        + "Downloads/OMRScanner (likely a storage permission issue). "
+                                                        + "Check the app's storage/files permission in Settings, "
+                                                        + "then re-open each affected assessment before uploading.");
+                                    }
+                                    loadDataFromDb(); // refresh UI with restored data
+                                });
+                            }
 
                             @Override
                             public void onError(Exception e) {
@@ -3265,51 +3265,51 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 myAssessmentsSearchQuery, selectedMyAssessmentsSort, rows -> runOnUiThread(() -> {
                     if (!SCREEN_ASSESSMENTS.equals(currentScreen)) return;
 
-            int rowCount = (rows != null) ? rows.size() : 0;
-            if (assessmentsAllCount != null) assessmentsAllCount.setText(String.valueOf(rowCount));
-            assessmentsSummaryCount.setText(String.valueOf(rowCount));
+                    int rowCount = (rows != null) ? rows.size() : 0;
+                    if (assessmentsAllCount != null) assessmentsAllCount.setText(String.valueOf(rowCount));
+                    assessmentsSummaryCount.setText(String.valueOf(rowCount));
 
-            if (rowCount == 0) {
-                assessmentsAllEmpty.setVisibility(View.VISIBLE);
-                assessmentsAllList.setVisibility(View.GONE);
-                return;
-            }
-            assessmentsAllEmpty.setVisibility(View.GONE);
-            assessmentsAllList.setVisibility(View.VISIBLE);
-            for (AssessmentListRow row : rows) {
-                ClassFolder ownerClass = findClassById(row.classId);
-                assessmentsAllList.addView(classRenderer.createActivityCard(
-                        row,
-                        () -> {
-                            ActivityFolder a = findActivityById(ownerClass, row.id);
-                            if (ownerClass != null && a != null) dialogs.showEditActivityDialog(a);
-                        },
-                        () -> {
-                            ActivityFolder a = findActivityById(ownerClass, row.id);
-                            if (ownerClass != null && a != null) dialogs.showAnswerKeyFolderDialog(a);
-                        },
-                        () -> {
-                            ActivityFolder a = findActivityById(ownerClass, row.id);
-                            if (ownerClass != null && a != null) dialogs.showDeleteActivityConfirmation(a);
-                        },
-                        () -> {
-                            ActivityFolder a = findActivityById(ownerClass, row.id);
-                            if (ownerClass != null && a != null) dialogs.showUploadAssessmentDialog(a, ownerClass);
-                        },
-                        () -> {
-                            ActivityFolder a = findActivityById(ownerClass, row.id);
-                            if (ownerClass == null || a == null) {
-                                ui.showErrorDialog("Assessment unavailable",
-                                        "The selected assessment could not be loaded. Please try again.");
-                                return;
-                            }
-                            selectedClass = ownerClass;
-                            selectedActivity = a;
-                            activityOpenedFromAssessmentsTab = true;
-                            showScreen(SCREEN_ACTIVITY);
-                        }));
-            }
-        }));
+                    if (rowCount == 0) {
+                        assessmentsAllEmpty.setVisibility(View.VISIBLE);
+                        assessmentsAllList.setVisibility(View.GONE);
+                        return;
+                    }
+                    assessmentsAllEmpty.setVisibility(View.GONE);
+                    assessmentsAllList.setVisibility(View.VISIBLE);
+                    for (AssessmentListRow row : rows) {
+                        ClassFolder ownerClass = findClassById(row.classId);
+                        assessmentsAllList.addView(classRenderer.createActivityCard(
+                                row,
+                                () -> {
+                                    ActivityFolder a = findActivityById(ownerClass, row.id);
+                                    if (ownerClass != null && a != null) dialogs.showEditActivityDialog(a);
+                                },
+                                () -> {
+                                    ActivityFolder a = findActivityById(ownerClass, row.id);
+                                    if (ownerClass != null && a != null) dialogs.showAnswerKeyFolderDialog(a);
+                                },
+                                () -> {
+                                    ActivityFolder a = findActivityById(ownerClass, row.id);
+                                    if (ownerClass != null && a != null) dialogs.showDeleteActivityConfirmation(a);
+                                },
+                                () -> {
+                                    ActivityFolder a = findActivityById(ownerClass, row.id);
+                                    if (ownerClass != null && a != null) dialogs.showUploadAssessmentDialog(a, ownerClass);
+                                },
+                                () -> {
+                                    ActivityFolder a = findActivityById(ownerClass, row.id);
+                                    if (ownerClass == null || a == null) {
+                                        ui.showErrorDialog("Assessment unavailable",
+                                                "The selected assessment could not be loaded. Please try again.");
+                                        return;
+                                    }
+                                    selectedClass = ownerClass;
+                                    selectedActivity = a;
+                                    activityOpenedFromAssessmentsTab = true;
+                                    showScreen(SCREEN_ACTIVITY);
+                                }));
+                    }
+                }));
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -3672,55 +3672,55 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                         }
                     }
                     repo.getAssessmentsByClass(ce.id, assessmentEntities -> {
-                    List<ActivityFolder> activities = new ArrayList<>();
-                    if (assessmentEntities == null || assessmentEntities.isEmpty()) {
-                        cf.setActivities(activities);
-                        loadedClasses.add(cf);
-                        if (classCountdown.decrementAndGet() == 0)
-                            publishResult(loadedClasses, prevClassId, prevActivityId, prevScreen);
-                        return;
-                    }
-                    AtomicInteger assessmentCountdown = new AtomicInteger(assessmentEntities.size());
-                    for (AssessmentEntity ae : assessmentEntities) {
-                        ActivityFolder af = DataMapper.toActivityFolder(ae);
-                        af.setAnswerKeyId(ae.answerKeyId); // carry the soft-link into the in-memory model
-                        repo.getScansByAssessment(ae.id, scanEntities -> {
-                            List<ScanEntry> scanEntries = new ArrayList<>();
-                            Map<Integer, Integer> scanNumbers = DataMapper.computeScanNumbers(scanEntities);
-                            if (scanEntities == null || scanEntities.isEmpty()) {
-                                af.setScans(scanEntries);
-                                activities.add(af);
-                                if (assessmentCountdown.decrementAndGet() == 0) {
-                                    cf.setActivities(activities);
-                                    loadedClasses.add(cf);
-                                    if (classCountdown.decrementAndGet() == 0)
-                                        publishResult(loadedClasses, prevClassId, prevActivityId, prevScreen);
-                                }
-                                return;
-                            }
-                            AtomicInteger scanCountdown = new AtomicInteger(scanEntities.size());
-                            for (ScanEntity se : scanEntities) {
-                                repo.getAnswersByScan(se.id, answerEntities -> {
-                                    Map<Integer, String> answers = DataMapper.toAnswerMap(answerEntities);
-                                    ScanEntry scanEntry = DataMapper.toScanEntry(se, answers);
-                                    scanEntry.setStudentName(lrnToName.get(se.studentLrn));
-                                    Integer num = scanNumbers.get(se.id);
-                                    scanEntry.setScanNumber(num != null ? num : 0);
-                                    scanEntries.add(scanEntry);
-                                    if (scanCountdown.decrementAndGet() == 0) {
-                                        af.setScans(scanEntries);
-                                        activities.add(af);
-                                        if (assessmentCountdown.decrementAndGet() == 0) {
-                                            cf.setActivities(activities);
-                                            loadedClasses.add(cf);
-                                            if (classCountdown.decrementAndGet() == 0)
-                                                publishResult(loadedClasses, prevClassId, prevActivityId, prevScreen);
-                                        }
+                        List<ActivityFolder> activities = new ArrayList<>();
+                        if (assessmentEntities == null || assessmentEntities.isEmpty()) {
+                            cf.setActivities(activities);
+                            loadedClasses.add(cf);
+                            if (classCountdown.decrementAndGet() == 0)
+                                publishResult(loadedClasses, prevClassId, prevActivityId, prevScreen);
+                            return;
+                        }
+                        AtomicInteger assessmentCountdown = new AtomicInteger(assessmentEntities.size());
+                        for (AssessmentEntity ae : assessmentEntities) {
+                            ActivityFolder af = DataMapper.toActivityFolder(ae);
+                            af.setAnswerKeyId(ae.answerKeyId); // carry the soft-link into the in-memory model
+                            repo.getScansByAssessment(ae.id, scanEntities -> {
+                                List<ScanEntry> scanEntries = new ArrayList<>();
+                                Map<Integer, Integer> scanNumbers = DataMapper.computeScanNumbers(scanEntities);
+                                if (scanEntities == null || scanEntities.isEmpty()) {
+                                    af.setScans(scanEntries);
+                                    activities.add(af);
+                                    if (assessmentCountdown.decrementAndGet() == 0) {
+                                        cf.setActivities(activities);
+                                        loadedClasses.add(cf);
+                                        if (classCountdown.decrementAndGet() == 0)
+                                            publishResult(loadedClasses, prevClassId, prevActivityId, prevScreen);
                                     }
-                                });
-                            }
-                        });
-                    }
+                                    return;
+                                }
+                                AtomicInteger scanCountdown = new AtomicInteger(scanEntities.size());
+                                for (ScanEntity se : scanEntities) {
+                                    repo.getAnswersByScan(se.id, answerEntities -> {
+                                        Map<Integer, String> answers = DataMapper.toAnswerMap(answerEntities);
+                                        ScanEntry scanEntry = DataMapper.toScanEntry(se, answers);
+                                        scanEntry.setStudentName(lrnToName.get(se.studentLrn));
+                                        Integer num = scanNumbers.get(se.id);
+                                        scanEntry.setScanNumber(num != null ? num : 0);
+                                        scanEntries.add(scanEntry);
+                                        if (scanCountdown.decrementAndGet() == 0) {
+                                            af.setScans(scanEntries);
+                                            activities.add(af);
+                                            if (assessmentCountdown.decrementAndGet() == 0) {
+                                                cf.setActivities(activities);
+                                                loadedClasses.add(cf);
+                                                if (classCountdown.decrementAndGet() == 0)
+                                                    publishResult(loadedClasses, prevClassId, prevActivityId, prevScreen);
+                                            }
+                                        }
+                                    });
+                                }
+                            });
+                        }
                     });
                 });
             }
