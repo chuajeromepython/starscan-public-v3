@@ -82,6 +82,14 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class DashboardActivity extends AppCompatActivity implements DashboardDialogs.DialogHost {
 
+    /**
+     * Set by the live instance in onResume/cleared in onPause so
+     * saveScanResult() (called statically from CameraActivity) can nudge
+     * the visible screen to refresh immediately instead of waiting for
+     * the next onResume/navigation.
+     */
+    public static Runnable onScanSavedListener;
+
     private static final String TAG = "DashboardActivity";
     private static final String CAMERA_MODE_PREFS = "camera_mode_prefs";
     private static final String PREF_FIXED_MOUNT_MODE = "fixed_mount_mode"; // kept, no longer surfaced in UI
@@ -496,12 +504,16 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         loadDataFromDb();
         lastSyncedTicker.removeCallbacks(lastSyncedTickRunnable);
         lastSyncedTicker.postDelayed(lastSyncedTickRunnable, LAST_SYNCED_TICK_MS);
+        onScanSavedListener = () -> {
+            if (SCREEN_CLASS.equals(currentScreen)) renderClassScreen();
+        };
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         lastSyncedTicker.removeCallbacks(lastSyncedTickRunnable);
+        onScanSavedListener = null;
     }
 
     @Override
@@ -1293,8 +1305,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                             android.widget.Toast.LENGTH_SHORT).show();
                     if (context instanceof DashboardActivity) {
                         DashboardActivity dash = (DashboardActivity) context;
-                        dash.loadDataFromDb();
-                        mainHandler.postDelayed(dash::refreshAfterAssessmentsSync, TOAST_SHORT_DELAY_MS);
+                        // Wait until the toast has finished showing before touching
+                        // the screen, so the cards appear right after the toast
+                        // instead of shifting underneath it.
+                        mainHandler.postDelayed(() -> {
+                            dash.loadDataFromDb();
+                            dash.refreshAfterAssessmentsSync();
+                        }, TOAST_SHORT_DELAY_MS);
                     }
                 });
             } catch (Exception e) {
@@ -3859,6 +3876,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
 // ── Standalone write to student_lrn ──
         r.insertStudentLrn(scanEntry.getLrn(), classId, null);
+
+        // Nudge the live screen (if any) to refresh its "X of Y students
+        // scanned" badge right now instead of waiting for onResume.
+        if (onScanSavedListener != null) {
+            new Handler(Looper.getMainLooper()).post(onScanSavedListener);
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -3956,8 +3979,11 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                         android.widget.Toast.makeText(context,
                                 "No students found for this class.", android.widget.Toast.LENGTH_SHORT).show();
                         mainHandler.postDelayed(() -> {
-                            if (context instanceof DashboardActivity)
-                                ((DashboardActivity) context).refreshStudentSyncSubtitle(localClassId);
+                            if (context instanceof DashboardActivity) {
+                                DashboardActivity dash = (DashboardActivity) context;
+                                dash.refreshStudentSyncSubtitle(localClassId);
+                                dash.refreshAfterAssessmentsSync(); // also repaints the "X of Y scanned" badges
+                            }
                         }, TOAST_SHORT_DELAY_MS);
                     });
                 } else {
@@ -3985,8 +4011,11 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                         android.widget.Toast.makeText(context,
                                 "Synced " + savedCount + " student" + (savedCount != 1 ? "s" : ""), android.widget.Toast.LENGTH_SHORT).show();
                         mainHandler.postDelayed(() -> {
-                            if (context instanceof DashboardActivity)
-                                ((DashboardActivity) context).refreshStudentSyncSubtitle(localClassId);
+                            if (context instanceof DashboardActivity) {
+                                DashboardActivity dash = (DashboardActivity) context;
+                                dash.refreshStudentSyncSubtitle(localClassId);
+                                dash.refreshAfterAssessmentsSync(); // also repaints the "X of Y scanned" badges
+                            }
                         }, TOAST_SHORT_DELAY_MS);
                     }));
                 }
