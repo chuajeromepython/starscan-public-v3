@@ -80,6 +80,15 @@ public interface ScanDao {
   ScanEntity getByAssessmentAndLrn(String assessmentId, String lrn);
 
   /**
+   * Same lookup as getByAssessmentAndLrn, but excludes a given scan id —
+   * used when editing an existing scan's LRN, so the scan doesn't match
+   * itself and only a genuinely different conflicting scan is returned.
+   */
+  @Query("SELECT * FROM scans WHERE assessment_id = :assessmentId AND student_lrn = :lrn " +
+          "AND id != :excludeScanId LIMIT 1")
+  ScanEntity getByAssessmentAndLrnExcluding(String assessmentId, String lrn, int excludeScanId);
+
+  /**
    * Every scan across every class/assessment, newest first — powers the
    * read-only "Scans" tab. Joined with assessments/classes purely for
    * display (class + assessment name) and filtering; no write access is

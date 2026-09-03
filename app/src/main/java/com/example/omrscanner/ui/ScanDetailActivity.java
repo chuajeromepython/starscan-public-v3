@@ -719,8 +719,39 @@ public class ScanDetailActivity extends AppCompatActivity {
 
     private void saveChanges() {
         if (readOnly) return;
+
+        String newLrn = etLrn.getText().toString().trim();
+
+        // Check for another scan in this assessment that already has this LRN
+        // (excluding this scan itself) before committing the edit.
+        new Thread(() -> {
+            ScanEntity conflict = (classId != null && !newLrn.isEmpty())
+                    ? repo.getConflictingScanByLrnSync(currentScanEntity.assessmentId, newLrn, currentScanEntity.id)
+                    : null;
+
+            runOnUiThread(() -> {
+                if (conflict != null) {
+                    new com.google.android.material.dialog.MaterialAlertDialogBuilder(
+                            this, R.style.ThemeOverlay_OMRScanner_Dialog)
+                            .setTitle("Duplicate LRN detected")
+                            .setMessage("Another scan with LRN " + newLrn
+                                    + " already exists in this assessment. Replacing it will "
+                                    + "delete that other scan and keep this one instead.")
+                            .setPositiveButton("Replace", (dialog, which) -> {
+                                repo.deleteScan(conflict, ignored -> performSave(newLrn));
+                            })
+                            .setNegativeButton("Cancel", null)
+                            .show();
+                } else {
+                    performSave(newLrn);
+                }
+            });
+        }).start();
+    }
+
+    private void performSave(String newLrn) {
         // 1. Update LRN
-        currentScan.setLrn(etLrn.getText().toString().trim());
+        currentScan.setLrn(newLrn);
 
         // 2. Commit edited answers
         currentScan.setAnswers(new LinkedHashMap<>(editedAnswers));

@@ -533,6 +533,17 @@ public class OMRRepository {
     return db.scanDao().getByAssessmentAndLrn(assessmentId, lrn);
   }
 
+  /**
+   * Find a scan in this assessment that already has the given LRN, other than
+   * the scan currently being edited. Used by ScanDetailActivity to catch
+   * duplicate-LRN conflicts before committing an LRN edit.
+   * Safe to call from a background thread.
+   */
+  public ScanEntity getConflictingScanByLrnSync(String assessmentId, String lrn, int excludeScanId) {
+    if (assessmentId == null || lrn == null || lrn.isEmpty()) return null;
+    return db.scanDao().getByAssessmentAndLrnExcluding(assessmentId, lrn, excludeScanId);
+  }
+
   // ═════════════════════════════════════════════════════════════════════════
   // ANSWER KEY
   // ═════════════════════════════════════════════════════════════════════════
