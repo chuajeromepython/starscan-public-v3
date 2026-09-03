@@ -3466,8 +3466,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     // ═══════════════════════════════════════════════════════════════
 
     private void renderActivityScreen() {
-        scanCtaSub.setText(selectedActivity.getSheetType()
-                + " · " + selectedActivity.getNumItems() + " items");
+        scanCtaSub.setText(selectedActivity.getSheetType());
 
         activityRenderer.renderActivityScreen(
                 activityScanList, activityScansEmpty, scansHeader, scansTotalCount,
