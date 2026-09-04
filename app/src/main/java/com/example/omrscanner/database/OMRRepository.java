@@ -8,6 +8,9 @@ import com.example.omrscanner.database.entities.AnswerKeyEntity;
 import com.example.omrscanner.database.entities.AssessmentEntity;
 import com.example.omrscanner.database.entities.ClassEntity;
 import com.example.omrscanner.database.entities.ScanEntity;
+import com.example.omrscanner.database.entities.QuizEntity;
+import com.example.omrscanner.database.entities.QuizScanEntity;
+import com.example.omrscanner.database.entities.QuizScanAnswerEntity;
 import com.example.omrscanner.database.entities.StudentLrnEntity;
 import com.example.omrscanner.database.entities.TeacherEntity;
 import com.example.omrscanner.database.projections.AssessmentListRow;
@@ -599,6 +602,18 @@ public class OMRRepository {
     return db.scanDao().getByAssessmentAndLrnExcluding(assessmentId, lrn, excludeScanId);
   }
 
+  public QuizScanEntity getConflictingQuizScanByLrnSync(String quizId, String lrn, int excludeScanId) {
+    if (quizId == null || lrn == null || lrn.isEmpty()) return null;
+    return db.quizScanDao().getByQuizAndLrnExcluding(quizId, lrn, excludeScanId);
+  }
+
+  public void deleteQuizScan(QuizScanEntity scan, Callback<Void> callback) {
+    executor.execute(() -> {
+      db.quizScanDao().delete(scan);
+      if (callback != null) callback.onResult(null);
+    });
+  }
+
   // ═════════════════════════════════════════════════════════════════════════
   // ANSWER KEY
   // ═════════════════════════════════════════════════════════════════════════
@@ -706,6 +721,68 @@ public class OMRRepository {
 
   public List<ScanEntity> getScansByAssessmentSync(String assessmentId) {
     return db.scanDao().getByAssessment(assessmentId);
+  }
+
+  public QuizEntity getQuizByIdSync(String id) {
+    return db.quizDao().getById(id);
+  }
+
+  public void insertQuizScan(QuizScanEntity scan, Callback<Long> callback) {
+    executor.execute(() -> {
+      long id = db.quizScanDao().insert(scan);
+      if (callback != null) callback.onResult(id);
+    });
+  }
+
+  public void updateQuizScan(QuizScanEntity scan, Callback<Void> callback) {
+    executor.execute(() -> {
+      db.quizScanDao().update(scan);
+      if (callback != null) callback.onResult(null);
+    });
+  }
+
+  public void getScansByQuiz(String quizId, Callback<List<QuizScanEntity>> callback) {
+    executor.execute(() -> {
+      List<QuizScanEntity> list = db.quizScanDao().getByQuiz(quizId);
+      if (callback != null) callback.onResult(list);
+    });
+  }
+
+  public List<QuizScanEntity> getScansByQuizSync(String quizId) {
+    return db.quizScanDao().getByQuiz(quizId);
+  }
+
+  public QuizScanEntity getQuizScanByQuizAndLrnSync(String quizId, String lrn) {
+    return db.quizScanDao().getByQuizAndLrn(quizId, lrn);
+  }
+
+  public void insertQuizScanAnswersFromMap(int quizScanId, Map<Integer, String> answers,
+                                           Callback<Void> callback) {
+    executor.execute(() -> {
+      List<QuizScanAnswerEntity> entities = new java.util.ArrayList<>();
+      if (answers != null) {
+        for (Map.Entry<Integer, String> entry : answers.entrySet()) {
+          String val = entry.getValue() != null ? entry.getValue() : "";
+          entities.add(new QuizScanAnswerEntity(quizScanId, entry.getKey(), val));
+        }
+      }
+      db.quizScanAnswerDao().insertAll(entities);
+      if (callback != null) callback.onResult(null);
+    });
+  }
+
+  public void deleteQuizScanAnswersByQuizScan(int quizScanId, Callback<Void> callback) {
+    executor.execute(() -> {
+      db.quizScanAnswerDao().deleteByQuizScan(quizScanId);
+      if (callback != null) callback.onResult(null);
+    });
+  }
+
+  public void getQuizScanAnswers(int quizScanId, Callback<List<QuizScanAnswerEntity>> callback) {
+    executor.execute(() -> {
+      List<QuizScanAnswerEntity> list = db.quizScanAnswerDao().getByQuizScan(quizScanId);
+      if (callback != null) callback.onResult(list);
+    });
   }
 
   public List<AnswerEntity> getAnswersByScanSync(int scanId) {

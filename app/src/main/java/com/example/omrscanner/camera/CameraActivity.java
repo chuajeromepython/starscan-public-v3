@@ -275,6 +275,7 @@ public class CameraActivity extends AppCompatActivity {
     private String selectedSheetType = null;
     private String classId = null;
     private String activityId = null;
+    private boolean isQuiz = false;
 
     // ── Camera provider held at instance level to avoid re-binding ─
     private ProcessCameraProvider cameraProvider;
@@ -372,6 +373,7 @@ public class CameraActivity extends AppCompatActivity {
             selectedSheetType = getIntent().getStringExtra(DashboardActivity.EXTRA_SHEET_TYPE);
             classId = getIntent().getStringExtra(DashboardActivity.EXTRA_CLASS_ID);
             activityId = getIntent().getStringExtra(DashboardActivity.EXTRA_ACTIVITY_ID);
+            isQuiz = getIntent().getBooleanExtra(DashboardActivity.EXTRA_IS_QUIZ, false);
             fixedMountMode = getIntent().getBooleanExtra(EXTRA_FIXED_MOUNT_MODE, false);
             tiltAgnosticMode = getIntent().getBooleanExtra(EXTRA_TILT_AGNOSTIC_MODE, false);
             Log.d(TAG, "Received sheet type: " + selectedSheetType + ", classId: " + classId
@@ -1794,6 +1796,7 @@ public class CameraActivity extends AppCompatActivity {
                                 intent.putExtra(DashboardActivity.EXTRA_CLASS_ID, classId);
                             if (activityId != null)
                                 intent.putExtra(DashboardActivity.EXTRA_ACTIVITY_ID, activityId);
+                            intent.putExtra(DashboardActivity.EXTRA_IS_QUIZ, isQuiz);
                             startActivity(intent);
                             finish();
                         });

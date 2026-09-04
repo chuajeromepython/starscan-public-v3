@@ -253,6 +253,46 @@ public final class DataMapper {
      *
      * @return map of scan DB id -> permanent scan number (1-based).
      */
+    public static ScanEntry toScanEntry(com.example.omrscanner.database.entities.QuizScanEntity entity,
+                                        Map<Integer, String> answers) {
+        ScanEntry scan = new ScanEntry();
+        scan.setLrn(entity.studentLrn);
+        boolean hasRealScore = (entity.score != null);
+        scan.setScore(hasRealScore ? entity.score : entity.detectedBubbles);
+        scan.setScored(hasRealScore);
+        scan.setNumItems(entity.numItems);
+        scan.setImagePath(entity.imagePath);
+        scan.setOverlayImagePath(entity.overlayImagePath);
+        scan.setKeyReferenceImagePath(entity.keyReferenceImagePath);
+        scan.setTimestamp(entity.timestamp);
+        scan.setAnswers(answers != null ? answers : new LinkedHashMap<>());
+        return scan;
+    }
+
+    public static Map<Integer, String> toQuizAnswerMap(
+            List<com.example.omrscanner.database.entities.QuizScanAnswerEntity> answerEntities) {
+        Map<Integer, String> map = new LinkedHashMap<>();
+        if (answerEntities != null) {
+            for (com.example.omrscanner.database.entities.QuizScanAnswerEntity a : answerEntities) {
+                map.put(a.itemNumber, a.answer);
+            }
+        }
+        return map;
+    }
+
+    public static Map<Integer, Integer> computeQuizScanNumbers(
+            List<com.example.omrscanner.database.entities.QuizScanEntity> scans) {
+        Map<Integer, Integer> numbers = new LinkedHashMap<>();
+        if (scans == null) return numbers;
+        List<com.example.omrscanner.database.entities.QuizScanEntity> byInsertionOrder =
+                new java.util.ArrayList<>(scans);
+        byInsertionOrder.sort((a, b) -> Integer.compare(a.id, b.id));
+        for (int i = 0; i < byInsertionOrder.size(); i++) {
+            numbers.put(byInsertionOrder.get(i).id, i + 1);
+        }
+        return numbers;
+    }
+
     public static Map<Integer, Integer> computeScanNumbers(List<ScanEntity> scans) {
         Map<Integer, Integer> numbers = new LinkedHashMap<>();
         if (scans == null) return numbers;

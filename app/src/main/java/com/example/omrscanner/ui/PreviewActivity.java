@@ -44,6 +44,7 @@ public class PreviewActivity extends AppCompatActivity {
     private String selectedSheetType;
     private String classId;
     private String activityId;
+    private boolean isQuiz;
     private boolean fixedMountMode;
     private boolean tiltAgnosticMode;
     private Bitmap originalBitmap;
@@ -84,6 +85,7 @@ public class PreviewActivity extends AppCompatActivity {
         // Get class/activity IDs for folder-based saving
         classId = getIntent().getStringExtra(DashboardActivity.EXTRA_CLASS_ID);
         activityId = getIntent().getStringExtra(DashboardActivity.EXTRA_ACTIVITY_ID);
+        isQuiz = getIntent().getBooleanExtra(DashboardActivity.EXTRA_IS_QUIZ, false);
 
         // Get camera mode so "Retake" can relaunch the camera in the same mode
         fixedMountMode = getIntent().getBooleanExtra(CameraActivity.EXTRA_FIXED_MOUNT_MODE, false);
@@ -196,6 +198,7 @@ public class PreviewActivity extends AppCompatActivity {
         if (selectedSheetType != null) intent.putExtra(DashboardActivity.EXTRA_SHEET_TYPE, selectedSheetType);
         if (classId != null) intent.putExtra(DashboardActivity.EXTRA_CLASS_ID, classId);
         if (activityId != null) intent.putExtra(DashboardActivity.EXTRA_ACTIVITY_ID, activityId);
+        intent.putExtra(DashboardActivity.EXTRA_IS_QUIZ, isQuiz);
         startActivity(intent);
         finish();
     }
@@ -242,6 +245,7 @@ public class PreviewActivity extends AppCompatActivity {
         if (activityId != null) {
             intent.putExtra(DashboardActivity.EXTRA_ACTIVITY_ID, activityId);
         }
+        intent.putExtra(DashboardActivity.EXTRA_IS_QUIZ, isQuiz);
 
         startActivity(intent);
         finish();

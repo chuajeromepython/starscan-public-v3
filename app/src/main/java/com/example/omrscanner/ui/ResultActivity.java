@@ -90,6 +90,7 @@ public class ResultActivity extends AppCompatActivity {
     private String selectedSheetType;
     private String classId;
     private String activityId;
+    private boolean isQuiz;
     private String imageSource;
     private boolean fixedMountMode;
     private boolean tiltAgnosticMode;
@@ -152,6 +153,7 @@ public class ResultActivity extends AppCompatActivity {
         selectedSheetType = getIntent().getStringExtra(DashboardActivity.EXTRA_SHEET_TYPE);
         classId = getIntent().getStringExtra(DashboardActivity.EXTRA_CLASS_ID);
         activityId = getIntent().getStringExtra(DashboardActivity.EXTRA_ACTIVITY_ID);
+        isQuiz = getIntent().getBooleanExtra(DashboardActivity.EXTRA_IS_QUIZ, false);
         imageSource = getIntent().getStringExtra(PreviewActivity.IMAGE_SOURCE);
         fixedMountMode = getIntent().getBooleanExtra(CameraActivity.EXTRA_FIXED_MOUNT_MODE, false);
         tiltAgnosticMode = getIntent().getBooleanExtra(CameraActivity.EXTRA_TILT_AGNOSTIC_MODE, false);
@@ -1249,8 +1251,12 @@ public class ResultActivity extends AppCompatActivity {
                 }
             }
 
-            DashboardActivity.saveScanResult(this, classId, activityId, entry, replace);
-            Log.d(TAG, "Scan result saved to folder: classId=" + classId + ", activityId=" + activityId);
+            if (isQuiz) {
+                DashboardActivity.saveQuizScanResult(this, classId, activityId, entry, replace);
+            } else {
+                DashboardActivity.saveScanResult(this, classId, activityId, entry, replace);
+            }
+            Log.d(TAG, "Scan result saved to folder: classId=" + classId + ", activityId=" + activityId + ", isQuiz=" + isQuiz);
             return true;
 
         } catch (Exception e) {

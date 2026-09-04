@@ -13,6 +13,8 @@ import com.example.omrscanner.database.dao.AnswerDao;
 import com.example.omrscanner.database.dao.AnswerKeyDao;
 import com.example.omrscanner.database.dao.AssessmentDao;
 import com.example.omrscanner.database.dao.QuizDao;
+import com.example.omrscanner.database.dao.QuizScanDao;
+import com.example.omrscanner.database.dao.QuizScanAnswerDao;
 import com.example.omrscanner.database.dao.ClassDao;
 import com.example.omrscanner.database.dao.ScanDao;
 import com.example.omrscanner.database.dao.StudentLrnDao;
@@ -22,6 +24,8 @@ import com.example.omrscanner.database.entities.AnswerEntity;
 import com.example.omrscanner.database.entities.AnswerKeyEntity;
 import com.example.omrscanner.database.entities.AssessmentEntity;
 import com.example.omrscanner.database.entities.QuizEntity;
+import com.example.omrscanner.database.entities.QuizScanEntity;
+import com.example.omrscanner.database.entities.QuizScanAnswerEntity;
 import com.example.omrscanner.database.entities.ClassEntity;
 import com.example.omrscanner.database.entities.ScanEntity;
 import com.example.omrscanner.database.entities.StudentLrnEntity;
@@ -52,6 +56,9 @@ import com.example.omrscanner.database.entities.UserEntity;
  *   19 → 20: Added student_lrn.first_name/middle_name/last_name so scan
  *            cards can show the student's name above their LRN. Existing
  *            rows stay NULL until the class is re-synced.
+ *   21 → 22: Added quiz_scans + quiz_scan_answers tables. Quiz scans are
+ *            stored separately from assessments' scans/answers tables so
+ *            quizzes stay fully isolated, per their local-only design.
  *
  *
  * Usage:
@@ -67,8 +74,10 @@ import com.example.omrscanner.database.entities.UserEntity;
         AnswerKeyEntity.class,
         UserEntity.class,
         StudentLrnEntity.class,
-        QuizEntity.class
-}, version = 21, exportSchema = false)
+        QuizEntity.class,
+        QuizScanEntity.class,
+        QuizScanAnswerEntity.class
+}, version = 22, exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase {
 
   private static final String DATABASE_NAME = "omrscanner.db";
@@ -360,6 +369,38 @@ public abstract class AppDatabase extends RoomDatabase {
     }
   };
 
+  private static final Migration MIGRATION_21_22 = new Migration(21, 22) {
+    @Override
+    public void migrate(@NonNull SupportSQLiteDatabase db) {
+      // New local-only "quiz_scans" table — kept separate from "scans" so
+      // quiz data never shares storage (or a foreign key) with assessments.
+      db.execSQL("CREATE TABLE IF NOT EXISTS quiz_scans ("
+              + "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, "
+              + "quiz_id TEXT NOT NULL, "
+              + "student_lrn TEXT, "
+              + "detected_bubbles INTEGER NOT NULL DEFAULT 0, "
+              + "score INTEGER, "
+              + "num_items INTEGER NOT NULL DEFAULT 0, "
+              + "image_path TEXT, "
+              + "overlay_image_path TEXT, "
+              + "key_reference_image_path TEXT, "
+              + "timestamp INTEGER NOT NULL DEFAULT 0, "
+              + "updated_at INTEGER NOT NULL DEFAULT 0, "
+              + "FOREIGN KEY(quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE)");
+      db.execSQL("CREATE INDEX IF NOT EXISTS index_quiz_scans_quiz_id ON quiz_scans(quiz_id)");
+
+      // Mirrors "answers", but foreign-keyed to quiz_scans instead of scans.
+      db.execSQL("CREATE TABLE IF NOT EXISTS quiz_scan_answers ("
+              + "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, "
+              + "quiz_scan_id INTEGER NOT NULL, "
+              + "item_number INTEGER NOT NULL, "
+              + "answer TEXT NOT NULL DEFAULT '', "
+              + "FOREIGN KEY(quiz_scan_id) REFERENCES quiz_scans(id) ON DELETE CASCADE)");
+      db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_quiz_scan_answers_quiz_scan_id_item_number "
+              + "ON quiz_scan_answers(quiz_scan_id, item_number)");
+    }
+  };
+
   // ── Abstract DAO accessors (Room generates the implementations) ──────────
   public abstract TeacherDao teacherDao();
 
@@ -379,6 +420,10 @@ public abstract class AppDatabase extends RoomDatabase {
 
   public abstract QuizDao quizDao();
 
+  public abstract QuizScanDao quizScanDao();
+
+  public abstract QuizScanAnswerDao quizScanAnswerDao();
+
   // ── Singleton ────────────────────────────────────────────────────────────
   public static AppDatabase getInstance(Context context) {
     if (INSTANCE == null) {
@@ -388,7 +433,7 @@ public abstract class AppDatabase extends RoomDatabase {
               context.getApplicationContext(),
               AppDatabase.class,
               DATABASE_NAME)
-                  .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21)
+                  .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22)
               .build();
         }
       }

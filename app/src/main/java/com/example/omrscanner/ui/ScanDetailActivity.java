@@ -77,6 +77,8 @@ public class ScanDetailActivity extends AppCompatActivity {
     private ActivityFolder currentActivity;
     private ScanEntry currentScan;
     private ScanEntity currentScanEntity;
+    private com.example.omrscanner.database.entities.QuizScanEntity currentQuizScanEntity;
+    private boolean isQuiz;
     private OMRRepository repo;
     /** Answer key for this assessment — null if none assigned. */
     private com.example.omrscanner.database.entities.AnswerKeyEntity currentAnswerKey;
@@ -126,6 +128,7 @@ public class ScanDetailActivity extends AppCompatActivity {
             scanNumber = getIntent().getIntExtra(EXTRA_SCAN_NUMBER, -1);
             scanId = getIntent().getIntExtra(EXTRA_SCAN_ID, -1);
             readOnly = getIntent().getBooleanExtra(EXTRA_READ_ONLY, false);
+            isQuiz = getIntent().getBooleanExtra(com.example.omrscanner.DashboardActivity.EXTRA_IS_QUIZ, false);
         }
 
         if (readOnly) {
@@ -238,6 +241,11 @@ public class ScanDetailActivity extends AppCompatActivity {
             return;
         }
 
+        if (isQuiz) {
+            loadQuizData();
+            return;
+        }
+
         repo.getClassById(classId, classEntity -> {
             if (classEntity == null) {
                 runOnUiThread(() -> showError("Class not found"));
@@ -284,6 +292,73 @@ public class ScanDetailActivity extends AppCompatActivity {
         });
     }
 
+    /** Quiz counterpart of loadData()'s by-index path — reads quizzes/quiz_scans only. */
+    private void loadQuizData() {
+        repo.getClassById(classId, classEntity -> {
+            if (classEntity == null) {
+                runOnUiThread(() -> showError("Class not found"));
+                return;
+            }
+            repo.getFirstTeacher(teacherEntity -> {
+                String teacherName = (teacherEntity != null && teacherEntity.name != null) ? teacherEntity.name
+                        : "Unknown";
+                currentClass = DataMapper.toClassFolder(classEntity, teacherName);
+
+                com.example.omrscanner.database.entities.QuizEntity quizEntity = repo.getQuizByIdSync(activityId);
+                if (quizEntity == null) {
+                    runOnUiThread(() -> showError("Activity not found"));
+                    return;
+                }
+                currentActivity = DataMapper.toActivityFolder(quizEntity);
+
+                if (quizEntity.answerKeyId != null) {
+                    currentAnswerKey = repo.getAnswerKeyByIdSync(quizEntity.answerKeyId);
+                    if (currentAnswerKey != null && currentAnswerKey.answers != null) {
+                        correctAnswers = currentAnswerKey.answers.split(",");
+                    }
+                }
+
+                repo.getScansByQuiz(activityId, quizScans -> {
+                    if (scanIndex < 0 || scanIndex >= quizScans.size()) {
+                        runOnUiThread(() -> showError("Scan not found"));
+                        return;
+                    }
+
+                    currentQuizScanEntity = quizScans.get(scanIndex);
+                    if (scanNumber < 0) {
+                        Map<Integer, Integer> numbers = DataMapper.computeQuizScanNumbers(quizScans);
+                        Integer n = numbers.get(currentQuizScanEntity.id);
+                        scanNumber = (n != null) ? n : (scanIndex + 1);
+                    }
+
+                    loadQuizAnswersAndPopulate();
+                });
+            });
+        });
+    }
+
+    /** Quiz counterpart of loadAnswersAndPopulate(). */
+    private void loadQuizAnswersAndPopulate() {
+        repo.getQuizScanAnswers(currentQuizScanEntity.id, answerEntities -> {
+            Map<Integer, String> answers = DataMapper.toQuizAnswerMap(answerEntities);
+            currentScan = DataMapper.toScanEntry(currentQuizScanEntity, answers);
+
+            editedAnswers.clear();
+            if (currentScan.getAnswers() != null) {
+                editedAnswers.putAll(currentScan.getAnswers());
+            }
+
+            if (classId != null && currentScan.getLrn() != null && !currentScan.getLrn().isEmpty()) {
+                repo.getStudentByLrnAndClass(currentScan.getLrn(), classId, student -> {
+                    currentScan.setStudentName(DataMapper.formatStudentFullName(student));
+                    runOnUiThread(this::populateUI);
+                });
+            } else {
+                runOnUiThread(this::populateUI);
+            }
+        });
+    }
+
     private void populateUI() {
         if (scanIndex >= 0) {
             topBarTitle.setText("Scan #" + (scanNumber >= 0 ? scanNumber : (scanIndex + 1)));
@@ -314,10 +389,12 @@ public class ScanDetailActivity extends AppCompatActivity {
             if (hasStudentName) tvStudentName.setText(studentName);
         }
         // DETECTED always shows raw bubble count in green
-        tvScore.setText(currentScanEntity.detectedBubbles + "/" + currentScan.getNumItems());
+        int detectedBubbles = isQuiz ? currentQuizScanEntity.detectedBubbles : currentScanEntity.detectedBubbles;
+        Integer gradedScore = isQuiz ? currentQuizScanEntity.score : currentScanEntity.score;
+        tvScore.setText(detectedBubbles + "/" + currentScan.getNumItems());
         tvScore.setTextColor(Color.parseColor("#059669"));
-        if (currentScan.isScored() && currentScanEntity.score != null) {
-            tvScoreBadge.setText("Score: " + currentScanEntity.score + "/" + currentScan.getNumItems());
+        if (currentScan.isScored() && gradedScore != null) {
+            tvScoreBadge.setText("Score: " + gradedScore + "/" + currentScan.getNumItems());
             android.graphics.drawable.GradientDrawable scoreBg = new android.graphics.drawable.GradientDrawable();
             scoreBg.setColor(Color.parseColor("#FEF9C3"));
             scoreBg.setCornerRadius(dp(20));
@@ -725,12 +802,15 @@ public class ScanDetailActivity extends AppCompatActivity {
         // Check for another scan in this assessment that already has this LRN
         // (excluding this scan itself) before committing the edit.
         new Thread(() -> {
-            ScanEntity conflict = (classId != null && !newLrn.isEmpty())
+            ScanEntity conflict = (!isQuiz && classId != null && !newLrn.isEmpty())
                     ? repo.getConflictingScanByLrnSync(currentScanEntity.assessmentId, newLrn, currentScanEntity.id)
+                    : null;
+            com.example.omrscanner.database.entities.QuizScanEntity quizConflict = (isQuiz && classId != null && !newLrn.isEmpty())
+                    ? repo.getConflictingQuizScanByLrnSync(activityId, newLrn, currentQuizScanEntity.id)
                     : null;
 
             runOnUiThread(() -> {
-                if (conflict != null) {
+                if (conflict != null || quizConflict != null) {
                     new com.google.android.material.dialog.MaterialAlertDialogBuilder(
                             this, R.style.ThemeOverlay_OMRScanner_Dialog)
                             .setTitle("Duplicate LRN detected")
@@ -738,7 +818,11 @@ public class ScanDetailActivity extends AppCompatActivity {
                                     + " already exists in this assessment. Replacing it will "
                                     + "delete that other scan and keep this one instead.")
                             .setPositiveButton("Replace", (dialog, which) -> {
-                                repo.deleteScan(conflict, ignored -> performSave(newLrn));
+                                if (isQuiz) {
+                                    repo.deleteQuizScan(quizConflict, ignored -> performSave(newLrn));
+                                } else {
+                                    repo.deleteScan(conflict, ignored -> performSave(newLrn));
+                                }
                             })
                             .setNegativeButton("Cancel", null)
                             .show();
@@ -758,7 +842,8 @@ public class ScanDetailActivity extends AppCompatActivity {
 
         // 3. Recalculate detected answer count
         currentScan.setScore(currentScan.getAnsweredCount());
-        currentScanEntity.detectedBubbles = currentScan.getAnsweredCount();
+        if (isQuiz) currentQuizScanEntity.detectedBubbles = currentScan.getAnsweredCount();
+        else currentScanEntity.detectedBubbles = currentScan.getAnsweredCount();
 
         // 4. Re-grade against the answer key if one exists, instead of
         //    wiping the score/graded state on every save.
@@ -772,20 +857,30 @@ public class ScanDetailActivity extends AppCompatActivity {
             }
             currentScan.setScore(recomputedScore);
             currentScan.setScored(true);
-            currentScanEntity.score = recomputedScore;
+            if (isQuiz) currentQuizScanEntity.score = recomputedScore;
+            else currentScanEntity.score = recomputedScore;
         }
 
-        currentScanEntity.studentLrn = currentScan.getLrn();
+        int savedScanId;
+        if (isQuiz) {
+            currentQuizScanEntity.studentLrn = currentScan.getLrn();
+            savedScanId = currentQuizScanEntity.id;
+        } else {
+            currentScanEntity.studentLrn = currentScan.getLrn();
+            savedScanId = currentScanEntity.id;
+        }
 
         // 5. Update scan in DB
-        repo.updateScan(currentScanEntity, ignored1 -> {
+        Runnable afterUpdate = () -> {
             // 6. Update individual answers map in DB
-            repo.insertAnswersFromMap(currentScanEntity.id, editedAnswers, ignored2 -> {
+            Runnable afterAnswers = () -> {
                 // 7. Rebuild the exported CSV now that the DB write has committed —
                 //    without this, the on-disk CSV stays stale until some other
                 //    scan happens to re-trigger autoSaveClassData.
-                com.example.omrscanner.dashboard.ClassExporter.autoSaveClassData(
-                        this, classId, activityId);
+                if (!isQuiz) {
+                    com.example.omrscanner.dashboard.ClassExporter.autoSaveClassData(
+                            this, classId, activityId);
+                }
 
                 runOnUiThread(() -> {
                     Toast.makeText(this, "Changes saved", Toast.LENGTH_SHORT).show();
@@ -800,8 +895,20 @@ public class ScanDetailActivity extends AppCompatActivity {
                     updateScoreDisplay();
                     renderAnswers();
                 });
-            });
-        });
+            };
+
+            if (isQuiz) {
+                repo.insertQuizScanAnswersFromMap(savedScanId, editedAnswers, ignored2 -> afterAnswers.run());
+            } else {
+                repo.insertAnswersFromMap(savedScanId, editedAnswers, ignored2 -> afterAnswers.run());
+            }
+        };
+
+        if (isQuiz) {
+            repo.updateQuizScan(currentQuizScanEntity, ignored1 -> afterUpdate.run());
+        } else {
+            repo.updateScan(currentScanEntity, ignored1 -> afterUpdate.run());
+        }
     }
 
     /**

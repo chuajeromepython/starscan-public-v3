@@ -100,6 +100,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     public static final String EXTRA_SHEET_TYPE = "sheet_type";
     public static final String EXTRA_CLASS_ID = "class_id";
     public static final String EXTRA_ACTIVITY_ID = "activity_id";
+    public static final String EXTRA_IS_QUIZ = "is_quiz";
     public static final String EXTRA_ANSWER_KEY_ID = "answer_key_id";
 
     // ── Screen names ──
@@ -126,6 +127,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private String currentScreen = SCREEN_HOME;
     private String screenBeforeChromeTab = SCREEN_HOME;
     private boolean activityOpenedFromAssessmentsTab = false;
+    private boolean activityOpenedFromQuizzesTab = false;
     private List<ClassFolder> classFolders = new ArrayList<>();
     private ClassFolder selectedClass = null;
     private ActivityFolder selectedActivity = null;
@@ -577,6 +579,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     // BACK HANDLER
     // ═══════════════════════════════════════════════════════════════
 
+    /** Where the "back" action from SCREEN_ACTIVITY should land, based on which tab opened it. */
+    private String getActivityBackScreen() {
+        if (activityOpenedFromQuizzesTab) return SCREEN_QUIZZES;
+        return activityOpenedFromAssessmentsTab ? SCREEN_ASSESSMENTS : SCREEN_CLASS;
+    }
+
     private void initBackHandler() {
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
@@ -587,7 +595,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     selectHomeTab();
                 } else if (SCREEN_ACTIVITY.equals(currentScreen)) {
                     selectedActivity = null;
-                    showScreen(activityOpenedFromAssessmentsTab ? SCREEN_ASSESSMENTS : SCREEN_CLASS);
+                    showScreen(getActivityBackScreen());
                 } else if (SCREEN_CLASS.equals(currentScreen)) {
                     selectedClass = null;
                     showScreen(SCREEN_HOME);
@@ -854,7 +862,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         breadcrumbClass.setOnClickListener(v -> {
             if (SCREEN_ACTIVITY.equals(currentScreen)) {
                 selectedActivity = null;
-                showScreen(activityOpenedFromAssessmentsTab ? SCREEN_ASSESSMENTS : SCREEN_CLASS);
+                showScreen(getActivityBackScreen());
             }
         });
         // Go directly to camera — no scan method picker
@@ -2942,7 +2950,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 break;
             case SCREEN_ACTIVITY:
                 selectedActivity = null;
-                showScreen(activityOpenedFromAssessmentsTab ? SCREEN_ASSESSMENTS : SCREEN_CLASS);
+                showScreen(getActivityBackScreen());
                 break;
         }
     }
@@ -3199,6 +3207,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                     }
                                     selectedActivity = a;
                                     activityOpenedFromAssessmentsTab = false;
+                                    activityOpenedFromQuizzesTab = false;
                                     showScreen(SCREEN_ACTIVITY);
                                 }));
                     }
@@ -3422,6 +3431,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                     selectedClass = ownerClass;
                                     selectedActivity = a;
                                     activityOpenedFromAssessmentsTab = true;
+                                    activityOpenedFromQuizzesTab = false;
                                     showScreen(SCREEN_ACTIVITY);
                                 }));
                     }
@@ -3505,7 +3515,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                     () -> openQuizFor(row.id, (q, cid) -> dialogs.showAnswerKeyFolderDialog(q, true)),
                                     () -> openQuizFor(row.id, (q, cid) -> dialogs.showDeleteQuizConfirmation(q)),
                                     null,
-                                    () -> openQuizFor(row.id, dialogs::showEditQuizDialog),
+                                    () -> openQuizFor(row.id, (quiz, classId) -> {
+                                        selectedClass = findClassById(classId);
+                                        selectedActivity = quiz;
+                                        activityOpenedFromAssessmentsTab = false;
+                                        activityOpenedFromQuizzesTab = true;
+                                        showScreen(SCREEN_ACTIVITY);
+                                    }),
                                     false));
                         }
                     }));
@@ -3679,9 +3695,49 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private void renderActivityScreen() {
         scanCtaSub.setText(selectedActivity.getSheetType());
 
+        if (activityOpenedFromQuizzesTab) {
+            loadQuizScansThenRender();
+            return;
+        }
+
         activityRenderer.renderActivityScreen(
                 activityScanList, activityScansEmpty, scansHeader, scansTotalCount,
-                selectedActivity, selectedClass.getId(), selectedActivity.getId());
+                selectedActivity, selectedClass.getId(), selectedActivity.getId(), false);
+    }
+
+    /** Quiz equivalent of the assessment scan-load block above — reads quiz_scans/quiz_scan_answers only. */
+    private void loadQuizScansThenRender() {
+        final String quizId = selectedActivity.getId();
+        repo.getScansByQuiz(quizId, quizScans -> {
+            List<ScanEntry> scanEntries = new ArrayList<>();
+            if (quizScans == null || quizScans.isEmpty()) {
+                runOnUiThread(() -> finishQuizScanRender(quizId, scanEntries));
+                return;
+            }
+            Map<Integer, Integer> scanNumbers = DataMapper.computeQuizScanNumbers(quizScans);
+            AtomicInteger countdown = new AtomicInteger(quizScans.size());
+            for (com.example.omrscanner.database.entities.QuizScanEntity qse : quizScans) {
+                repo.getQuizScanAnswers(qse.id, answerEntities -> {
+                    Map<Integer, String> answers = DataMapper.toQuizAnswerMap(answerEntities);
+                    ScanEntry entry = DataMapper.toScanEntry(qse, answers);
+                    Integer num = scanNumbers.get(qse.id);
+                    entry.setScanNumber(num != null ? num : 0);
+                    scanEntries.add(entry);
+                    if (countdown.decrementAndGet() == 0) {
+                        runOnUiThread(() -> finishQuizScanRender(quizId, scanEntries));
+                    }
+                });
+            }
+        });
+    }
+
+    private void finishQuizScanRender(String quizId, List<ScanEntry> scanEntries) {
+        if (!SCREEN_ACTIVITY.equals(currentScreen) || selectedActivity == null
+                || !quizId.equals(selectedActivity.getId())) return;
+        selectedActivity.setScans(scanEntries);
+        activityRenderer.renderActivityScreen(
+                activityScanList, activityScansEmpty, scansHeader, scansTotalCount,
+                selectedActivity, selectedClass.getId(), selectedActivity.getId(), true);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -3781,6 +3837,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         if (selectedSheetType != null) intent.putExtra(EXTRA_SHEET_TYPE, selectedSheetType);
         if (selectedClass != null) intent.putExtra(EXTRA_CLASS_ID, selectedClass.getId());
         if (selectedActivity != null) intent.putExtra(EXTRA_ACTIVITY_ID, selectedActivity.getId());
+        intent.putExtra(EXTRA_IS_QUIZ, activityOpenedFromQuizzesTab);
         startActivity(intent);
     }
 
@@ -4036,6 +4093,61 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         if (activityId == null || lrn == null) return false;
         OMRRepository r = new OMRRepository(context);
         return r.isLrnExistsSync(activityId, lrn);
+    }
+
+    public static void saveQuizScanResult(android.content.Context context,
+                                          String classId, String quizId, ScanEntry scanEntry, boolean replace) {
+        if (quizId == null || scanEntry == null) return;
+        OMRRepository r = new OMRRepository(context);
+        com.example.omrscanner.database.entities.QuizScanEntity existing = (replace && scanEntry.getLrn() != null)
+                ? r.getQuizScanByQuizAndLrnSync(quizId, scanEntry.getLrn()) : null;
+        com.example.omrscanner.database.entities.QuizScanEntity entity = new com.example.omrscanner.database.entities.QuizScanEntity();
+        entity.quizId = quizId;
+        entity.studentLrn = scanEntry.getLrn();
+        entity.detectedBubbles = scanEntry.getScore();
+        entity.score = scanEntry.isScored() ? scanEntry.getScore() : null;
+        entity.numItems = scanEntry.getNumItems();
+        entity.imagePath = scanEntry.getImagePath();
+        entity.overlayImagePath = scanEntry.getOverlayImagePath();
+        entity.keyReferenceImagePath = scanEntry.getKeyReferenceImagePath();
+        entity.timestamp = scanEntry.getTimestamp() > 0 ? scanEntry.getTimestamp() : System.currentTimeMillis();
+        entity.updatedAt = System.currentTimeMillis();
+
+        // ── Auto-score against the quiz's own answer key ──
+        com.example.omrscanner.database.entities.QuizEntity quiz = r.getQuizByIdSync(quizId);
+        if (quiz != null && quiz.answerKeyId != null) {
+            com.example.omrscanner.database.entities.AnswerKeyEntity key = r.getAnswerKeyByIdSync(quiz.answerKeyId);
+            if (key != null && key.answers != null && !key.answers.isEmpty()) {
+                String[] correctAnswers = key.answers.split(",");
+                java.util.Map<Integer, String> studentAnswers = scanEntry.getAnswers();
+                int score = 0;
+                for (int i = 0; i < correctAnswers.length; i++) {
+                    String k = correctAnswers[i].trim();
+                    if (k.isEmpty() || k.equals("?")) continue;
+                    String s = (studentAnswers != null && studentAnswers.containsKey(i + 1))
+                            ? studentAnswers.get(i + 1) : "";
+                    if (k.equals(s)) score++;
+                }
+                entity.score = score;
+            }
+        }
+
+        if (existing != null) {
+            entity.id = existing.id;
+            r.updateQuizScan(entity, null);
+            r.deleteQuizScanAnswersByQuizScan(existing.id,
+                    done -> r.insertQuizScanAnswersFromMap(existing.id, scanEntry.getAnswers(), null));
+        } else {
+            r.insertQuizScan(entity, newId -> {
+                if (newId != null && newId > 0) {
+                    r.insertQuizScanAnswersFromMap(newId.intValue(), scanEntry.getAnswers(), null);
+                }
+            });
+        }
+
+        if (onScanSavedListener != null) {
+            new Handler(Looper.getMainLooper()).post(onScanSavedListener);
+        }
     }
 
     public static void saveScanResult(android.content.Context context,
