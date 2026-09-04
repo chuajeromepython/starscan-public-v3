@@ -12,6 +12,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase; // database
 import com.example.omrscanner.database.dao.AnswerDao;
 import com.example.omrscanner.database.dao.AnswerKeyDao;
 import com.example.omrscanner.database.dao.AssessmentDao;
+import com.example.omrscanner.database.dao.QuizDao;
 import com.example.omrscanner.database.dao.ClassDao;
 import com.example.omrscanner.database.dao.ScanDao;
 import com.example.omrscanner.database.dao.StudentLrnDao;
@@ -20,6 +21,7 @@ import com.example.omrscanner.database.dao.UserDao;
 import com.example.omrscanner.database.entities.AnswerEntity;
 import com.example.omrscanner.database.entities.AnswerKeyEntity;
 import com.example.omrscanner.database.entities.AssessmentEntity;
+import com.example.omrscanner.database.entities.QuizEntity;
 import com.example.omrscanner.database.entities.ClassEntity;
 import com.example.omrscanner.database.entities.ScanEntity;
 import com.example.omrscanner.database.entities.StudentLrnEntity;
@@ -64,8 +66,9 @@ import com.example.omrscanner.database.entities.UserEntity;
         AnswerEntity.class,
         AnswerKeyEntity.class,
         UserEntity.class,
-        StudentLrnEntity.class
-}, version = 20, exportSchema = false)
+        StudentLrnEntity.class,
+        QuizEntity.class
+}, version = 21, exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase {
 
   private static final String DATABASE_NAME = "omrscanner.db";
@@ -335,6 +338,28 @@ public abstract class AppDatabase extends RoomDatabase {
     }
   };
 
+  private static final Migration MIGRATION_20_21 = new Migration(20, 21) {
+    @Override
+    public void migrate(@NonNull SupportSQLiteDatabase db) {
+      // New local-only "quizzes" table. No sync columns by design.
+      db.execSQL("CREATE TABLE IF NOT EXISTS quizzes ("
+              + "id TEXT NOT NULL PRIMARY KEY, "
+              + "class_id TEXT NOT NULL, "
+              + "name TEXT, "
+              + "term TEXT, "
+              + "sheet_type TEXT, "
+              + "exam_date TEXT, "
+              + "exam_date_epoch INTEGER NOT NULL DEFAULT 0, "
+              + "created_at INTEGER NOT NULL DEFAULT 0, "
+              + "updated_at INTEGER NOT NULL DEFAULT 0, "
+              + "answer_key_id TEXT, "
+              + "FOREIGN KEY(class_id) REFERENCES classes(id) ON DELETE CASCADE)");
+      db.execSQL("CREATE INDEX IF NOT EXISTS index_quizzes_class_id ON quizzes(class_id)");
+      db.execSQL("CREATE INDEX IF NOT EXISTS index_quizzes_created_at ON quizzes(created_at)");
+      db.execSQL("CREATE INDEX IF NOT EXISTS index_quizzes_exam_date_epoch ON quizzes(exam_date_epoch)");
+    }
+  };
+
   // ── Abstract DAO accessors (Room generates the implementations) ──────────
   public abstract TeacherDao teacherDao();
 
@@ -352,6 +377,8 @@ public abstract class AppDatabase extends RoomDatabase {
 
   public abstract StudentLrnDao studentLrnDao();
 
+  public abstract QuizDao quizDao();
+
   // ── Singleton ────────────────────────────────────────────────────────────
   public static AppDatabase getInstance(Context context) {
     if (INSTANCE == null) {
@@ -361,7 +388,7 @@ public abstract class AppDatabase extends RoomDatabase {
               context.getApplicationContext(),
               AppDatabase.class,
               DATABASE_NAME)
-                  .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20)
+                  .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21)
               .build();
         }
       }

@@ -2,6 +2,7 @@ package com.example.omrscanner.database;
 
 import com.example.omrscanner.database.entities.AnswerKeyEntity;
 import com.example.omrscanner.database.entities.AssessmentEntity;
+import com.example.omrscanner.database.entities.QuizEntity;
 import com.example.omrscanner.database.entities.ClassEntity;
 import com.example.omrscanner.database.entities.ScanEntity;
 import com.example.omrscanner.models.ActivityFolder;
@@ -261,5 +262,33 @@ public final class DataMapper {
             numbers.put(byInsertionOrder.get(i).id, i + 1);
         }
         return numbers;
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // QUIZ  ↔  ActivityFolder  (quiz "term" is stashed in assessmentType)
+    // ═════════════════════════════════════════════════════════════════════════
+
+    public static QuizEntity toQuizEntity(ActivityFolder q, String classId) {
+        QuizEntity entity = new QuizEntity(q.getId(), classId, q.getName(),
+                q.getAssessmentType(), q.getExamDate());
+        entity.sheetType = q.getSheetType(); // overrides the constructor's "ZPH40" default with e.g. "ZPH40 (30 Items)"
+        entity.createdAt = q.getCreatedAt() > 0 ? q.getCreatedAt() : System.currentTimeMillis();
+        entity.examDateEpoch = q.getExamDateEpoch() > 0 ? q.getExamDateEpoch() : entity.createdAt;
+        entity.updatedAt = System.currentTimeMillis();
+        entity.answerKeyId = q.getAnswerKeyId();
+        return entity;
+    }
+
+    public static ActivityFolder toActivityFolder(com.example.omrscanner.database.entities.QuizEntity entity) {
+        ActivityFolder q = new ActivityFolder();
+        q.setId(entity.id);
+        q.setName(entity.name);
+        q.setSheetType(entity.sheetType);
+        q.setExamDate(entity.examDate);
+        q.setExamDateEpoch(entity.examDateEpoch);
+        q.setCreatedAt(entity.createdAt);
+        q.setAnswerKeyId(entity.answerKeyId);
+        q.setAssessmentType(entity.term); // term reuses this field in-memory
+        return q;
     }
 }

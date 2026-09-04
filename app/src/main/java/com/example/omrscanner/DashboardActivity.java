@@ -154,6 +154,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private String selectedClassTypeFilter = null;
 
     private String myAssessmentsSearchQuery = "";
+    private String myQuizzesSearchQuery = "";
+    private Runnable pendingMyQuizzesSearchRunnable;
     private String selectedMyAssessmentsSort = ASSESSMENT_SORT_NEWEST;
     private String myAssessmentsGroupBy = "SHEET"; // SHEET, TYPE, or CLASS
     private String selectedMyAssessmentsSheetFilter = null;
@@ -311,6 +313,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private boolean answerKeysFilterPanelVisible = false;
     private View classAssessmentsHeaderAddBtn;
     private View assessmentsHeaderAddBtn;
+    private View quizzesHeaderAddBtn;
 
     private CardView scanCtaCard;
     private LinearLayout scansHeader, activityScanList, activityScansEmpty;
@@ -752,6 +755,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         classSyncAssessmentsRow = findViewById(R.id.classSyncAssessmentsRow);
         classAssessmentsHeaderAddBtn = findViewById(R.id.classAssessmentsHeaderAddBtn);
         assessmentsHeaderAddBtn = findViewById(R.id.assessmentsHeaderAddBtn);
+        quizzesHeaderAddBtn = findViewById(R.id.quizzesHeaderAddBtn);
         scanCtaCard = findViewById(R.id.scanCtaCard);
         scanCtaSub = findViewById(R.id.scanCtaSub);
         scansHeader = findViewById(R.id.scansHeader);
@@ -819,6 +823,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         classAssessmentsHeaderAddBtn.setOnClickListener(v -> dialogs.showNewActivityDialog());
 
         assessmentsHeaderAddBtn.setOnClickListener(v -> showAssessmentClassPickerDialog());
+        quizzesHeaderAddBtn.setOnClickListener(v -> showQuizClassPickerDialog());
 
         fabTestRow.setOnClickListener(v -> {
             closeFabMenu();
@@ -902,6 +907,17 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             public void afterTextChanged(Editable s) {
                 myAssessmentsSearchQuery = s != null ? s.toString().trim() : "";
                 scheduleMyAssessmentsSearchRefresh();
+            }
+        });
+
+        myQuizzesSearchInput.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int st, int c, int a) { }
+            @Override public void onTextChanged(CharSequence s, int st, int b, int c) { }
+            @Override public void afterTextChanged(Editable s) {
+                myQuizzesSearchQuery = s != null ? s.toString().trim() : "";
+                if (pendingMyQuizzesSearchRunnable != null) searchDebounceHandler.removeCallbacks(pendingMyQuizzesSearchRunnable);
+                pendingMyQuizzesSearchRunnable = () -> { if (SCREEN_QUIZZES.equals(currentScreen)) renderQuizzesScreen(); };
+                searchDebounceHandler.postDelayed(pendingMyQuizzesSearchRunnable, 300);
             }
         });
 
@@ -1123,6 +1139,25 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 .setItems(classNames, (dialog, which) -> {
                     selectedClass = classFolders.get(which);
                     dialogs.showNewActivityDialog();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void showQuizClassPickerDialog() {
+        if (classFolders == null || classFolders.isEmpty()) {
+            ui.showErrorDialog("No classes yet", "Create a class first before adding a quiz.");
+            return;
+        }
+        String[] classNames = new String[classFolders.size()];
+        for (int i = 0; i < classFolders.size(); i++) classNames[i] = classFolders.get(i).getDisplayName();
+
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(
+                this, R.style.ThemeOverlay_OMRScanner_Dialog)
+                .setTitle("Select a class")
+                .setItems(classNames, (dialog, which) -> {
+                    selectedClass = classFolders.get(which);
+                    dialogs.showNewQuizDialog();
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
@@ -3393,17 +3428,15 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 }));
     }
 
-    /** Renders the Quizzes tab. Card, sort, and filter bay mirror Assessments; list stays empty until the quiz data model is defined. */
+    /** Renders the Quizzes tab. Card, sort, and filter bay mirror Assessments. */
     private void renderQuizzesScreen() {
+        quizzesAllList.removeAllViews();
+
         String summaryTeacherName = (activeUserFirstName != null && !activeUserFirstName.isEmpty())
                 ? (activeUserFirstName + (activeUserLastName != null && !activeUserLastName.isEmpty() ? " " + activeUserLastName : ""))
                 : globalTeacherName;
         quizzesSummaryTeacher.setText(summaryTeacherName != null && !summaryTeacherName.isEmpty()
                 ? "Teacher: " + summaryTeacherName : "Teacher: Unknown");
-
-        // No quiz data model yet — using an empty list keeps the Group By/filter UI functional
-        // and visually identical to Assessments while there's nothing to show.
-        List<ActivityFolder> allQuizzesAcrossClasses = new ArrayList<>();
 
         classRenderer.updateAssessmentFilterToggleAppearance(myQuizzesFilterToggle,
                 myQuizzesFilterPanelVisible,
@@ -3417,31 +3450,77 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             renderQuizzesScreen();
         });
 
-        if ("TYPE".equals(myQuizzesGroupBy)) {
-            classRenderer.buildAssessmentTypeTabs(myQuizzesSheetTabs, allQuizzesAcrossClasses,
-                    selectedMyQuizzesTypeFilter, filterVal -> {
-                        selectedMyQuizzesTypeFilter = filterVal;
-                        renderQuizzesScreen();
-                    });
-        } else if ("CLASS".equals(myQuizzesGroupBy)) {
-            classRenderer.buildClassGroupTabs(myQuizzesSheetTabs, classFolders,
-                    selectedMyQuizzesClassFilter, filterVal -> {
-                        selectedMyQuizzesClassFilter = filterVal;
-                        renderQuizzesScreen();
-                    });
-        } else {
-            classRenderer.buildClassSheetTabs(myQuizzesSheetTabs, allQuizzesAcrossClasses,
-                    selectedMyQuizzesSheetFilter, filterVal -> {
-                        selectedMyQuizzesSheetFilter = filterVal;
-                        renderQuizzesScreen();
-                    });
-        }
+        // Unfiltered pass first — used only to populate the term/class tab options.
+        repo.queryAllQuizzes(null, null, null, ASSESSMENT_SORT_NEWEST, tabRows -> runOnUiThread(() -> {
+            if (!SCREEN_QUIZZES.equals(currentScreen)) return;
 
-        quizzesSummaryCount.setText("0");
-        quizzesAllCount.setText("0");
-        quizzesAllList.removeAllViews();
-        quizzesAllList.setVisibility(View.GONE);
-        quizzesAllEmpty.setVisibility(View.VISIBLE);
+            List<ActivityFolder> allQuizzesAcrossClasses = new ArrayList<>();
+            for (AssessmentListRow r : (tabRows != null ? tabRows : new ArrayList<AssessmentListRow>())) {
+                ActivityFolder f = new ActivityFolder();
+                f.setSheetType(r.sheetType); // "ZPH40 • 1st Term" etc.
+                allQuizzesAcrossClasses.add(f);
+            }
+
+            if ("TYPE".equals(myQuizzesGroupBy)) {
+                classRenderer.buildAssessmentTypeTabs(myQuizzesSheetTabs, allQuizzesAcrossClasses,
+                        selectedMyQuizzesTypeFilter, filterVal -> {
+                            selectedMyQuizzesTypeFilter = filterVal;
+                            renderQuizzesScreen();
+                        });
+            } else if ("CLASS".equals(myQuizzesGroupBy)) {
+                classRenderer.buildClassGroupTabs(myQuizzesSheetTabs, classFolders,
+                        selectedMyQuizzesClassFilter, filterVal -> {
+                            selectedMyQuizzesClassFilter = filterVal;
+                            renderQuizzesScreen();
+                        });
+            } else {
+                classRenderer.buildClassSheetTabs(myQuizzesSheetTabs, allQuizzesAcrossClasses,
+                        selectedMyQuizzesSheetFilter, filterVal -> {
+                            selectedMyQuizzesSheetFilter = filterVal;
+                            renderQuizzesScreen();
+                        });
+            }
+
+            String activeTermFilter = "TYPE".equals(myQuizzesGroupBy) ? selectedMyQuizzesTypeFilter : null;
+            String activeClassFilter = "CLASS".equals(myQuizzesGroupBy) ? selectedMyQuizzesClassFilter : null;
+
+            repo.queryAllQuizzes(activeTermFilter, activeClassFilter, myQuizzesSearchQuery,
+                    selectedMyQuizzesSort, rows -> runOnUiThread(() -> {
+                        if (!SCREEN_QUIZZES.equals(currentScreen)) return;
+
+                        int rowCount = (rows != null) ? rows.size() : 0;
+                        quizzesAllCount.setText(String.valueOf(rowCount));
+                        quizzesSummaryCount.setText(String.valueOf(rowCount));
+
+                        if (rowCount == 0) {
+                            quizzesAllEmpty.setVisibility(View.VISIBLE);
+                            quizzesAllList.setVisibility(View.GONE);
+                            return;
+                        }
+                        quizzesAllEmpty.setVisibility(View.GONE);
+                        quizzesAllList.setVisibility(View.VISIBLE);
+                        for (AssessmentListRow row : rows) {
+                            quizzesAllList.addView(classRenderer.createActivityCard(row,
+                                    () -> openQuizFor(row.id, dialogs::showEditQuizDialog),
+                                    () -> openQuizFor(row.id, (q, cid) -> dialogs.showAnswerKeyFolderDialog(q, true)),
+                                    () -> openQuizFor(row.id, (q, cid) -> dialogs.showDeleteQuizConfirmation(q)),
+                                    null,
+                                    () -> openQuizFor(row.id, dialogs::showEditQuizDialog),
+                                    false));
+                        }
+                    }));
+        }));
+    }
+
+    /** Fetches the full QuizEntity by id (async) and hands (ActivityFolder, classId) to the consumer. */
+    private void openQuizFor(String quizId, java.util.function.BiConsumer<ActivityFolder, String> consumer) {
+        repo.getQuizById(quizId, quiz -> runOnUiThread(() -> {
+            if (quiz == null) {
+                ui.showErrorDialog("Quiz unavailable", "The selected quiz could not be loaded. Please try again.");
+                return;
+            }
+            consumer.accept(DataMapper.toActivityFolder(quiz), quiz.classId);
+        }));
     }
 
     // ═══════════════════════════════════════════════════════════════

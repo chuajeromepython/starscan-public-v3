@@ -499,7 +499,14 @@ public class ClassScreenRenderer {
      * @param onOpen   called when the card body is tapped
      */
     public View createActivityCard(AssessmentListRow row,
-            Runnable onEdit, Runnable onSelectAnswerKey, Runnable onDelete, Runnable onUpload, Runnable onOpen) {
+                                   Runnable onEdit, Runnable onSelectAnswerKey, Runnable onDelete, Runnable onUpload, Runnable onOpen) {
+        return createActivityCard(row, onEdit, onSelectAnswerKey, onDelete, onUpload, onOpen, true);
+    }
+
+    /** @param showUpload false hides the "Upload" menu item entirely — used for quizzes, which never sync. */
+    public View createActivityCard(AssessmentListRow row,
+                                   Runnable onEdit, Runnable onSelectAnswerKey, Runnable onDelete, Runnable onUpload, Runnable onOpen,
+                                   boolean showUpload) {
 
         FrameLayout card = new FrameLayout(activity);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
@@ -587,7 +594,7 @@ public class ClassScreenRenderer {
 
             popup.getMenu().add(0, 1, 0, editTitle).setIcon(editIcon);
             popup.getMenu().add(0, 2, 1, keyTitle).setIcon(keyIcon);
-            popup.getMenu().add(0, 3, 2, uploadTitle).setIcon(uploadIcon);
+            if (showUpload) popup.getMenu().add(0, 3, 2, uploadTitle).setIcon(uploadIcon);
             popup.getMenu().add(0, 4, 3, deleteTitle).setIcon(deleteIcon);
 
             try {
@@ -603,7 +610,7 @@ public class ClassScreenRenderer {
                 int id = item.getItemId();
                 if (id == 1) { onEdit.run(); return true; }
                 if (id == 2) { onSelectAnswerKey.run(); return true; }
-                if (id == 3) { onUpload.run(); return true; }
+                if (id == 3 && showUpload) { onUpload.run(); return true; }
                 if (id == 4) { onDelete.run(); return true; }
                 return false;
             });
@@ -618,8 +625,13 @@ public class ClassScreenRenderer {
                 ? row.examDate
                 : new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
                 .format(new java.util.Date(row.createdAt));
-        meta.setText("\uD83D\uDC65 " + row.scanCount + " of " + row.syncedStudentCount + " student"
-                + (row.syncedStudentCount != 1 ? "s" : "") + " scanned · " + dateToShow);
+        if (showUpload) {
+            meta.setText("\uD83D\uDC65 " + row.scanCount + " of " + row.syncedStudentCount + " student"
+                    + (row.syncedStudentCount != 1 ? "s" : "") + " scanned · " + dateToShow);
+        } else {
+            meta.setText("\uD83D\uDC65 " + row.scanCount + " student"
+                    + (row.scanCount != 1 ? "s" : "") + " scanned · " + dateToShow);
+        }
         meta.setTextColor(Color.parseColor("#94A3B8"));
         meta.setTextSize(11);
         LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(

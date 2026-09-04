@@ -334,6 +334,61 @@ public class OMRRepository {
     }
 
   // ═════════════════════════════════════════════════════════════════════════
+  // QUIZ  (local-only — never synced)
+  // ═════════════════════════════════════════════════════════════════════════
+
+  public void insertQuiz(com.example.omrscanner.database.entities.QuizEntity quiz, Callback<Void> callback) {
+    executor.execute(() -> {
+      db.quizDao().insert(quiz);
+      if (callback != null) callback.onResult(null);
+    });
+  }
+
+  public void updateQuiz(com.example.omrscanner.database.entities.QuizEntity quiz, Callback<Void> callback) {
+    executor.execute(() -> {
+      db.quizDao().update(quiz);
+      if (callback != null) callback.onResult(null);
+    });
+  }
+
+  public void deleteQuiz(com.example.omrscanner.database.entities.QuizEntity quiz, Callback<Void> callback) {
+    executor.execute(() -> {
+      db.quizDao().delete(quiz);
+      if (callback != null) callback.onResult(null);
+    });
+  }
+
+  public void getQuizById(String id, Callback<com.example.omrscanner.database.entities.QuizEntity> callback) {
+    executor.execute(() -> {
+      com.example.omrscanner.database.entities.QuizEntity result = db.quizDao().getById(id);
+      if (callback != null) callback.onResult(result);
+    });
+  }
+
+  public void queryAllQuizzes(String termFilter, String classIdFilter, String search, String sortKey,
+                              Callback<List<AssessmentListRow>> callback) {
+    executor.execute(() -> {
+      List<AssessmentListRow> list = db.quizDao().queryAllQuizzes(termFilter, classIdFilter, search, sortKey);
+      if (callback != null) callback.onResult(list);
+    });
+  }
+
+  /** Quizzes have no scans, so linking is a plain column update — no grading pass. */
+  public void linkAnswerKeyToQuiz(String quizId, String answerKeyId, Callback<Void> callback) {
+    executor.execute(() -> {
+      db.quizDao().setAnswerKey(quizId, answerKeyId);
+      if (callback != null) callback.onResult(null);
+    });
+  }
+
+  public void unlinkAnswerKeyFromQuiz(String quizId, Callback<Void> callback) {
+    executor.execute(() -> {
+      db.quizDao().setAnswerKey(quizId, null);
+      if (callback != null) callback.onResult(null);
+    });
+  }
+
+  // ═════════════════════════════════════════════════════════════════════════
   // SCAN
   // ═════════════════════════════════════════════════════════════════════════
 

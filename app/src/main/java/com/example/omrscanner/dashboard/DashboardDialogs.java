@@ -25,6 +25,7 @@ import com.example.omrscanner.database.entities.AssessmentEntity;
 import com.example.omrscanner.database.entities.ClassEntity;
 import com.example.omrscanner.models.ActivityFolder;
 import com.example.omrscanner.models.ClassFolder;
+import com.example.omrscanner.database.OMRRepository.Callback;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -873,10 +874,334 @@ public class DashboardDialogs {
     }
 
     // ─────────────────────────────────────────────────────────────
+    // New / Edit / Delete QUIZ (local-only, ZPH40 only)
+    // ─────────────────────────────────────────────────────────────
+
+    private static final String[] QUIZ_TERMS = {"1st Term", "2nd Term", "3rd Term"};
+
+    /** Builds the Term selector row shared by New/Edit Quiz. */
+    private TextView[] buildTermRow(LinearLayout root, String preselected, java.util.function.Consumer<String> onChange) {
+        root.addView(ui.createFieldLabel("TERM *"));
+        LinearLayout row = new LinearLayout(activity);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.bottomMargin = ui.dp(16);
+        row.setLayoutParams(lp);
+
+        final TextView[] buttons = new TextView[QUIZ_TERMS.length];
+        for (int i = 0; i < QUIZ_TERMS.length; i++) {
+            final int idx = i;
+            TextView btn = new TextView(activity);
+            btn.setText(QUIZ_TERMS[i]);
+            btn.setTextSize(12);
+            btn.setTypeface(null, Typeface.BOLD);
+            btn.setGravity(Gravity.CENTER);
+            btn.setPadding(ui.dp(10), ui.dp(10), ui.dp(10), ui.dp(10));
+            btn.setClickable(true);
+            btn.setFocusable(true);
+            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            if (i < QUIZ_TERMS.length - 1) blp.rightMargin = ui.dp(8);
+            btn.setLayoutParams(blp);
+            buttons[i] = btn;
+            btn.setOnClickListener(v -> {
+                onChange.accept(QUIZ_TERMS[idx]);
+                updateSheetTypeSelection(buttons, idx);
+            });
+            row.addView(btn);
+        }
+        root.addView(row);
+        int initIdx = -1;
+        for (int i = 0; i < QUIZ_TERMS.length; i++) if (QUIZ_TERMS[i].equals(preselected)) initIdx = i;
+        updateSheetTypeSelection(buttons, initIdx);
+        return buttons;
+    }
+
+    /** Sheet type selector restricted to ZPH40 — same item-count sub-picker as assessments. */
+    private TextView[] buildQuizSheetTypeRow(LinearLayout root, String preselectedSheetType, java.util.function.Consumer<String> onChange) {
+        root.addView(ui.createFieldLabel("OMR SHEET TYPE *"));
+        String[][] sheetTypes = {{"ZPH40", "40 Items"}};
+
+        LinearLayout typeRow = new LinearLayout(activity);
+        typeRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams trLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        trLp.bottomMargin = ui.dp(16);
+        typeRow.setLayoutParams(trLp);
+
+        final TextView[] typeButtons = new TextView[sheetTypes.length];
+        final int[] selectedIdx = {-1};
+        int cumulativeStart = 1;
+        for (int i = 0; i < sheetTypes.length; i++) {
+            final int idx = i;
+            final String baseId = sheetTypes[i][0];
+            final String plainLabel = sheetTypes[i][1];
+            final int maxItems = Integer.parseInt(sheetTypes[i][1].split(" ")[0]);
+            final int rangeStart = cumulativeStart;
+            TextView btn = new TextView(activity);
+            btn.setText(baseId + "\n" + plainLabel);
+            btn.setTextSize(12);
+            btn.setTypeface(null, Typeface.BOLD);
+            btn.setGravity(Gravity.CENTER);
+            btn.setPadding(ui.dp(10), ui.dp(10), ui.dp(10), ui.dp(10));
+            btn.setClickable(true);
+            btn.setFocusable(true);
+            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            btn.setLayoutParams(blp);
+            typeButtons[i] = btn;
+            btn.setOnClickListener(v -> {
+                if (selectedIdx[0] == idx) {
+                    selectedIdx[0] = -1;
+                    btn.setText(baseId + "\n" + plainLabel);
+                    onChange.accept(null);
+                    updateSheetTypeSelection(typeButtons, -1);
+                    return;
+                }
+                promptItemCount(baseId, rangeStart, maxItems, chosenCount -> {
+                    btn.setText(baseId + "\n(" + chosenCount + " Items)");
+                    selectedIdx[0] = idx;
+                    onChange.accept(baseId + " (" + chosenCount + " Items)");
+                    updateSheetTypeSelection(typeButtons, idx);
+                });
+            });
+            typeRow.addView(btn);
+            cumulativeStart = maxItems + 1;
+        }
+        root.addView(typeRow);
+
+        if (preselectedSheetType != null) {
+            typeButtons[0].setText("ZPH40\n(" + ActivityFolder.parseItemCountFromSheetType(preselectedSheetType) + " Items)");
+            selectedIdx[0] = 0;
+            onChange.accept(preselectedSheetType);
+        }
+        updateSheetTypeSelection(typeButtons, selectedIdx[0]);
+        return typeButtons;
+    }
+
+    public void showNewQuizDialog() {
+        Dialog dialog = new Dialog(activity);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setCancelable(true);
+
+        LinearLayout root = ui.buildSheet();
+        root.addView(ui.createDialogHandle());
+        root.addView(ui.buildSheetTitle("⊕ New Quiz", "#0038A8", Gravity.START, 20));
+
+        root.addView(ui.createFieldLabel("QUIZ NAME *"));
+        EditText nameInput = ui.createLightInput("e.g. Reading Quiz 1");
+        root.addView(nameInput);
+
+        final String[] selectedTerm = {null};
+        buildTermRow(root, null, term -> selectedTerm[0] = term);
+
+        root.addView(ui.createFieldLabel("QUIZ DATE"));
+        EditText dateInput = ui.createLightInput("Select date");
+        dateInput.setFocusable(false);
+        dateInput.setClickable(true);
+        dateInput.setText(new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(new java.util.Date()));
+        dateInput.setOnClickListener(v -> {
+            Calendar c = Calendar.getInstance();
+            new DatePickerDialog(activity, (view, year, month, day) -> {
+                Calendar chosen = Calendar.getInstance();
+                chosen.set(year, month, day);
+                dateInput.setText(new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(chosen.getTime()));
+            }, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).show();
+        });
+        root.addView(dateInput);
+
+        final String[] selectedSheetType = {null};
+        buildQuizSheetTypeRow(root, null, val -> selectedSheetType[0] = val);
+
+        LinearLayout actions = ui.buildActionsRow(ui.dp(4));
+        TextView btnCancel = ui.createDialogButton("Cancel", false);
+        TextView btnDone = ui.createDialogButton("Done", true);
+        actions.addView(btnCancel);
+        actions.addView(ui.spacer(ui.dp(10)));
+        actions.addView(btnDone);
+        root.addView(actions);
+
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+        btnDone.setOnClickListener(v -> {
+            String name = nameInput.getText().toString().trim();
+            if (name.isEmpty()) {
+                ui.showErrorDialog("Missing Name", "Quiz name is required to create a quiz.");
+                return;
+            }
+            if (selectedTerm[0] == null) {
+                ui.showErrorDialog("Missing Term", "Please select a term.");
+                return;
+            }
+            if (selectedSheetType[0] == null) {
+                ui.showErrorDialog("Missing Sheet Type", "Please select an OMR sheet type.");
+                return;
+            }
+            ClassFolder selectedClass = host.getSelectedClass();
+            if (selectedClass == null) {
+                ui.showErrorDialog("No class selected", "Please select a class first.");
+                return;
+            }
+            ActivityFolder q = new ActivityFolder(name, selectedSheetType[0]);
+            String examDate = dateInput.getText().toString().trim();
+            q.setExamDate(examDate);
+            q.setExamDateEpoch(parseExamDateToEpoch(examDate, System.currentTimeMillis()));
+            q.setAssessmentType(selectedTerm[0]); // term
+            com.example.omrscanner.database.entities.QuizEntity entity =
+                    DataMapper.toQuizEntity(q, selectedClass.getId());
+            repo.insertQuiz(entity, ignored -> activity.runOnUiThread(() -> {
+                dialog.dismiss();
+                ui.showToast("Quiz created ✓");
+                host.loadDataFromDb();
+            }));
+        });
+
+        dialog.setContentView(root);
+        ui.configureBottomDialog(dialog);
+        dialog.show();
+    }
+
+    public void showEditQuizDialog(ActivityFolder quiz, String classId) {
+        Dialog dialog = new Dialog(activity);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setCancelable(true);
+
+        LinearLayout root = ui.buildSheet();
+        root.addView(ui.createDialogHandle());
+        root.addView(ui.buildSheetTitle("✏️ Edit Quiz", "#0038A8", Gravity.START, 20));
+
+        root.addView(ui.createFieldLabel("QUIZ NAME *"));
+        EditText nameInput = ui.createLightInput("e.g. Reading Quiz 1");
+        nameInput.setText(quiz.getName());
+        root.addView(nameInput);
+
+        final String[] selectedTerm = {quiz.getAssessmentType()};
+        buildTermRow(root, quiz.getAssessmentType(), term -> selectedTerm[0] = term);
+
+        root.addView(ui.createFieldLabel("QUIZ DATE"));
+        EditText dateInput = ui.createLightInput("Select date");
+        dateInput.setFocusable(false);
+        dateInput.setClickable(true);
+        dateInput.setText(quiz.getExamDate() != null ? quiz.getExamDate()
+                : new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(new java.util.Date()));
+        dateInput.setOnClickListener(v -> {
+            Calendar c = Calendar.getInstance();
+            new DatePickerDialog(activity, (view, year, month, day) -> {
+                Calendar chosen = Calendar.getInstance();
+                chosen.set(year, month, day);
+                dateInput.setText(new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(chosen.getTime()));
+            }, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).show();
+        });
+        root.addView(dateInput);
+
+        final String[] selectedSheetType = {quiz.getSheetType()};
+        buildQuizSheetTypeRow(root, quiz.getSheetType(), val -> selectedSheetType[0] = val);
+
+        LinearLayout actions = ui.buildActionsRow(ui.dp(4));
+        TextView btnCancel = ui.createDialogButton("Cancel", false);
+        TextView btnDone = ui.createDialogButton("Save", true);
+        actions.addView(btnCancel);
+        actions.addView(ui.spacer(ui.dp(10)));
+        actions.addView(btnDone);
+        root.addView(actions);
+
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+        btnDone.setOnClickListener(v -> {
+            String name = nameInput.getText().toString().trim();
+            if (name.isEmpty()) {
+                ui.showErrorDialog("Missing Name", "Quiz name is required to save.");
+                return;
+            }
+            if (selectedTerm[0] == null) {
+                ui.showErrorDialog("Missing Term", "Please select a term.");
+                return;
+            }
+            if (selectedSheetType[0] == null) {
+                ui.showErrorDialog("Missing Sheet Type", "Please select an OMR sheet type.");
+                return;
+            }
+            quiz.setName(name);
+            String examDate = dateInput.getText().toString().trim();
+            quiz.setExamDate(examDate);
+            quiz.setExamDateEpoch(parseExamDateToEpoch(examDate, quiz.getCreatedAt()));
+            quiz.setAssessmentType(selectedTerm[0]);
+            quiz.setSheetType(selectedSheetType[0]);
+            // answer_key_id is left untouched here — it's now only changed via the card's "Answer Key" action
+            com.example.omrscanner.database.entities.QuizEntity entity = DataMapper.toQuizEntity(quiz, classId);
+            repo.updateQuiz(entity, ignored -> activity.runOnUiThread(() -> {
+                dialog.dismiss();
+                ui.showToast("Quiz updated ✓");
+                host.loadDataFromDb();
+            }));
+        });
+
+        dialog.setContentView(root);
+        ui.configureBottomDialog(dialog);
+        dialog.show();
+    }
+
+    public void showDeleteQuizConfirmation(ActivityFolder quiz) {
+        Dialog dialog = new Dialog(activity);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setCancelable(true);
+
+        LinearLayout root = ui.buildSheet();
+        TextView title = new TextView(activity);
+        title.setText("Delete Quiz?");
+        title.setTextSize(18);
+        title.setTypeface(null, Typeface.BOLD);
+        title.setTextColor(Color.parseColor("#CE1126"));
+        root.addView(title);
+
+        TextView msg = new TextView(activity);
+        msg.setText("Are you sure you want to delete \"" + quiz.getName() + "\"? This cannot be undone.");
+        msg.setTextColor(Color.parseColor("#64748B"));
+        msg.setTextSize(14);
+        msg.setPadding(0, ui.dp(12), 0, ui.dp(24));
+        root.addView(msg);
+
+        LinearLayout actions = new LinearLayout(activity);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        TextView btnCancel = ui.createDialogButton("Cancel", false);
+        actions.addView(btnCancel);
+        actions.addView(ui.spacer(ui.dp(10)));
+
+        TextView btnDelete = ui.createDialogButton("Delete", true);
+        GradientDrawable delBg = new GradientDrawable();
+        delBg.setColor(Color.parseColor("#CE1126"));
+        delBg.setCornerRadius(ui.dp(12));
+        btnDelete.setBackground(delBg);
+        btnDelete.setTextColor(Color.WHITE);
+        btnDelete.setOnClickListener(v -> {
+            repo.getQuizById(quiz.getId(), quizEntity -> {
+                if (quizEntity == null) {
+                    activity.runOnUiThread(() -> { dialog.dismiss(); host.loadDataFromDb(); });
+                    return;
+                }
+                repo.deleteQuiz(quizEntity, ignored -> activity.runOnUiThread(() -> {
+                    dialog.dismiss();
+                    ui.showToast("Quiz deleted");
+                    host.loadDataFromDb();
+                }));
+            });
+        });
+        actions.addView(btnDelete);
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+        root.addView(actions);
+
+        dialog.setContentView(root);
+        ui.configureBottomDialog(dialog);
+        dialog.show();
+    }
+
+    // ─────────────────────────────────────────────────────────────
     // New ANSWER KEY
     // ─────────────────────────────────────────────────────────────
 
     public void showAnswerKeyFolderDialog(ActivityFolder act) {
+        showAnswerKeyFolderDialog(act, false);
+    }
+
+    public void showAnswerKeyFolderDialog(ActivityFolder act, boolean isQuiz) {
         Dialog dialog = new Dialog(activity);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setCancelable(true);
@@ -1030,21 +1355,23 @@ public class DashboardDialogs {
                         : new String[]{"Assign", "#FFFFFF", "#0038A8"});
                 btnAssign.setOnClickListener(v -> {
                     if (isAssigned) {
-                        repo.unlinkAnswerKeyFromAssessment(act.getId(), ignored ->
-                                activity.runOnUiThread(() -> {
-                                    act.setAnswerKeyId(null);
-                                    dialog.dismiss();
-                                    ui.showToast("Answer key unlinked");
-                                    host.loadDataFromDb();
-                                }));
+                        Callback<Void> onDone = ignored -> activity.runOnUiThread(() -> {
+                            act.setAnswerKeyId(null);
+                            dialog.dismiss();
+                            ui.showToast("Answer key unlinked");
+                            host.loadDataFromDb();
+                        });
+                        if (isQuiz) repo.unlinkAnswerKeyFromQuiz(act.getId(), onDone);
+                        else repo.unlinkAnswerKeyFromAssessment(act.getId(), onDone);
                     } else {
-                        repo.linkAnswerKeyToAssessment(act.getId(), key.id, ignored ->
-                                activity.runOnUiThread(() -> {
-                                    act.setAnswerKeyId(key.id);
-                                    dialog.dismiss();
-                                    ui.showToast("\"" + key.name + "\" assigned ✓");
-                                    host.loadDataFromDb();
-                                }));
+                        Callback<Void> onDone = ignored -> activity.runOnUiThread(() -> {
+                            act.setAnswerKeyId(key.id);
+                            dialog.dismiss();
+                            ui.showToast("\"" + key.name + "\" assigned ✓");
+                            host.loadDataFromDb();
+                        });
+                        if (isQuiz) repo.linkAnswerKeyToQuiz(act.getId(), key.id, onDone);
+                        else repo.linkAnswerKeyToAssessment(act.getId(), key.id, onDone);
                     }
                 });
                 actionsRow.addView(btnAssign);
