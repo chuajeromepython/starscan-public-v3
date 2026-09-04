@@ -585,11 +585,19 @@ public class ResultActivity extends AppCompatActivity {
                 if (activityId != null) {
                     com.example.omrscanner.database.OMRRepository repo =
                             new com.example.omrscanner.database.OMRRepository(ResultActivity.this);
-                    com.example.omrscanner.database.entities.AssessmentEntity assessment =
-                            repo.getAssessmentByIdSync(activityId);
-                    if (assessment != null && assessment.answerKeyId != null) {
+                    String answerKeyId = null;
+                    if (isQuiz) {
+                        com.example.omrscanner.database.entities.QuizEntity quiz =
+                                repo.getQuizByIdSync(activityId);
+                        if (quiz != null) answerKeyId = quiz.answerKeyId;
+                    } else {
+                        com.example.omrscanner.database.entities.AssessmentEntity assessment =
+                                repo.getAssessmentByIdSync(activityId);
+                        if (assessment != null) answerKeyId = assessment.answerKeyId;
+                    }
+                    if (answerKeyId != null) {
                         com.example.omrscanner.database.entities.AnswerKeyEntity key =
-                                repo.getAnswerKeyByIdSync(assessment.answerKeyId);
+                                repo.getAnswerKeyByIdSync(answerKeyId);
                         if (key != null && key.answers != null && !key.answers.isEmpty()) {
                             correctAnswers = key.answers.split(",");
                         }

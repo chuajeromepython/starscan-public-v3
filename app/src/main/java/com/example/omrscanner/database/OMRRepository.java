@@ -689,6 +689,15 @@ public class OMRRepository {
     });
   }
 
+  /** Load every quiz currently linked to any answer key (for the "Linked to Quiz" dropdown). */
+  public void getAnswerKeyLinkedQuizzes(Callback<List<com.example.omrscanner.database.projections.AnswerKeyLinkedQuiz>> callback) {
+    executor.execute(() -> {
+      List<com.example.omrscanner.database.projections.AnswerKeyLinkedQuiz> list = db.answerKeyDao().getLinkedQuizzes();
+      if (callback != null)
+        callback.onResult(list);
+    });
+  }
+
   /** Load answer keys for a specific sheet type (for contextual assignment UI). */
   public void getAnswerKeysBySheetType(String sheetType, Callback<List<AnswerKeyEntity>> callback) {
     executor.execute(() -> {

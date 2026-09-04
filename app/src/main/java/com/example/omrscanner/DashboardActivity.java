@@ -143,6 +143,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private List<AnswerKeyEntity> answerKeys = new ArrayList<>();
     private Map<String, AnswerKeyLinkInfo> answerKeyLinkInfo = new java.util.HashMap<>();
     private Map<String, List<AnswerKeyLinkedAssessment>> answerKeyLinkedAssessments = new java.util.HashMap<>();
+    private Map<String, List<com.example.omrscanner.database.projections.AnswerKeyLinkedQuiz>> answerKeyLinkedQuizzes = new java.util.HashMap<>();
 
     private String classSearchQuery = "";
     private String selectedClassGradeFilter = null;
@@ -3682,6 +3683,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     key,
                     answerKeyLinkInfo.get(key.id),
                     answerKeyLinkedAssessments.get(key.id),
+                    answerKeyLinkedQuizzes.get(key.id),
                     () -> dialogs.showViewAnswerKeyDialog(key),
                     () -> dialogs.showEditAnswerKeyDialog(key),
                     () -> dialogs.showDeleteAnswerKeyConfirmation(key)));
@@ -4438,7 +4440,17 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                     .add(r);
                         }
                     }
-                    if (SCREEN_ANSWERKEYS.equals(currentScreen)) renderAnswerKeysScreen();
+                    repo.getAnswerKeyLinkedQuizzes(quizRows -> runOnUiThread(() -> {
+                        answerKeyLinkedQuizzes.clear();
+                        if (quizRows != null) {
+                            for (com.example.omrscanner.database.projections.AnswerKeyLinkedQuiz r : quizRows) {
+                                answerKeyLinkedQuizzes
+                                        .computeIfAbsent(r.answerKeyId, k -> new ArrayList<>())
+                                        .add(r);
+                            }
+                        }
+                        if (SCREEN_ANSWERKEYS.equals(currentScreen)) renderAnswerKeysScreen();
+                    }));
                 }));
             }));
         }));

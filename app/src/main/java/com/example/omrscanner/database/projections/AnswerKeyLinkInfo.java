@@ -21,4 +21,12 @@ public class AnswerKeyLinkInfo {
     /** Total number of assessments currently referencing this key. */
     @ColumnInfo(name = "linkedCount")
     public int linkedCount;
+
+    /** Nullable: name of the most recently created quiz referencing this key. */
+    @ColumnInfo(name = "linkedQuizName")
+    public String linkedQuizName;
+
+    /** Total number of quizzes currently referencing this key. */
+    @ColumnInfo(name = "linkedQuizCount")
+    public int linkedQuizCount;
 }
