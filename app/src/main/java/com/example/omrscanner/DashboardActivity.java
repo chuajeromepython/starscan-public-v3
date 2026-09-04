@@ -110,6 +110,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private static final String SCREEN_ASSESSMENTS = "assessments";
     private static final String SCREEN_ANSWERKEYS = "answerkeys";
     private static final String SCREEN_SCANS = "scans";
+    private static final String SCREEN_QUIZZES = "quizzes";
 
     // ── Sort constants (delegated to renderers, kept here for initialisation) ──
     private static final String CLASS_SORT_NEWEST = HomeScreenRenderer.CLASS_SORT_NEWEST;
@@ -159,6 +160,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private String selectedMyAssessmentsTypeFilter = null;
     private String selectedMyAssessmentsClassFilter = null;
 
+    private String selectedMyQuizzesSort = ASSESSMENT_SORT_NEWEST;
+    private String myQuizzesGroupBy = "SHEET"; // SHEET, TYPE, or CLASS
+    private String selectedMyQuizzesSheetFilter = null;
+    private String selectedMyQuizzesTypeFilter = null;
+    private String selectedMyQuizzesClassFilter = null;
+
     private String answerKeysSearchQuery = "";
     private String selectedAnswerKeysSort = ASSESSMENT_SORT_NEWEST;
     private String selectedAnswerKeysSheetFilter = null;
@@ -202,14 +209,15 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private TextView tvLastSynced;
     private LinearLayout teacherNameRow;
 
-    private View screenHome, screenAssessments, screenAnswerKeys, screenScans;
+    private View screenHome, screenAssessments, screenAnswerKeys, screenScans, screenQuizzes;
     private ScrollView screenClass, screenActivity, screenUser;
 
     private android.widget.FrameLayout bottomNav;
-    private LinearLayout navHomeTab, navUserTab, navAssessmentsTab, navAnswerKeysTab, navScansTab;
-    private ImageView navHomeIcon, navUserIcon, navAssessmentsIcon, navAnswerKeysIcon, navScansIcon;
-    private TextView navHomeLabel, navUserLabel, navAssessmentsLabel, navAnswerKeysLabel, navScansLabel;
+    private LinearLayout navHomeTab, navUserTab, navAssessmentsTab, navAnswerKeysTab, navScansTab, navQuizzesTab;
+    private ImageView navHomeIcon, navUserIcon, navAssessmentsIcon, navAnswerKeysIcon, navScansIcon, navQuizzesIcon;
+    private TextView navHomeLabel, navUserLabel, navAssessmentsLabel, navAnswerKeysLabel, navScansLabel, navQuizzesLabel;
 
+    private TextView homeAllClassesCount;
     private LinearLayout scansAllList, scansAllEmpty;
     private TextView scansAllCount, scansAllSummaryCount, scansAllSummaryTeacher;
     private ScansScreenRenderer scansRenderer;
@@ -275,6 +283,16 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private LinearLayout myAssessmentsFilterPanel;
     private android.widget.ImageView myAssessmentsFilterToggle;
     private boolean myAssessmentsFilterPanelVisible = false;
+
+    private LinearLayout quizzesAllList, quizzesAllEmpty;
+    private TextView quizzesAllCount;
+    private TextView quizzesSummaryTeacher, quizzesSummaryCount;
+    private LinearLayout myQuizzesGroupSwitcher, myQuizzesSheetTabs;
+    private EditText myQuizzesSearchInput;
+    private TextView myQuizzesSortPicker;
+    private LinearLayout myQuizzesFilterPanel;
+    private android.widget.ImageView myQuizzesFilterToggle;
+    private boolean myQuizzesFilterPanelVisible = false;
 
     private LinearLayout answerKeysAllList, answerKeysAllEmpty;
     private TextView answerKeysAllCount;
@@ -596,6 +614,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         screenAssessments = findViewById(R.id.screenAssessments);
         screenAnswerKeys = findViewById(R.id.screenAnswerKeys);
         screenScans = findViewById(R.id.screenScans);
+        screenQuizzes = findViewById(R.id.screenQuizzes);
         screenClass = findViewById(R.id.screenClass);
         screenActivity = findViewById(R.id.screenActivity);
         screenUser = findViewById(R.id.screenUser);
@@ -606,6 +625,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         navAssessmentsTab = findViewById(R.id.navAssessmentsTab);
         navAnswerKeysTab = findViewById(R.id.navAnswerKeysTab);
         navScansTab = findViewById(R.id.navScansTab);
+        navQuizzesTab = findViewById(R.id.navQuizzesTab);
+        navQuizzesIcon = findViewById(R.id.navQuizzesIcon);
+        navQuizzesLabel = findViewById(R.id.navQuizzesLabel);
         navHomeIcon = findViewById(R.id.navHomeIcon);
         navUserIcon = findViewById(R.id.navUserIcon);
         navAssessmentsIcon = findViewById(R.id.navAssessmentsIcon);
@@ -668,6 +690,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         homeFilterPanel = findViewById(R.id.homeFilterPanel);
         homeFilterToggle = findViewById(R.id.homeFilterToggle);
         homeSummaryClassCount = findViewById(R.id.homeSummaryClassCount);
+        homeAllClassesCount = findViewById(R.id.homeAllClassesCount);
         homeSummaryAssessmentCount = findViewById(R.id.homeSummaryAssessmentCount);
 
         classTeacherLabel = findViewById(R.id.classTeacherLabel);
@@ -696,6 +719,18 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         myAssessmentsSortPicker = findViewById(R.id.myAssessmentsSortPicker);
         myAssessmentsFilterPanel = findViewById(R.id.myAssessmentsFilterPanel);
         myAssessmentsFilterToggle = findViewById(R.id.myAssessmentsFilterToggle);
+
+        quizzesAllList = findViewById(R.id.quizzesAllList);
+        quizzesAllEmpty = findViewById(R.id.quizzesAllEmpty);
+        quizzesAllCount = findViewById(R.id.quizzesAllCount);
+        quizzesSummaryTeacher = findViewById(R.id.quizzesSummaryTeacher);
+        quizzesSummaryCount = findViewById(R.id.quizzesSummaryCount);
+        myQuizzesGroupSwitcher = findViewById(R.id.myQuizzesGroupSwitcher);
+        myQuizzesSheetTabs = findViewById(R.id.myQuizzesSheetTabs);
+        myQuizzesSearchInput = findViewById(R.id.myQuizzesSearchInput);
+        myQuizzesSortPicker = findViewById(R.id.myQuizzesSortPicker);
+        myQuizzesFilterPanel = findViewById(R.id.myQuizzesFilterPanel);
+        myQuizzesFilterToggle = findViewById(R.id.myQuizzesFilterToggle);
 
         answerKeysAllList = findViewById(R.id.answerKeysAllList);
         answerKeysAllEmpty = findViewById(R.id.answerKeysAllEmpty);
@@ -758,6 +793,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         navAssessmentsTab.setOnClickListener(v -> selectAssessmentsTab());
         navAnswerKeysTab.setOnClickListener(v -> selectAnswerKeysTab());
         navScansTab.setOnClickListener(v -> selectScansTab());
+        navQuizzesTab.setOnClickListener(v -> selectQuizzesTab());
 
         btnBack.setOnClickListener(v -> navigateBack());
         btnUpload.setOnClickListener(v -> dialogs.showGlobalUploadClassDialog());
@@ -919,6 +955,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     updateSortPickers();
                     if (SCREEN_ASSESSMENTS.equals(currentScreen)) renderAssessmentsScreen();
                 }));
+        myQuizzesSortPicker.setOnClickListener(v ->
+                classRenderer.showAssessmentSortDialog(selectedMyQuizzesSort, key -> {
+                    selectedMyQuizzesSort = key;
+                    updateSortPickers();
+                    if (SCREEN_QUIZZES.equals(currentScreen)) renderQuizzesScreen();
+                }));
         answerKeysSortPicker.setOnClickListener(v ->
                 classRenderer.showAssessmentSortDialog(selectedAnswerKeysSort, key -> {
                     selectedAnswerKeysSort = key;
@@ -960,6 +1002,17 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                             || selectedMyAssessmentsSheetFilter != null
                             || selectedMyAssessmentsTypeFilter != null
                             || selectedMyAssessmentsClassFilter != null);
+        });
+
+        myQuizzesFilterToggle.setOnClickListener(v -> {
+            myQuizzesFilterPanelVisible = !myQuizzesFilterPanelVisible;
+            myQuizzesFilterPanel.setVisibility(myQuizzesFilterPanelVisible ? View.VISIBLE : View.GONE);
+            classRenderer.updateAssessmentFilterToggleAppearance(myQuizzesFilterToggle,
+                    myQuizzesFilterPanelVisible,
+                    !ASSESSMENT_SORT_NEWEST.equals(selectedMyQuizzesSort)
+                            || selectedMyQuizzesSheetFilter != null
+                            || selectedMyQuizzesTypeFilter != null
+                            || selectedMyQuizzesClassFilter != null);
         });
 
         answerKeysFilterToggle.setOnClickListener(v -> {
@@ -2287,6 +2340,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         screenAssessments.setVisibility(View.GONE);
         screenAnswerKeys.setVisibility(View.GONE);
         screenScans.setVisibility(View.GONE);
+        screenQuizzes.setVisibility(View.GONE);
 
         switch (screen) {
             case SCREEN_HOME:
@@ -2399,6 +2453,17 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 breadcrumbDivider.setVisibility(View.GONE);
                 renderScansScreen();
                 break;
+
+            case SCREEN_QUIZZES:
+                screenQuizzes.setVisibility(View.VISIBLE);
+                btnBack.setVisibility(View.GONE);
+                fabMain.setVisibility(View.GONE);
+                topBarTitle.setText("Quizzes");
+                topBarBadge.setVisibility(View.GONE);
+                breadcrumbBar.setVisibility(View.GONE);
+                breadcrumbDivider.setVisibility(View.GONE);
+                renderQuizzesScreen();
+                break;
         }
 
         updateBottomNavSelection(screen);
@@ -2407,7 +2472,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     /** True for the "chrome" tabs that sit alongside Home in the bottom nav. */
     private boolean isChromeTab(String screen) {
         return SCREEN_USER.equals(screen) || SCREEN_ASSESSMENTS.equals(screen)
-                || SCREEN_ANSWERKEYS.equals(screen) || SCREEN_SCANS.equals(screen);
+                || SCREEN_ANSWERKEYS.equals(screen) || SCREEN_SCANS.equals(screen)
+                || SCREEN_QUIZZES.equals(screen);
     }
 
     /** Switches to the Home tab's remembered screen (called by the tab tap or back button). */
@@ -2461,6 +2527,15 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         }
     }
 
+    private void selectQuizzesTab() {
+        if (!SCREEN_QUIZZES.equals(currentScreen)) {
+            if (!isChromeTab(currentScreen)) {
+                screenBeforeChromeTab = currentScreen;
+            }
+            showScreen(SCREEN_QUIZZES);
+        }
+    }
+
     /** Colors the active vs inactive tab icon/label. */
     private void updateBottomNavSelection(String screen) {
         int activeColor = Color.parseColor("#FFFFFF");
@@ -2475,7 +2550,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         boolean assessmentsActive = SCREEN_ASSESSMENTS.equals(screen);
         boolean answerKeysActive = SCREEN_ANSWERKEYS.equals(screen);
         boolean scansActive = SCREEN_SCANS.equals(screen);
-        boolean homeActive = !userActive && !assessmentsActive && !answerKeysActive && !scansActive;
+        boolean quizzesActive = SCREEN_QUIZZES.equals(screen);
+        boolean homeActive = !userActive && !assessmentsActive && !answerKeysActive && !scansActive && !quizzesActive;
 
         navHomeIcon.setColorFilter(activeColor);
         navHomeIcon.setImageAlpha(homeActive ? activeAlpha : inactiveAlpha);
@@ -2496,6 +2572,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         navUserIcon.setColorFilter(activeColor);
         navUserIcon.setImageAlpha(userActive ? activeAlpha : inactiveAlpha);
         navUserLabel.setTextColor(userActive ? activeColor : inactiveColor);
+
+        navQuizzesIcon.setColorFilter(activeColor);
+        navQuizzesIcon.setImageAlpha(quizzesActive ? activeAlpha : inactiveAlpha);
+        navQuizzesLabel.setTextColor(quizzesActive ? activeColor : inactiveColor);
     }
 
     /** Populates the User tab with the currently active user's info, activity stats, and account details. */
@@ -2892,6 +2972,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         }
         homeSummaryClassCount.setText(String.valueOf(classFolders.size()));
         homeSummaryAssessmentCount.setText(String.valueOf(totalAssessments));
+        if (homeAllClassesCount != null) homeAllClassesCount.setText(String.valueOf(classFolders.size()));
 
         homeRenderer.updateFilterToggleAppearance(homeFilterToggle, homeFilterPanelVisible,
                 selectedClassGradeFilter, selectedClassSchoolYearFilter, selectedClassSort);
@@ -3046,7 +3127,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
                     int rowCount = (rows != null) ? rows.size() : 0;
                     if (classAssessmentCount != null)
-                        classAssessmentCount.setText(rowCount + " total");
+                        classAssessmentCount.setText(String.valueOf(rowCount));
 
                     if (rowCount == 0) {
                         classEmpty.setVisibility(View.VISIBLE);
@@ -3312,6 +3393,57 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 }));
     }
 
+    /** Renders the Quizzes tab. Card, sort, and filter bay mirror Assessments; list stays empty until the quiz data model is defined. */
+    private void renderQuizzesScreen() {
+        String summaryTeacherName = (activeUserFirstName != null && !activeUserFirstName.isEmpty())
+                ? (activeUserFirstName + (activeUserLastName != null && !activeUserLastName.isEmpty() ? " " + activeUserLastName : ""))
+                : globalTeacherName;
+        quizzesSummaryTeacher.setText(summaryTeacherName != null && !summaryTeacherName.isEmpty()
+                ? "Teacher: " + summaryTeacherName : "Teacher: Unknown");
+
+        // No quiz data model yet — using an empty list keeps the Group By/filter UI functional
+        // and visually identical to Assessments while there's nothing to show.
+        List<ActivityFolder> allQuizzesAcrossClasses = new ArrayList<>();
+
+        classRenderer.updateAssessmentFilterToggleAppearance(myQuizzesFilterToggle,
+                myQuizzesFilterPanelVisible,
+                !ASSESSMENT_SORT_NEWEST.equals(selectedMyQuizzesSort)
+                        || selectedMyQuizzesSheetFilter != null
+                        || selectedMyQuizzesTypeFilter != null
+                        || selectedMyQuizzesClassFilter != null);
+
+        classRenderer.buildGroupBySwitcher(myQuizzesGroupSwitcher, myQuizzesGroupBy, key -> {
+            myQuizzesGroupBy = key;
+            renderQuizzesScreen();
+        });
+
+        if ("TYPE".equals(myQuizzesGroupBy)) {
+            classRenderer.buildAssessmentTypeTabs(myQuizzesSheetTabs, allQuizzesAcrossClasses,
+                    selectedMyQuizzesTypeFilter, filterVal -> {
+                        selectedMyQuizzesTypeFilter = filterVal;
+                        renderQuizzesScreen();
+                    });
+        } else if ("CLASS".equals(myQuizzesGroupBy)) {
+            classRenderer.buildClassGroupTabs(myQuizzesSheetTabs, classFolders,
+                    selectedMyQuizzesClassFilter, filterVal -> {
+                        selectedMyQuizzesClassFilter = filterVal;
+                        renderQuizzesScreen();
+                    });
+        } else {
+            classRenderer.buildClassSheetTabs(myQuizzesSheetTabs, allQuizzesAcrossClasses,
+                    selectedMyQuizzesSheetFilter, filterVal -> {
+                        selectedMyQuizzesSheetFilter = filterVal;
+                        renderQuizzesScreen();
+                    });
+        }
+
+        quizzesSummaryCount.setText("0");
+        quizzesAllCount.setText("0");
+        quizzesAllList.removeAllViews();
+        quizzesAllList.setVisibility(View.GONE);
+        quizzesAllEmpty.setVisibility(View.VISIBLE);
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // RENDER — ANSWER KEYS (all)
     // ═══════════════════════════════════════════════════════════════
@@ -3484,6 +3616,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             classAssessmentSortPicker.setText(classRenderer.getAssessmentSortLabel(selectedAssessmentSort) + " \u25be");
         if (myAssessmentsSortPicker != null)
             myAssessmentsSortPicker.setText(classRenderer.getAssessmentSortLabel(selectedMyAssessmentsSort) + " \u25be");
+        if (myQuizzesSortPicker != null)
+            myQuizzesSortPicker.setText(classRenderer.getAssessmentSortLabel(selectedMyQuizzesSort) + " \u25be");
         if (answerKeysSortPicker != null)
             answerKeysSortPicker.setText(classRenderer.getAssessmentSortLabel(selectedAnswerKeysSort) + " \u25be");
         if (scansSortPicker != null)
