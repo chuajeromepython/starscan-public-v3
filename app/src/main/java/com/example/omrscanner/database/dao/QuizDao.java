@@ -28,6 +28,10 @@ public interface QuizDao {
     @Query("SELECT * FROM quizzes WHERE id = :id")
     QuizEntity getById(String id);
 
+    /** Every quiz, unfiltered — used for full local backup export. */
+    @Query("SELECT * FROM quizzes")
+    List<QuizEntity> getAllSync();
+
     @Query("UPDATE quizzes SET answer_key_id = :keyId WHERE id = :quizId")
     void setAnswerKey(String quizId, String keyId);
 
@@ -43,8 +47,13 @@ public interface QuizDao {
             + "q.exam_date_epoch AS examDateEpoch, q.created_at AS createdAt, "
             + "q.answer_key_id AS answerKeyId, ak.name AS answerKeyName, "
             + "(c.grade || ' \u2014 ' || c.section) AS className, "
-            + "0 AS scanCount, 0 AS syncedStudentCount, 0 AS needsCorrectionCount "
+            + "COUNT(qs.id) AS scanCount, "
+            + "(SELECT COUNT(DISTINCT sl.lrn) FROM student_lrn sl WHERE sl.className = q.class_id) AS syncedStudentCount, "
+            + "(SELECT COUNT(DISTINCT ans.quiz_scan_id) FROM quiz_scan_answers ans "
+            + "  JOIN quiz_scans qs2 ON qs2.id = ans.quiz_scan_id "
+            + "  WHERE qs2.quiz_id = q.id AND LENGTH(ans.answer) > 1) AS needsCorrectionCount "
             + "FROM quizzes q "
+            + "LEFT JOIN quiz_scans qs ON qs.quiz_id = q.id "
             + "LEFT JOIN answer_keys ak ON ak.id = q.answer_key_id "
             + "LEFT JOIN classes c ON c.id = q.class_id "
             + "WHERE (:termFilter IS NULL OR :termFilter = '' OR q.term = :termFilter) "
@@ -53,6 +62,7 @@ public interface QuizDao {
             + "OR q.name LIKE '%' || :search || '%' "
             + "OR q.term LIKE '%' || :search || '%' "
             + "OR q.exam_date LIKE '%' || :search || '%') "
+            + "GROUP BY q.id "
             + "ORDER BY "
             + "CASE WHEN :sortKey = 'NEWEST' THEN q.created_at END DESC, "
             + "CASE WHEN :sortKey = 'OLDEST' THEN q.created_at END ASC, "

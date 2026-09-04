@@ -625,13 +625,10 @@ public class ClassScreenRenderer {
                 ? row.examDate
                 : new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
                 .format(new java.util.Date(row.createdAt));
-        if (showUpload) {
-            meta.setText("\uD83D\uDC65 " + row.scanCount + " of " + row.syncedStudentCount + " student"
-                    + (row.syncedStudentCount != 1 ? "s" : "") + " scanned · " + dateToShow);
-        } else {
-            meta.setText("\uD83D\uDC65 " + row.scanCount + " student"
-                    + (row.scanCount != 1 ? "s" : "") + " scanned · " + dateToShow);
-        }
+        // "X of Y students scanned" — same format for quizzes and assessments.
+        // (showUpload only controls the Upload menu item, unrelated to this count.)
+        meta.setText("\uD83D\uDC65 " + row.scanCount + " of " + row.syncedStudentCount + " student"
+                + (row.syncedStudentCount != 1 ? "s" : "") + " scanned · " + dateToShow);
         meta.setTextColor(Color.parseColor("#94A3B8"));
         meta.setTextSize(11);
         LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(

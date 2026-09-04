@@ -375,9 +375,11 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     runOnUiThread(() -> Toast.makeText(this, "Backing up…", Toast.LENGTH_SHORT).show());
                     backupManager.exportBackup(uri, new BackupManager.ExportCallback() {
                         @Override
-                        public void onSuccess(int assessmentCount, int scanCount, int answerKeyCount) {
+                        public void onSuccess(int assessmentCount, int scanCount, int answerKeyCount,
+                                              int quizCount, int quizScanCount) {
                             runOnUiThread(() -> ui.showToast("Backup saved ✓  (" + assessmentCount
-                                    + " assessment(s), " + scanCount + " scan(s), " + answerKeyCount
+                                    + " assessment(s), " + scanCount + " scan(s), " + quizCount
+                                    + " quiz(zes), " + quizScanCount + " quiz scan(s), " + answerKeyCount
                                     + " answer key(s)) — keep this file safe, you'll need it to restore."));
                         }
 
@@ -436,16 +438,26 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                         backupManager.restoreBackup(uri, new BackupManager.RestoreCallback() {
                             @Override
                             public void onSuccess(int restoredAssessments, int restoredScans,
-                                                  int restoredAnswerKeys, int skippedAssessments,
-                                                  int failedExports) {
+                                                  int restoredAnswerKeys, int restoredQuizzes,
+                                                  int restoredQuizScans, int skippedAssessments,
+                                                  int skippedQuizzes, int failedExports) {
                                 runOnUiThread(() -> {
                                     ui.showToast("Restore complete ✓  (" + restoredAssessments
                                             + " assessment(s), " + restoredScans + " scan(s), "
-                                            + restoredAnswerKeys + " answer key(s))");
+                                            + restoredQuizzes + " quiz(zes), " + restoredQuizScans
+                                            + " quiz scan(s), " + restoredAnswerKeys + " answer key(s))");
                                     if (skippedAssessments > 0) {
                                         ui.showErrorDialog("Some data was skipped",
                                                 skippedAssessments + " assessment(s) were skipped because their "
                                                         + "class isn't synced to your account anymore.");
+                                    }
+                                    if (skippedQuizzes > 0) {
+                                        ui.showErrorDialog("Some quizzes were skipped",
+                                                skippedQuizzes + " quiz(zes) were skipped because their "
+                                                        + "class isn't synced to your account anymore. Quizzes "
+                                                        + "have no server copy, so re-syncing the class won't "
+                                                        + "bring them back — sync the class first, then restore "
+                                                        + "this backup again.");
                                     }
                                     if (failedExports > 0) {
                                         ui.showErrorDialog("Some assessments couldn't be prepared for upload",
@@ -1229,8 +1241,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
      * class screen isn't showing.
      */
     public void refreshAfterAssessmentsSync() {
-        if (!SCREEN_CLASS.equals(currentScreen) || selectedClass == null) return;
-        renderClassScreen();
+        if (SCREEN_CLASS.equals(currentScreen) && selectedClass != null) {
+            renderClassScreen();
+        } else if (SCREEN_QUIZZES.equals(currentScreen)) {
+            // Quizzes read the same synced student_lrn roster as assessments, so a
+            // sync should repaint the "X of Y scanned" badges here too if it's open.
+            renderQuizzesScreen();
+        }
     }
 
     /** Picks ZPH40 for n < 41 items, otherwise ZPH60, e.g. 25 -> "ZPH40 (25 Items)". */
@@ -4075,6 +4092,20 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         runOnUiThread(() -> {
             classFolders = loaded;
             Log.d(TAG, "Loaded " + classFolders.size() + " classes from Room");
+
+            // Quizzes are NOT part of ClassFolder.getActivities(), so
+            // findActivityById() below can never locate them — it would silently
+            // null out selectedActivity and bounce us to SCREEN_HOME. Resolve
+            // quiz activities through the quiz-specific async lookup instead.
+            if (SCREEN_ACTIVITY.equals(prevScreen) && activityOpenedFromQuizzesTab && prevActivityId != null) {
+                openQuizFor(prevActivityId, (quiz, classId) -> {
+                    selectedClass = findClassById(classId);
+                    selectedActivity = quiz;
+                    showScreen(SCREEN_ACTIVITY);
+                });
+                return;
+            }
+
             if (prevClassId != null) {
                 selectedClass = findClassById(prevClassId);
                 if (selectedClass != null && prevActivityId != null)
