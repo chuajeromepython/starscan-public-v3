@@ -3501,16 +3501,21 @@
             android:background="@drawable/shape_circle_white"
             android:alpha="0.08" />
 
-        <LinearLayout
+        <HorizontalScrollView
             android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scrollbars="none"
+            android:overScrollMode="never">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
             android:layout_height="match_parent"
             android:orientation="horizontal">
 
             <LinearLayout
                 android:id="@+id/navHomeTab"
-                android:layout_width="0dp"
+                android:layout_width="72dp"
                 android:layout_height="match_parent"
-                android:layout_weight="1"
                 android:orientation="vertical"
                 android:gravity="center"
                 android:clickable="true"
@@ -3538,9 +3543,8 @@
 
             <LinearLayout
                 android:id="@+id/navAssessmentsTab"
-                android:layout_width="0dp"
+                android:layout_width="72dp"
                 android:layout_height="match_parent"
-                android:layout_weight="1"
                 android:orientation="vertical"
                 android:gravity="center"
                 android:clickable="true"
@@ -3567,9 +3571,8 @@
 
             <LinearLayout
                 android:id="@+id/navScansTab"
-                android:layout_width="0dp"
+                android:layout_width="72dp"
                 android:layout_height="match_parent"
-                android:layout_weight="1"
                 android:orientation="vertical"
                 android:gravity="center"
                 android:clickable="true"
@@ -3596,9 +3599,8 @@
 
             <LinearLayout
                 android:id="@+id/navAnswerKeysTab"
-                android:layout_width="0dp"
+                android:layout_width="72dp"
                 android:layout_height="match_parent"
-                android:layout_weight="1"
                 android:orientation="vertical"
                 android:gravity="center"
                 android:clickable="true"
@@ -3625,9 +3627,8 @@
 
             <LinearLayout
                 android:id="@+id/navQuizzesTab"
-                android:layout_width="0dp"
+                android:layout_width="72dp"
                 android:layout_height="match_parent"
-                android:layout_weight="1"
                 android:orientation="vertical"
                 android:gravity="center"
                 android:clickable="true"
@@ -3654,9 +3655,8 @@
 
             <LinearLayout
                 android:id="@+id/navUserTab"
-                android:layout_width="0dp"
+                android:layout_width="72dp"
                 android:layout_height="match_parent"
-                android:layout_weight="1"
                 android:orientation="vertical"
                 android:gravity="center"
                 android:clickable="true"
@@ -3682,6 +3682,8 @@
             </LinearLayout>
 
         </LinearLayout>
+
+        </HorizontalScrollView>
 
     </FrameLayout>
 
