@@ -161,20 +161,20 @@ public class ClassScreenRenderer {
     }
 
     /**
-     * Populates a tab row grouping assessments by assessment type (Diagnostic/Summative/ECD).
+     * Populates a tab row grouping assessments by assessment type (Diagnostic/Summative/Term).
      * @param onTabSelected called with the selected filterValue (null = All)
      */
     public void buildAssessmentTypeTabs(LinearLayout tabContainer,
                                         List<ActivityFolder> activities, String selectedTypeFilter,
                                         java.util.function.Consumer<String> onTabSelected) {
 
-        int countDiagnostic = 0, countSummative = 0, countEcd = 0;
+        int countDiagnostic = 0, countSummative = 0, countTerm = 0;
         if (activities != null) {
             for (ActivityFolder act : activities) {
                 String type = act.getAssessmentType();
                 if ("Diagnostic".equals(type)) countDiagnostic++;
                 else if ("Summative".equals(type)) countSummative++;
-                else if ("ECD".equals(type)) countEcd++;
+                else if ("Term".equals(type)) countTerm++;
             }
         }
         int totalCount = (activities != null) ? activities.size() : 0;
@@ -183,7 +183,7 @@ public class ClassScreenRenderer {
                 {"All",        null,         totalCount},
                 {"Diagnostic", "Diagnostic", countDiagnostic},
                 {"Summative",  "Summative",  countSummative},
-                {"ECD",        "ECD",        countEcd},
+                {"Term",       "Term",       countTerm},
         };
 
         renderPillRow(tabContainer, tabs, selectedTypeFilter, onTabSelected);

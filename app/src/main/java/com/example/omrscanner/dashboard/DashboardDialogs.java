@@ -436,7 +436,7 @@ public class DashboardDialogs {
         root.addView(nameInput);
 
         root.addView(ui.createFieldLabel("ASSESSMENT TYPE"));
-        String[] assessmentTypes = {"Diagnostic", "Summative", "ECD"};
+        String[] assessmentTypes = {"Diagnostic", "Summative", "Term"};
         final String[] selectedAssessmentType = {null};
         final int[] selectedAssessmentIdx = {-1};
 
@@ -616,7 +616,7 @@ public class DashboardDialogs {
 
         // ── ASSESSMENT TYPE ──────────────────────────────────────────────
         root.addView(ui.createFieldLabel("ASSESSMENT TYPE"));
-        String[] assessmentTypes = {"Diagnostic", "Summative", "ECD"};
+        String[] assessmentTypes = {"Diagnostic", "Summative", "Term"};
         final String[] selectedAssessmentType = {
                 act.getAssessmentType() != null ? act.getAssessmentType() : "Diagnostic"
         };

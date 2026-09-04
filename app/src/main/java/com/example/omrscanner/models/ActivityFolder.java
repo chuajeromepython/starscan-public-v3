@@ -19,7 +19,7 @@ public class ActivityFolder {
     /** Soft-link to the assigned answer key's ID; null if none assigned. */
     private String answerKeyId;
 
-    private String assessmentType; // Assessment type, [diagnostic, summative, ECD]
+    private String assessmentType; // Assessment type, [diagnostic, summative, term]
 
     public ActivityFolder() {
         // Default constructor for deserialization

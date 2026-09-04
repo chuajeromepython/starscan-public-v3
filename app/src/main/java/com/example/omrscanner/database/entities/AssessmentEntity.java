@@ -48,7 +48,7 @@ public class AssessmentEntity {
   public String answerKeyId;
 
   // ── NEW FIELD ──────────────────────────────────────────────────────
-  /** Assessment type: "Diagnostic", "Summative", or "ECD" */
+  /** Assessment type: "Diagnostic", "Summative", or "Term" */
   @Nullable
   @ColumnInfo(name = "assessment_type")
   public String assessmentType;
