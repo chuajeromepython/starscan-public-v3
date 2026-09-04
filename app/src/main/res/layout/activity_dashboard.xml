@@ -3624,6 +3624,35 @@
             </LinearLayout>
 
             <LinearLayout
+                android:id="@+id/navQuizzesTab"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackground">
+
+                <ImageView
+                    android:id="@+id/navQuizzesIcon"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:src="@drawable/ic_book_open"
+                    app:tint="#CCFFFFFF" />
+
+                <TextView
+                    android:id="@+id/navQuizzesLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="Quizzes"
+                    android:textColor="#CCFFFFFF"
+                    android:textSize="10sp" />
+
+            </LinearLayout>
+
+            <LinearLayout
                 android:id="@+id/navUserTab"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
