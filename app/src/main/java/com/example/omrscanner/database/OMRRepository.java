@@ -297,11 +297,33 @@ public class OMRRepository {
     });
   }
 
+  /**
+   * Switches the active account to {@code user}. Before doing so, wipes all
+   * local data belonging to whichever account was previously active — this
+   * device may have just been handed to a different teacher via QR login,
+   * and the old account's classes/assessments/scans/answers must not be
+   * visible to (or synced under) the new one.
+   *
+   * Deleting the previous account's TeacherEntity is sufficient: classes,
+   * assessments, scans, answers, and student_lrn all cascade off it
+   * (directly or transitively) via onDelete = CASCADE foreign keys.
+   */
   public void insertUserAsActive(UserEntity user, Callback<Long> callback) {
     executor.execute(() -> {
-      long id = db.userDao().insertAsOnlyActive(user);
+      long[] idHolder = new long[1];
+      db.runInTransaction(() -> {
+        UserEntity previousUser = db.userDao().getActiveUser();
+        if (previousUser != null && previousUser.userId != null
+                && !previousUser.userId.equals(user.userId)) {
+          TeacherEntity previousTeacher = db.teacherDao().getByUserId(previousUser.userId);
+          if (previousTeacher != null) {
+            db.teacherDao().delete(previousTeacher);
+          }
+        }
+        idHolder[0] = db.userDao().insertAsOnlyActive(user);
+      });
       if (callback != null)
-        callback.onResult(id);
+        callback.onResult(idHolder[0]);
     });
   }
 
