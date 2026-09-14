@@ -2320,66 +2320,6 @@
                                     android:background="@drawable/shape_circle_white"
                                     android:alpha="0.05" />
 
-                                <!-- Kid-friendly decorative stickers -->
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_gravity="top|end"
-                                    android:layout_marginTop="-4dp"
-                                    android:layout_marginEnd="4dp"
-                                    android:text="🦕"
-                                    android:textSize="26sp"
-                                    android:rotation="15"
-                                    android:alpha="0.32" />
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_gravity="bottom|start"
-                                    android:layout_marginBottom="-2dp"
-                                    android:layout_marginStart="46dp"
-                                    android:text="🧸"
-                                    android:textSize="30sp"
-                                    android:rotation="-12"
-                                    android:alpha="0.35" />
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_gravity="top|start"
-                                    android:layout_marginTop="6dp"
-                                    android:layout_marginStart="-2dp"
-                                    android:text="🪆"
-                                    android:textSize="22sp"
-                                    android:rotation="-10"
-                                    android:alpha="0.28" />
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_gravity="center|end"
-                                    android:layout_marginEnd="-4dp"
-                                    android:text="⭐"
-                                    android:textSize="18sp"
-                                    android:rotation="20"
-                                    android:alpha="0.25" />
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_gravity="bottom|end"
-                                    android:layout_marginBottom="4dp"
-                                    android:layout_marginEnd="-6dp"
-                                    android:text="🎈"
-                                    android:textSize="24sp"
-                                    android:rotation="8"
-                                    android:alpha="0.3" />
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_gravity="center|start"
-                                    android:layout_marginStart="2dp"
-                                    android:text="🧩"
-                                    android:textSize="18sp"
-                                    android:rotation="-18"
-                                    android:alpha="0.25" />
-
                                 <LinearLayout
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
