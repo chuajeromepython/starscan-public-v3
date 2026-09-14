@@ -128,6 +128,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
     private String currentScreen = SCREEN_HOME;
     private String screenBeforeChromeTab = SCREEN_HOME;
+    private String lastEcdScreen = SCREEN_ECD;
     private boolean activityOpenedFromAssessmentsTab = false;
     private boolean activityOpenedFromQuizzesTab = false;
     private List<ClassFolder> classFolders = new ArrayList<>();
@@ -276,6 +277,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private LinearLayout ecdAllList, ecdAllEmpty;
     private TextView ecdSummaryCount, ecdSummaryTypes, ecdAllCount;
     private TextView ecdClassTeacherLabel;
+    private TextView ecdClassStudentCount;
     private EditText ecdSearchInput;
     private TextView ecdClassSortPicker;
     private LinearLayout ecdFilterPanel, ecdGroupSwitcher, ecdGradeFilterBlock, ecdSchoolYearFilterBlock;
@@ -665,6 +667,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         screenECD = findViewById(R.id.screenECD);
         screenEcdClass = findViewById(R.id.screenEcdClass);
         ecdClassTeacherLabel = findViewById(R.id.ecdClassTeacherLabel);
+        ecdClassStudentCount = findViewById(R.id.ecdClassStudentCount);
         screenClass = findViewById(R.id.screenClass);
         screenActivity = findViewById(R.id.screenActivity);
         screenUser = findViewById(R.id.screenUser);
@@ -905,6 +908,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
         findViewById(R.id.homeSyncClassRow).setOnClickListener(v -> onSyncClicked());
         findViewById(R.id.classSyncStudentsRow).setOnClickListener(v -> onAssessmentSyncClicked());
+        findViewById(R.id.ecdSyncStudentsRow).setOnClickListener(v -> onAssessmentSyncClicked());
 
         fabAssessmentSyncRow.setOnClickListener(v -> {
             closeFabMenu();
@@ -2475,6 +2479,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
     private void showScreen(String screen) {
         closeFabMenu();
+        boolean leavingEcdFamily = isEcdFamily(currentScreen) && !isEcdFamily(screen);
+        if (leavingEcdFamily) {
+            lastEcdScreen = currentScreen;
+        }
         currentScreen = screen;
 
         screenHome.setVisibility(View.GONE);
@@ -2651,6 +2659,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     ecdClassTeacherLabel.setText(globalTeacherName != null && !globalTeacherName.isEmpty()
                             ? "Teacher: " + globalTeacherName : "Teacher: Unknown");
                 }
+                refreshStudentSyncSubtitle(selectedClass.getId());
                 break;
         }
 
@@ -2662,6 +2671,11 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         return SCREEN_USER.equals(screen) || SCREEN_ASSESSMENTS.equals(screen)
                 || SCREEN_ANSWERKEYS.equals(screen) || SCREEN_SCANS.equals(screen)
                 || SCREEN_QUIZZES.equals(screen) || SCREEN_ECD.equals(screen);
+    }
+
+    /** True for the ECD tab's own root list and any screen inside its stack (e.g. a class). */
+    private boolean isEcdFamily(String screen) {
+        return SCREEN_ECD.equals(screen) || SCREEN_ECD_CLASS.equals(screen);
     }
 
     /** Switches to the Home tab's remembered screen (called by the tab tap or back button). */
@@ -2725,11 +2739,15 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     }
 
     private void selectECDTab() {
-        if (!SCREEN_ECD.equals(currentScreen)) {
+        if (SCREEN_ECD_CLASS.equals(currentScreen)) {
+            // Already inside the ECD tab's own stack — a second tap on the tab
+            // jumps back to its root, same as Home's behavior.
+            showScreen(SCREEN_ECD);
+        } else if (!SCREEN_ECD.equals(currentScreen)) {
             if (!isChromeTab(currentScreen)) {
                 screenBeforeChromeTab = currentScreen;
             }
-            showScreen(SCREEN_ECD);
+            showScreen(lastEcdScreen);
         }
     }
 
@@ -2748,7 +2766,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         boolean answerKeysActive = SCREEN_ANSWERKEYS.equals(screen);
         boolean scansActive = SCREEN_SCANS.equals(screen);
         boolean quizzesActive = SCREEN_QUIZZES.equals(screen);
-        boolean ecdActive = SCREEN_ECD.equals(screen);
+        boolean ecdActive = SCREEN_ECD.equals(screen) || SCREEN_ECD_CLASS.equals(screen);
         boolean homeActive = !userActive && !assessmentsActive && !answerKeysActive && !scansActive && !quizzesActive && !ecdActive;
 
         navHomeIcon.setColorFilter(activeColor);
@@ -3111,6 +3129,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 selectedActivity = null;
                 showScreen(getActivityBackScreen());
                 break;
+            case SCREEN_ECD_CLASS:
+                selectedClass = null;
+                showScreen(SCREEN_ECD);
+                break;
         }
     }
 
@@ -3349,17 +3371,27 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
      * no-ops if the class screen isn't showing or a different class is now open.
      */
     public void refreshStudentSyncSubtitle(String classId) {
-        if (!SCREEN_CLASS.equals(currentScreen) || selectedClass == null || classStudentSyncSubtitle == null)
+        boolean onClassScreen = SCREEN_CLASS.equals(currentScreen) && classStudentSyncSubtitle != null;
+        boolean onEcdClassScreen = SCREEN_ECD_CLASS.equals(currentScreen) && ecdClassStudentCount != null;
+        if ((!onClassScreen && !onEcdClassScreen) || selectedClass == null)
             return;
         if (classId != null && !classId.equals(selectedClass.getId()))
             return;
 
-        classStudentSyncSubtitle.setText("Checking…");
+        if (onClassScreen) classStudentSyncSubtitle.setText("Checking…");
+        if (onEcdClassScreen) ecdClassStudentCount.setText("Checking…");
+
         repo.getStudentCountForClass(selectedClass.getId(), count -> runOnUiThread(() -> {
-            if (!SCREEN_CLASS.equals(currentScreen) || selectedClass == null || classStudentSyncSubtitle == null)
+            if (selectedClass == null || (classId != null && !classId.equals(selectedClass.getId())))
                 return;
             int c = (count != null) ? count : 0;
-            classStudentSyncSubtitle.setText(c > 0 ? (c + " student" + (c == 1 ? "" : "s") + " synced") : "Not synced");
+            String label = c > 0 ? (c + " student" + (c == 1 ? "" : "s") + " synced") : "Not synced";
+            if (SCREEN_CLASS.equals(currentScreen) && classStudentSyncSubtitle != null) {
+                classStudentSyncSubtitle.setText(label);
+            }
+            if (SCREEN_ECD_CLASS.equals(currentScreen) && ecdClassStudentCount != null) {
+                ecdClassStudentCount.setText(label);
+            }
         }));
     }
 
