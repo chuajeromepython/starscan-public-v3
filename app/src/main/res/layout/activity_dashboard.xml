@@ -2413,7 +2413,7 @@
                                             <TextView
                                                 android:layout_width="wrap_content"
                                                 android:layout_height="wrap_content"
-                                                android:text="MY ECD"
+                                                android:text="ECD"
                                                 android:textColor="#FFFFFF"
                                                 android:textSize="13sp"
                                                 android:textStyle="bold"
@@ -2430,33 +2430,6 @@
                                                 android:ellipsize="end" />
                                         </LinearLayout>
 
-                                        <LinearLayout
-                                            android:id="@+id/ecdHeaderAddBtn"
-                                            android:layout_width="wrap_content"
-                                            android:layout_height="34dp"
-                                            android:orientation="horizontal"
-                                            android:gravity="center_vertical"
-                                            android:paddingStart="10dp"
-                                            android:paddingEnd="12dp"
-                                            android:background="@drawable/bg_icon_box_white"
-                                            android:clickable="true"
-                                            android:focusable="true"
-                                            android:foreground="?attr/selectableItemBackgroundBorderless">
-                                            <ImageView
-                                                android:layout_width="14dp"
-                                                android:layout_height="14dp"
-                                                android:src="@drawable/ic_plus"
-                                                app:tint="#FFFFFF" />
-                                            <TextView
-                                                android:layout_width="wrap_content"
-                                                android:layout_height="wrap_content"
-                                                android:layout_marginStart="5dp"
-                                                android:text="New ECD entry"
-                                                android:textColor="#FFFFFF"
-                                                android:textSize="11sp"
-                                                android:textStyle="bold"
-                                                android:includeFontPadding="false" />
-                                        </LinearLayout>
                                     </LinearLayout>
 
                                     <View
@@ -2532,7 +2505,7 @@
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:text="ALL ECD RECORDS"
+                                android:text="ALL CLASSES"
                                 android:textSize="12sp"
                                 android:textStyle="bold"
                                 android:textColor="#1E293B"
