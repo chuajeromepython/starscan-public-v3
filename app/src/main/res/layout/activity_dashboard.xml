@@ -2413,7 +2413,7 @@
                                             <TextView
                                                 android:layout_width="wrap_content"
                                                 android:layout_height="wrap_content"
-                                                android:text="ECD"
+                                                android:text="MY ECCDs"
                                                 android:textColor="#FFFFFF"
                                                 android:textSize="13sp"
                                                 android:textStyle="bold"
@@ -2422,7 +2422,7 @@
                                                 android:id="@+id/ecdSummaryTeacher"
                                                 android:layout_width="wrap_content"
                                                 android:layout_height="wrap_content"
-                                                android:text="Overview"
+                                                android:text="Teacher: Unknown"
                                                 android:textColor="#CCFFFFFF"
                                                 android:textSize="11sp"
                                                 android:layout_marginTop="1dp"
@@ -2558,6 +2558,113 @@
                                 android:layout_marginStart="8dp" />
                         </LinearLayout>
 
+                        <LinearLayout
+                            android:id="@+id/ecdFilterPanel"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="8dp"
+                            android:background="@drawable/bg_filter_panel"
+                            android:orientation="vertical"
+                            android:padding="10dp"
+                            android:visibility="gone">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="8dp"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+                                <TextView
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="Sort"
+                                    android:textColor="#64748B"
+                                    android:textSize="11sp"
+                                    android:textStyle="bold" />
+                                <TextView
+                                    android:id="@+id/ecdClassSortPicker"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:background="@drawable/bg_sort_pill"
+                                    android:paddingStart="10dp"
+                                    android:paddingTop="5dp"
+                                    android:paddingEnd="10dp"
+                                    android:paddingBottom="5dp"
+                                    android:text="Newest ▾"
+                                    android:textColor="#1E293B"
+                                    android:textSize="11sp" />
+                            </LinearLayout>
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="5dp"
+                                android:text="Group By"
+                                android:textColor="#64748B"
+                                android:textSize="10sp"
+                                android:textStyle="bold" />
+
+                            <LinearLayout
+                                android:id="@+id/ecdGroupSwitcher"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:orientation="horizontal"
+                                android:layout_marginBottom="8dp" />
+
+                            <LinearLayout
+                                android:id="@+id/ecdGradeFilterBlock"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="vertical">
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginBottom="5dp"
+                                    android:text="Filter Grade"
+                                    android:textColor="#64748B"
+                                    android:textSize="10sp"
+                                    android:textStyle="bold" />
+
+                                <HorizontalScrollView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:scrollbars="none">
+                                    <LinearLayout
+                                        android:id="@+id/ecdGradeFilterChips"
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:orientation="horizontal" />
+                                </HorizontalScrollView>
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:id="@+id/ecdSchoolYearFilterBlock"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="vertical">
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginBottom="5dp"
+                                    android:text="Filter School Year"
+                                    android:textColor="#64748B"
+                                    android:textSize="10sp"
+                                    android:textStyle="bold" />
+
+                                <HorizontalScrollView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:scrollbars="none">
+                                    <LinearLayout
+                                        android:id="@+id/ecdSchoolYearFilterChips"
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:orientation="horizontal" />
+                                </HorizontalScrollView>
+                            </LinearLayout>
+                        </LinearLayout>
+
                         <FrameLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content">
@@ -2673,7 +2780,109 @@
 
                     </LinearLayout>
                 </ScrollView>
+                <ScrollView
+                    android:id="@+id/screenEcdClass"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:fillViewport="true"
+                    android:overScrollMode="never"
+                    android:scrollbars="none"
+                    android:visibility="gone">
 
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:paddingStart="14dp"
+                        android:paddingEnd="14dp"
+                        android:paddingTop="14dp"
+                        android:paddingBottom="72dp">
+
+                        <com.google.android.material.card.MaterialCardView
+                            android:id="@+id/ecdClassInfoCard"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="16dp"
+                            app:cardCornerRadius="20dp"
+                            app:cardElevation="3dp"
+                            app:strokeWidth="0dp">
+                            <FrameLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:background="@drawable/bg_header_gradient">
+                                <View
+                                    android:layout_width="110dp"
+                                    android:layout_height="110dp"
+                                    android:layout_gravity="top|end"
+                                    android:layout_marginTop="-24dp"
+                                    android:layout_marginEnd="-16dp"
+                                    android:background="@drawable/shape_circle_white"
+                                    android:alpha="0.08" />
+                                <View
+                                    android:layout_width="64dp"
+                                    android:layout_height="64dp"
+                                    android:layout_gravity="bottom|start"
+                                    android:layout_marginBottom="-16dp"
+                                    android:layout_marginStart="-10dp"
+                                    android:background="@drawable/shape_circle_white"
+                                    android:alpha="0.05" />
+                                <LinearLayout
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:orientation="vertical"
+                                    android:padding="12dp">
+
+                                    <LinearLayout
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:orientation="horizontal"
+                                        android:gravity="center_vertical">
+
+                                        <FrameLayout
+                                            android:layout_width="34dp"
+                                            android:layout_height="34dp"
+                                            android:background="@drawable/bg_icon_box_white">
+                                            <ImageView
+                                                android:layout_width="16dp"
+                                                android:layout_height="16dp"
+                                                android:layout_gravity="center"
+                                                android:src="@drawable/ic_graduation_cap"
+                                                app:tint="#FFFFFF" />
+                                        </FrameLayout>
+
+                                        <LinearLayout
+                                            android:layout_width="0dp"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="1"
+                                            android:layout_marginStart="10dp"
+                                            android:orientation="vertical">
+                                            <TextView
+                                                android:layout_width="wrap_content"
+                                                android:layout_height="wrap_content"
+                                                android:text="ECCD"
+                                                android:textColor="#FFFFFF"
+                                                android:textSize="13sp"
+                                                android:textStyle="bold"
+                                                android:letterSpacing="0.03" />
+                                            <TextView
+                                                android:id="@+id/ecdClassTeacherLabel"
+                                                android:layout_width="wrap_content"
+                                                android:layout_height="wrap_content"
+                                                android:text="Teacher: Unknown"
+                                                android:textColor="#CCFFFFFF"
+                                                android:textSize="10sp"
+                                                android:layout_marginTop="1dp" />
+                                        </LinearLayout>
+
+                                    </LinearLayout>
+                                </LinearLayout>
+                            </FrameLayout>
+                        </com.google.android.material.card.MaterialCardView>
+
+                        <!-- ECCD content for this class goes here later — intentionally empty for now. -->
+
+                    </LinearLayout>
+                </ScrollView>
                 <ScrollView
                     android:id="@+id/screenClass"
                     android:layout_width="match_parent"
@@ -4451,7 +4660,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:text="ECD"
+                    android:text="ECCDs"
                     android:textColor="#CCFFFFFF"
                     android:textSize="10sp" />
 

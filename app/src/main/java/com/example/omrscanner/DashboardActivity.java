@@ -113,6 +113,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private static final String SCREEN_SCANS = "scans";
     private static final String SCREEN_QUIZZES = "quizzes";
     private static final String SCREEN_ECD = "ecd";
+    private static final String SCREEN_ECD_CLASS = "ecd_class";
 
     // ── Sort constants (delegated to renderers, kept here for initialisation) ──
     private static final String CLASS_SORT_NEWEST = HomeScreenRenderer.CLASS_SORT_NEWEST;
@@ -152,6 +153,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private String selectedClassSort = CLASS_SORT_NEWEST;
     private String homeGroupBy = "GRADE"; // GRADE or YEAR
 
+    private String ecdSearchQuery = "";
+    private String selectedEcdGradeFilter = null;
+    private String selectedEcdSchoolYearFilter = null;
+    private String selectedEcdSort = CLASS_SORT_NEWEST;
+    private String ecdGroupBy = "GRADE"; // GRADE or YEAR
+    private boolean ecdFilterPanelVisible = false;
+
     private String assessmentSearchQuery = "";
     private String selectedAssessmentSort = ASSESSMENT_SORT_NEWEST;
     private String classGroupBy = "SHEET"; // SHEET or TYPE
@@ -180,10 +188,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private String answerKeysGroupBy = "SHEET"; // SHEET or STATUS
 
     private int homeQueryGeneration = 0;
+    private int ecdQueryGeneration = 0;
     private int assessmentQueryGeneration = 0;
 
     private final Handler searchDebounceHandler = new Handler(Looper.getMainLooper());
     private Runnable pendingHomeSearchRunnable;
+    private Runnable pendingEcdSearchRunnable;
     private Runnable pendingAssessmentSearchRunnable;
     private Runnable pendingMyAssessmentsSearchRunnable;
     private Runnable pendingAnswerKeysSearchRunnable;
@@ -215,7 +225,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private TextView tvLastSynced;
     private LinearLayout teacherNameRow;
 
-    private View screenHome, screenAssessments, screenAnswerKeys, screenScans, screenQuizzes, screenECD;
+    private View screenHome, screenAssessments, screenAnswerKeys, screenScans, screenQuizzes, screenECD, screenEcdClass;
     private ScrollView screenClass, screenActivity, screenUser;
 
     private android.widget.FrameLayout bottomNav;
@@ -263,6 +273,14 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private Runnable pendingStorageAction;
 
     private LinearLayout homeEmpty, homeClassList;
+    private LinearLayout ecdAllList, ecdAllEmpty;
+    private TextView ecdSummaryCount, ecdSummaryTypes, ecdAllCount;
+    private TextView ecdClassTeacherLabel;
+    private EditText ecdSearchInput;
+    private TextView ecdClassSortPicker;
+    private LinearLayout ecdFilterPanel, ecdGroupSwitcher, ecdGradeFilterBlock, ecdSchoolYearFilterBlock;
+    private LinearLayout ecdGradeFilterChips, ecdSchoolYearFilterChips;
+    private android.widget.ImageView ecdFilterToggle;
     private TextView homeSummaryClassCount, homeSummaryAssessmentCount;
     private EditText homeClassSearchInput;
     private TextView homeClassSortPicker;
@@ -273,6 +291,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private boolean homeFilterPanelVisible = false;
 
     private TextView classTeacherLabel, classNameLabel, classActivityCount, classStudentSyncSubtitle, homeTeacherLabel;
+    private TextView ecdSummaryTeacher;
     private LinearLayout classEmpty, classActivityList, classSheetTabs, classGroupSwitcher;
     private TextView classAssessmentCount;
     private EditText classAssessmentSearchInput;
@@ -613,6 +632,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 } else if (SCREEN_CLASS.equals(currentScreen)) {
                     selectedClass = null;
                     showScreen(SCREEN_HOME);
+                } else if (SCREEN_ECD_CLASS.equals(currentScreen)) {
+                    selectedClass = null;
+                    showScreen(SCREEN_ECD);
                 } else {
                     setEnabled(false);
                     getOnBackPressedDispatcher().onBackPressed();
@@ -641,6 +663,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         screenScans = findViewById(R.id.screenScans);
         screenQuizzes = findViewById(R.id.screenQuizzes);
         screenECD = findViewById(R.id.screenECD);
+        screenEcdClass = findViewById(R.id.screenEcdClass);
+        ecdClassTeacherLabel = findViewById(R.id.ecdClassTeacherLabel);
         screenClass = findViewById(R.id.screenClass);
         screenActivity = findViewById(R.id.screenActivity);
         screenUser = findViewById(R.id.screenUser);
@@ -722,8 +746,24 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         homeAllClassesCount = findViewById(R.id.homeAllClassesCount);
         homeSummaryAssessmentCount = findViewById(R.id.homeSummaryAssessmentCount);
 
+        ecdAllList = findViewById(R.id.ecdAllList);
+        ecdAllEmpty = findViewById(R.id.ecdAllEmpty);
+        ecdSummaryCount = findViewById(R.id.ecdSummaryCount);
+        ecdSummaryTypes = findViewById(R.id.ecdSummaryTypes);
+        ecdAllCount = findViewById(R.id.ecdAllCount);
+        ecdSearchInput = findViewById(R.id.ecdSearchInput);
+        ecdClassSortPicker = findViewById(R.id.ecdClassSortPicker);
+        ecdFilterPanel = findViewById(R.id.ecdFilterPanel);
+        ecdGroupSwitcher = findViewById(R.id.ecdGroupSwitcher);
+        ecdGradeFilterBlock = findViewById(R.id.ecdGradeFilterBlock);
+        ecdSchoolYearFilterBlock = findViewById(R.id.ecdSchoolYearFilterBlock);
+        ecdGradeFilterChips = findViewById(R.id.ecdGradeFilterChips);
+        ecdSchoolYearFilterChips = findViewById(R.id.ecdSchoolYearFilterChips);
+        ecdFilterToggle = findViewById(R.id.ecdFilterToggle);
+
         classTeacherLabel = findViewById(R.id.classTeacherLabel);
         homeTeacherLabel = findViewById(R.id.homeTeacherLabel);
+        ecdSummaryTeacher = findViewById(R.id.ecdSummaryTeacher);
         classNameLabel = findViewById(R.id.classNameLabel);
         classActivityCount = findViewById(R.id.classActivityCount);
         classStudentSyncSubtitle = findViewById(R.id.classStudentSyncSubtitle);
@@ -876,7 +916,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         breadcrumbRoot.setOnClickListener(v -> {
             selectedClass = null;
             selectedActivity = null;
-            showScreen(SCREEN_HOME);
+            showScreen(SCREEN_ECD_CLASS.equals(currentScreen) ? SCREEN_ECD : SCREEN_HOME);
         });
         breadcrumbClass.setOnClickListener(v -> {
             if (SCREEN_ACTIVITY.equals(currentScreen)) {
@@ -903,6 +943,22 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             public void afterTextChanged(Editable s) {
                 classSearchQuery = s != null ? s.toString().trim() : "";
                 scheduleHomeSearchRefresh();
+            }
+        });
+
+        ecdSearchInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int st, int c, int a) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int st, int b, int c) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                ecdSearchQuery = s != null ? s.toString().trim() : "";
+                scheduleEcdSearchRefresh();
             }
         });
         classAssessmentSearchInput.addTextChangedListener(new TextWatcher() {
@@ -986,6 +1042,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     updateSortPickers();
                     if (SCREEN_HOME.equals(currentScreen)) renderHomeScreen();
                 }));
+        ecdClassSortPicker.setOnClickListener(v ->
+                homeRenderer.showClassSortDialog(selectedEcdSort, key -> {
+                    selectedEcdSort = key;
+                    updateSortPickers();
+                    if (SCREEN_ECD.equals(currentScreen)) renderEcdScreen();
+                }));
         classAssessmentSortPicker.setOnClickListener(v ->
                 classRenderer.showAssessmentSortDialog(selectedAssessmentSort, key -> {
                     selectedAssessmentSort = key;
@@ -1025,6 +1087,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             homeFilterPanel.setVisibility(homeFilterPanelVisible ? View.VISIBLE : View.GONE);
             homeRenderer.updateFilterToggleAppearance(homeFilterToggle, homeFilterPanelVisible,
                     selectedClassGradeFilter, selectedClassSchoolYearFilter, selectedClassSort);
+        });
+        ecdFilterToggle.setOnClickListener(v -> {
+            ecdFilterPanelVisible = !ecdFilterPanelVisible;
+            ecdFilterPanel.setVisibility(ecdFilterPanelVisible ? View.VISIBLE : View.GONE);
+            homeRenderer.updateFilterToggleAppearance(ecdFilterToggle, ecdFilterPanelVisible,
+                    selectedEcdGradeFilter, selectedEcdSchoolYearFilter, selectedEcdSort);
         });
 
         classAssessmentFilterToggle.setOnClickListener(v -> {
@@ -1757,6 +1825,15 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         searchDebounceHandler.postDelayed(pendingHomeSearchRunnable, 220);
     }
 
+    private void scheduleEcdSearchRefresh() {
+        if (pendingEcdSearchRunnable != null)
+            searchDebounceHandler.removeCallbacks(pendingEcdSearchRunnable);
+        pendingEcdSearchRunnable = () -> {
+            if (SCREEN_ECD.equals(currentScreen)) renderEcdScreen();
+        };
+        searchDebounceHandler.postDelayed(pendingEcdSearchRunnable, 220);
+    }
+
     private void scheduleAssessmentSearchRefresh() {
         if (pendingAssessmentSearchRunnable != null)
             searchDebounceHandler.removeCallbacks(pendingAssessmentSearchRunnable);
@@ -2409,6 +2486,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         screenScans.setVisibility(View.GONE);
         screenQuizzes.setVisibility(View.GONE);
         screenECD.setVisibility(View.GONE);
+        screenEcdClass.setVisibility(View.GONE);
 
         switch (screen) {
             case SCREEN_HOME:
@@ -2436,6 +2514,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 screenClass.setVisibility(View.VISIBLE);
                 btnBack.setVisibility(View.VISIBLE);
                 fabMain.setVisibility(View.GONE);
+                breadcrumbRoot.setText("Classes");
                 topBarTitle.setText(selectedClass.getDisplayName());
                 topBarBadge.setVisibility(View.VISIBLE);
                 topBarBadge.setText("📁 " + selectedClass.getActivityCount());
@@ -2541,6 +2620,37 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 topBarBadge.setVisibility(View.GONE);
                 breadcrumbBar.setVisibility(View.GONE);
                 breadcrumbDivider.setVisibility(View.GONE);
+                if (!ecdSearchQuery.equals(ecdSearchInput.getText().toString())) {
+                    ecdSearchInput.setText(ecdSearchQuery);
+                    ecdSearchInput.setSelection(ecdSearchInput.getText().length());
+                }
+                updateSortPickers();
+                renderEcdScreen();
+                break;
+
+            case SCREEN_ECD_CLASS:
+                if (selectedClass == null) {
+                    showScreen(SCREEN_ECD);
+                    return;
+                }
+                screenEcdClass.setVisibility(View.VISIBLE);
+                btnBack.setVisibility(View.VISIBLE);
+                fabMain.setVisibility(View.GONE);
+                topBarTitle.setText(selectedClass.getDisplayName());
+                topBarBadge.setVisibility(View.GONE);
+                breadcrumbBar.setVisibility(View.VISIBLE);
+                breadcrumbDivider.setVisibility(View.VISIBLE);
+                breadcrumbRoot.setText("ECD");
+                breadcrumbSep1.setVisibility(View.VISIBLE);
+                breadcrumbClass.setVisibility(View.VISIBLE);
+                breadcrumbClass.setText(selectedClass.getDisplayName());
+                breadcrumbClass.setTextColor(Color.parseColor("#1E293B"));
+                breadcrumbSep2.setVisibility(View.GONE);
+                breadcrumbActivity.setVisibility(View.GONE);
+                if (ecdClassTeacherLabel != null) {
+                    ecdClassTeacherLabel.setText(globalTeacherName != null && !globalTeacherName.isEmpty()
+                            ? "Teacher: " + globalTeacherName : "Teacher: Unknown");
+                }
                 break;
         }
 
@@ -3137,6 +3247,93 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                     assessmentSearchQuery = "";
                                     selectedAssessmentSort = ASSESSMENT_SORT_NEWEST;
                                     showScreen(SCREEN_CLASS);
+                                }));
+                    }
+                })));
+    }
+
+    /**
+     * ECD tab: shows the same synced classes as Home, read from the classFolders
+     * already loaded into memory. No separate sync action — this just reflects
+     * whatever the last "Sync Class" from Home pulled down.
+     */
+    private void renderEcdScreen() {
+        ecdAllList.removeAllViews();
+
+        if (ecdSummaryCount != null) ecdSummaryCount.setText(String.valueOf(classFolders.size()));
+        if (ecdAllCount != null) ecdAllCount.setText(String.valueOf(classFolders.size()));
+
+        homeRenderer.updateFilterToggleAppearance(ecdFilterToggle, ecdFilterPanelVisible,
+                selectedEcdGradeFilter, selectedEcdSchoolYearFilter, selectedEcdSort);
+
+        classRenderer.buildGroupBySwitcher(ecdGroupSwitcher, new String[][]{
+                {"Grade", "GRADE"},
+                {"School Year", "YEAR"},
+        }, ecdGroupBy, key -> {
+            ecdGroupBy = key;
+            renderEcdScreen();
+        });
+        ecdGradeFilterBlock.setVisibility("GRADE".equals(ecdGroupBy) ? View.VISIBLE : View.GONE);
+        ecdSchoolYearFilterBlock.setVisibility("YEAR".equals(ecdGroupBy) ? View.VISIBLE : View.GONE);
+
+        String activeGradeFilter = "GRADE".equals(ecdGroupBy) ? selectedEcdGradeFilter : null;
+        String activeYearFilter = "YEAR".equals(ecdGroupBy) ? selectedEcdSchoolYearFilter : null;
+
+        final int requestId = ++ecdQueryGeneration;
+        ensureTeacherId(teacherId -> repo.queryClassList(teacherId, ecdSearchQuery, activeGradeFilter,
+                activeYearFilter, selectedEcdSort, rows -> runOnUiThread(() -> {
+                    if (requestId != ecdQueryGeneration || !SCREEN_ECD.equals(currentScreen))
+                        return;
+
+                    List<String> grades = homeRenderer.getDistinctGrades(classFolders);
+                    List<String> years = homeRenderer.getDistinctSchoolYears(classFolders);
+
+                    boolean stale = homeRenderer.buildHomeFilterChips(
+                            ecdGradeFilterChips, ecdSchoolYearFilterChips,
+                            grades, years,
+                            selectedEcdGradeFilter, selectedEcdSchoolYearFilter,
+                            v -> {
+                                selectedEcdGradeFilter = v;
+                                if (SCREEN_ECD.equals(currentScreen)) renderEcdScreen();
+                            },
+                            v -> {
+                                selectedEcdSchoolYearFilter = v;
+                                if (SCREEN_ECD.equals(currentScreen)) renderEcdScreen();
+                            },
+                            () -> SCREEN_ECD.equals(currentScreen));
+                    if (stale) return;
+
+                    int rowCount = (rows != null) ? rows.size() : 0;
+
+                    if (rowCount == 0) {
+                        ecdAllEmpty.setVisibility(View.VISIBLE);
+                        ecdAllList.setVisibility(View.GONE);
+                        return;
+                    }
+                    ecdAllEmpty.setVisibility(View.GONE);
+                    ecdAllList.setVisibility(View.VISIBLE);
+                    for (ClassListRow row : rows) {
+                        ecdAllList.addView(homeRenderer.createClassCard(
+                                row, globalTeacherName,
+                                () -> {
+                                    ClassFolder c = findClassById(row.id);
+                                    if (c != null) dialogs.showEditClassDialog(c);
+                                },
+                                () -> {
+                                    ClassFolder c = findClassById(row.id);
+                                    if (c != null) dialogs.showDeleteClassConfirmation(c);
+                                },
+                                () -> {
+                                    selectedClass = findClassById(row.id);
+                                    if (selectedClass == null) {
+                                        ui.showErrorDialog("Class unavailable",
+                                                "The selected class could not be loaded. Please try again.");
+                                        return;
+                                    }
+                                    selectedSheetFilter = null;
+                                    assessmentSearchQuery = "";
+                                    selectedAssessmentSort = ASSESSMENT_SORT_NEWEST;
+                                    showScreen(SCREEN_ECD_CLASS);
                                 }));
                     }
                 })));
@@ -3797,6 +3994,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private void updateSortPickers() {
         if (homeClassSortPicker != null)
             homeClassSortPicker.setText(homeRenderer.getClassSortLabel(selectedClassSort) + " \u25be");
+        if (ecdClassSortPicker != null)
+            ecdClassSortPicker.setText(homeRenderer.getClassSortLabel(selectedEcdSort) + " \u25be");
         if (classAssessmentSortPicker != null)
             classAssessmentSortPicker.setText(classRenderer.getAssessmentSortLabel(selectedAssessmentSort) + " \u25be");
         if (myAssessmentsSortPicker != null)
@@ -4093,6 +4292,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 : displayName;
         if (homeTeacherLabel != null) {
             homeTeacherLabel.setText(fullTeacherName != null && !fullTeacherName.isEmpty()
+                    ? "Teacher: " + fullTeacherName : "Teacher: Unknown");
+        }
+        if (ecdSummaryTeacher != null) {
+            ecdSummaryTeacher.setText(fullTeacherName != null && !fullTeacherName.isEmpty()
                     ? "Teacher: " + fullTeacherName : "Teacher: Unknown");
         }
 
