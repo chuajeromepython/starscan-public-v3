@@ -112,6 +112,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private static final String SCREEN_ANSWERKEYS = "answerkeys";
     private static final String SCREEN_SCANS = "scans";
     private static final String SCREEN_QUIZZES = "quizzes";
+    private static final String SCREEN_ECD = "ecd";
 
     // ── Sort constants (delegated to renderers, kept here for initialisation) ──
     private static final String CLASS_SORT_NEWEST = HomeScreenRenderer.CLASS_SORT_NEWEST;
@@ -214,13 +215,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private TextView tvLastSynced;
     private LinearLayout teacherNameRow;
 
-    private View screenHome, screenAssessments, screenAnswerKeys, screenScans, screenQuizzes;
+    private View screenHome, screenAssessments, screenAnswerKeys, screenScans, screenQuizzes, screenECD;
     private ScrollView screenClass, screenActivity, screenUser;
 
     private android.widget.FrameLayout bottomNav;
-    private LinearLayout navHomeTab, navUserTab, navAssessmentsTab, navAnswerKeysTab, navScansTab, navQuizzesTab;
-    private ImageView navHomeIcon, navUserIcon, navAssessmentsIcon, navAnswerKeysIcon, navScansIcon, navQuizzesIcon;
-    private TextView navHomeLabel, navUserLabel, navAssessmentsLabel, navAnswerKeysLabel, navScansLabel, navQuizzesLabel;
+    private LinearLayout navHomeTab, navUserTab, navAssessmentsTab, navAnswerKeysTab, navScansTab, navQuizzesTab, navECDTab;
+    private ImageView navHomeIcon, navUserIcon, navAssessmentsIcon, navAnswerKeysIcon, navScansIcon, navQuizzesIcon, navECDIcon;
+    private TextView navHomeLabel, navUserLabel, navAssessmentsLabel, navAnswerKeysLabel, navScansLabel, navQuizzesLabel, navECDLabel;
 
     private TextView homeAllClassesCount;
     private LinearLayout scansAllList, scansAllEmpty;
@@ -639,6 +640,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         screenAnswerKeys = findViewById(R.id.screenAnswerKeys);
         screenScans = findViewById(R.id.screenScans);
         screenQuizzes = findViewById(R.id.screenQuizzes);
+        screenECD = findViewById(R.id.screenECD);
         screenClass = findViewById(R.id.screenClass);
         screenActivity = findViewById(R.id.screenActivity);
         screenUser = findViewById(R.id.screenUser);
@@ -652,6 +654,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         navQuizzesTab = findViewById(R.id.navQuizzesTab);
         navQuizzesIcon = findViewById(R.id.navQuizzesIcon);
         navQuizzesLabel = findViewById(R.id.navQuizzesLabel);
+        navECDTab = findViewById(R.id.navECDTab);
+        navECDIcon = findViewById(R.id.navECDIcon);
+        navECDLabel = findViewById(R.id.navECDLabel);
         navHomeIcon = findViewById(R.id.navHomeIcon);
         navUserIcon = findViewById(R.id.navUserIcon);
         navAssessmentsIcon = findViewById(R.id.navAssessmentsIcon);
@@ -819,6 +824,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         navAnswerKeysTab.setOnClickListener(v -> selectAnswerKeysTab());
         navScansTab.setOnClickListener(v -> selectScansTab());
         navQuizzesTab.setOnClickListener(v -> selectQuizzesTab());
+        navECDTab.setOnClickListener(v -> selectECDTab());
 
         btnBack.setOnClickListener(v -> navigateBack());
         btnUpload.setOnClickListener(v -> dialogs.showGlobalUploadClassDialog());
@@ -2402,6 +2408,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         screenAnswerKeys.setVisibility(View.GONE);
         screenScans.setVisibility(View.GONE);
         screenQuizzes.setVisibility(View.GONE);
+        screenECD.setVisibility(View.GONE);
 
         switch (screen) {
             case SCREEN_HOME:
@@ -2525,6 +2532,16 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 breadcrumbDivider.setVisibility(View.GONE);
                 renderQuizzesScreen();
                 break;
+
+            case SCREEN_ECD:
+                screenECD.setVisibility(View.VISIBLE);
+                btnBack.setVisibility(View.GONE);
+                fabMain.setVisibility(View.GONE);
+                topBarTitle.setText("ECD");
+                topBarBadge.setVisibility(View.GONE);
+                breadcrumbBar.setVisibility(View.GONE);
+                breadcrumbDivider.setVisibility(View.GONE);
+                break;
         }
 
         updateBottomNavSelection(screen);
@@ -2534,7 +2551,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private boolean isChromeTab(String screen) {
         return SCREEN_USER.equals(screen) || SCREEN_ASSESSMENTS.equals(screen)
                 || SCREEN_ANSWERKEYS.equals(screen) || SCREEN_SCANS.equals(screen)
-                || SCREEN_QUIZZES.equals(screen);
+                || SCREEN_QUIZZES.equals(screen) || SCREEN_ECD.equals(screen);
     }
 
     /** Switches to the Home tab's remembered screen (called by the tab tap or back button). */
@@ -2597,6 +2614,15 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         }
     }
 
+    private void selectECDTab() {
+        if (!SCREEN_ECD.equals(currentScreen)) {
+            if (!isChromeTab(currentScreen)) {
+                screenBeforeChromeTab = currentScreen;
+            }
+            showScreen(SCREEN_ECD);
+        }
+    }
+
     /** Colors the active vs inactive tab icon/label. */
     private void updateBottomNavSelection(String screen) {
         int activeColor = Color.parseColor("#FFFFFF");
@@ -2612,7 +2638,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         boolean answerKeysActive = SCREEN_ANSWERKEYS.equals(screen);
         boolean scansActive = SCREEN_SCANS.equals(screen);
         boolean quizzesActive = SCREEN_QUIZZES.equals(screen);
-        boolean homeActive = !userActive && !assessmentsActive && !answerKeysActive && !scansActive && !quizzesActive;
+        boolean ecdActive = SCREEN_ECD.equals(screen);
+        boolean homeActive = !userActive && !assessmentsActive && !answerKeysActive && !scansActive && !quizzesActive && !ecdActive;
 
         navHomeIcon.setColorFilter(activeColor);
         navHomeIcon.setImageAlpha(homeActive ? activeAlpha : inactiveAlpha);
@@ -2637,6 +2664,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         navQuizzesIcon.setColorFilter(activeColor);
         navQuizzesIcon.setImageAlpha(quizzesActive ? activeAlpha : inactiveAlpha);
         navQuizzesLabel.setTextColor(quizzesActive ? activeColor : inactiveColor);
+
+        navECDIcon.setColorFilter(activeColor);
+        navECDIcon.setImageAlpha(ecdActive ? activeAlpha : inactiveAlpha);
+        navECDLabel.setTextColor(ecdActive ? activeColor : inactiveColor);
     }
 
     /** Populates the User tab with the currently active user's info, activity stats, and account details. */
