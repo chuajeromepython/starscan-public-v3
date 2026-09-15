@@ -159,9 +159,9 @@ public class OMRRepository {
     });
   }
 
-  public void countClasses(Callback<Integer> callback) {
+  public void countClasses(int teacherId, Callback<Integer> callback) {
     executor.execute(() -> {
-      int count = db.classDao().countAll();
+      int count = db.classDao().countByTeacher(teacherId);
       if (callback != null)
         callback.onResult(count);
     });
@@ -246,9 +246,9 @@ public class OMRRepository {
     });
   }
 
-  public void countAssessments(Callback<Integer> callback) {
+  public void countAssessments(int teacherId, Callback<Integer> callback) {
     executor.execute(() -> {
-      int count = db.assessmentDao().countAll();
+      int count = db.assessmentDao().countByTeacher(teacherId);
       if (callback != null)
         callback.onResult(count);
     });
@@ -301,29 +301,15 @@ public class OMRRepository {
   }
 
   /**
-   * Switches the active account to {@code user}. Before doing so, wipes all
-   * local data belonging to whichever account was previously active — this
-   * device may have just been handed to a different teacher via QR login,
-   * and the old account's classes/assessments/quizzes/scans/answers must
-   * not be visible to (or synced under) the new one.
-   *
-   * Deleting the previous account's TeacherEntity is sufficient: classes,
-   * assessments, quizzes, scans, answers, quiz_scans, quiz_scan_answers,
-   * and student_lrn all cascade off it (directly or transitively) via
-   * onDelete = CASCADE foreign keys.
+   * Switches the active account to {@code user}. Local data belonging to
+   * other accounts is left untouched — every table is scoped by teacher_id,
+   * and every read path resolves "the current teacher" from the active
+   * user (see ensureTeacherId()), not from a single global teacher row.
    */
   public void insertUserAsActive(UserEntity user, Callback<Long> callback) {
     executor.execute(() -> {
       long[] idHolder = new long[1];
       db.runInTransaction(() -> {
-        UserEntity previousUser = db.userDao().getActiveUser();
-        if (previousUser != null && previousUser.userId != null
-                && !previousUser.userId.equals(user.userId)) {
-          TeacherEntity previousTeacher = db.teacherDao().getByUserId(previousUser.userId);
-          if (previousTeacher != null) {
-            db.teacherDao().delete(previousTeacher);
-          }
-        }
         idHolder[0] = db.userDao().insertAsOnlyActive(user);
       });
       if (callback != null)
@@ -487,9 +473,9 @@ public class OMRRepository {
     });
   }
 
-  public void countScans(Callback<Integer> callback) {
+  public void countScans(int teacherId, Callback<Integer> callback) {
     executor.execute(() -> {
-      int count = db.scanDao().countAll();
+      int count = db.scanDao().countByTeacher(teacherId);
       if (callback != null)
         callback.onResult(count);
     });

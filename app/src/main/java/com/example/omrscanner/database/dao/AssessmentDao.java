@@ -55,6 +55,11 @@ public interface AssessmentDao {
   @Query("SELECT COUNT(*) FROM assessments WHERE class_id = :classId")
   int countByClass(String classId);
 
+  @Query("SELECT COUNT(*) FROM assessments a "
+          + "JOIN classes c ON c.id = a.class_id "
+          + "WHERE c.teacher_id = :teacherId")
+  int countByTeacher(int teacherId);
+
   @Query("SELECT COUNT(*) FROM assessments")
   int countAll();
 

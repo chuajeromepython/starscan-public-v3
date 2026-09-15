@@ -36,6 +36,12 @@ public interface ScanDao {
   @Query("SELECT COUNT(*) FROM scans WHERE assessment_id = :assessmentId")
   int countByAssessment(String assessmentId);
 
+  @Query("SELECT COUNT(*) FROM scans s "
+          + "JOIN assessments a ON a.id = s.assessment_id "
+          + "JOIN classes c ON c.id = a.class_id "
+          + "WHERE c.teacher_id = :teacherId")
+  int countByTeacher(int teacherId);
+
   @Query("SELECT COUNT(*) FROM scans")
   int countAll();
 

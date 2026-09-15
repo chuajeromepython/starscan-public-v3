@@ -852,7 +852,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
         userRescanRow.setOnClickListener(v -> showQrGuide());
         userBackupRow.setOnClickListener(v -> {
-            String fileName = "omrscanner_backup_"
+            String teacherPart = (globalTeacherName != null && !globalTeacherName.trim().isEmpty())
+                    ? globalTeacherName.trim().replaceAll("[^a-zA-Z0-9 _-]", "").replaceAll("\\s+", "_")
+                    : "unknown_teacher";
+            String fileName = teacherPart + "_backup_"
                     + new SimpleDateFormat("yyyy-MM-dd_HHmm", Locale.getDefault()).format(new java.util.Date())
                     + ".zip";
             createBackupFileLauncher.launch(fileName);
@@ -2810,17 +2813,19 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         SimpleDateFormat sdf = new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault());
 
         // Activity stats
-        repo.countClasses(count -> runOnUiThread(() ->
-                userStatClasses.setText(String.valueOf(count))));
-        repo.countAssessments(count -> runOnUiThread(() ->
-                userStatAssessments.setText(String.valueOf(count))));
-        repo.countScans(count -> runOnUiThread(() ->
-                userStatScans.setText(String.valueOf(count))));
-        ensureTeacherId(teacherId -> repo.getAllAnswerKeys(teacherId, keys -> runOnUiThread(() ->
-                userStatAnswerKeys.setText(String.valueOf(keys != null ? keys.size() : 0)))));
+        ensureTeacherId(teacherId -> {
+            repo.countClasses(teacherId, count -> runOnUiThread(() ->
+                    userStatClasses.setText(String.valueOf(count))));
+            repo.countAssessments(teacherId, count -> runOnUiThread(() ->
+                    userStatAssessments.setText(String.valueOf(count))));
+            repo.countScans(teacherId, count -> runOnUiThread(() ->
+                    userStatScans.setText(String.valueOf(count))));
+            repo.getAllAnswerKeys(teacherId, keys -> runOnUiThread(() ->
+                    userStatAnswerKeys.setText(String.valueOf(keys != null ? keys.size() : 0))));
+        });
 
         // Local teacher profile timestamps
-        repo.getFirstTeacher(teacher -> runOnUiThread(() -> {
+        ensureTeacherId(teacherId -> repo.getTeacherById(teacherId, teacher -> runOnUiThread(() -> {
             if (teacher != null) {
                 userDetailMemberSince.setText(sdf.format(new java.util.Date(teacher.createdAt)));
                 userDetailLastUpdated.setText(sdf.format(new java.util.Date(teacher.updatedAt)));
@@ -2828,7 +2833,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 userDetailMemberSince.setText("—");
                 userDetailLastUpdated.setText("—");
             }
-        }));
+        })));
 
         // Linked backend account details
         repo.getActiveUser(user -> runOnUiThread(() -> {
@@ -4149,33 +4154,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             runOnUiThread(this::refreshTeacherNameHeader);
         });
 
-        repo.getFirstTeacher(teacher -> {
-            // Don't let the "teachers" table (name is always "" now that manual editing is
-            // gone) clobber the name we just set from the scanned-in active user above.
-            boolean hasScannedName = activeUserFirstName != null && !activeUserFirstName.isEmpty();
-
-            if (teacher != null) {
-                if (!hasScannedName) {
-                    globalTeacherName = teacher.name != null ? teacher.name : "";
-                }
-                currentTeacherId = teacher.id;
-                loadClassesFromDb(prevClassId, prevActivityId, prevScreen);
-                return;
+        boolean hasScannedName = activeUserFirstName != null && !activeUserFirstName.isEmpty();
+        ensureTeacherId(teacherId -> {
+            if (!hasScannedName) {
+                repo.getTeacherById(teacherId, t ->
+                        globalTeacherName = (t != null && t.name != null) ? t.name : "");
             }
-            repo.upsertTeacher(0, "", ensuredTeacher -> {
-                if (ensuredTeacher != null) {
-                    if (!hasScannedName) {
-                        globalTeacherName = ensuredTeacher.name != null ? ensuredTeacher.name : "";
-                    }
-                    currentTeacherId = ensuredTeacher.id;
-                } else {
-                    if (!hasScannedName) {
-                        globalTeacherName = "";
-                    }
-                    currentTeacherId = -1;
-                }
-                loadClassesFromDb(prevClassId, prevActivityId, prevScreen);
-            });
+            loadClassesFromDb(prevClassId, prevActivityId, prevScreen);
         });
     }
 
