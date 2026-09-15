@@ -2353,7 +2353,7 @@
                                             <TextView
                                                 android:layout_width="wrap_content"
                                                 android:layout_height="wrap_content"
-                                                android:text="MY ECCD ASSESSMENTS"
+                                                android:text="MY ECDC ASSESSMENTS"
                                                 android:textColor="#FFFFFF"
                                                 android:textSize="13sp"
                                                 android:textStyle="bold"
@@ -2860,7 +2860,7 @@
                                             <TextView
                                                 android:layout_width="wrap_content"
                                                 android:layout_height="wrap_content"
-                                                android:text="Early Childhood Care and Development (ECCD)"
+                                                android:text="Early Childhood Development Checklist (ECCD)"
                                                 android:textColor="#FFFFFF"
                                                 android:textSize="13sp"
                                                 android:textStyle="bold"
@@ -4731,7 +4731,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:text="ECCDs"
+                    android:text="ECDCs"
                     android:textColor="#CCFFFFFF"
                     android:textSize="10sp" />
 

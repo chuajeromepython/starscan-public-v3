@@ -2654,7 +2654,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 topBarBadge.setVisibility(View.GONE);
                 breadcrumbBar.setVisibility(View.VISIBLE);
                 breadcrumbDivider.setVisibility(View.VISIBLE);
-                breadcrumbRoot.setText("ECD");
+                breadcrumbRoot.setText("ECDC");
                 breadcrumbSep1.setVisibility(View.VISIBLE);
                 breadcrumbClass.setVisibility(View.VISIBLE);
                 breadcrumbClass.setText(selectedClass.getDisplayName());
