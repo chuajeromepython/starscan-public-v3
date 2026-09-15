@@ -128,8 +128,15 @@ public class DataInspector {
     // ─────────────────────────────────────────────────────────────────
 
     private void printAnswerKeys() {
-        repository.getAllAnswerKeys(keys -> {
-            Log.d(TAG, "----------------------------------------");
+        // Debug-only tool — answer keys are teacher-scoped, so resolve whichever
+        // teacher record exists locally rather than requiring a full sign-in flow.
+        repository.getFirstTeacher(teacher -> {
+            if (teacher == null) {
+                Log.d(TAG, "[ANSWER KEYS] No local teacher profile found.");
+                return;
+            }
+            repository.getAllAnswerKeys(teacher.id, keys -> {
+                Log.d(TAG, "----------------------------------------");
 
             if (keys == null || keys.isEmpty()) {
                 Log.d(TAG, "[ANSWER KEYS] No answer keys found.");
@@ -149,9 +156,10 @@ public class DataInspector {
                 Log.d(TAG, "[ANSWER KEYS]   ---");
             }
 
-            Log.d(TAG, "========================================");
-            Log.d(TAG, "  DATA INSPECTOR — done");
-            Log.d(TAG, "========================================");
+                Log.d(TAG, "========================================");
+                Log.d(TAG, "  DATA INSPECTOR — done");
+                Log.d(TAG, "========================================");
+            });
         });
     }
 }

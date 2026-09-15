@@ -349,10 +349,10 @@ public class OMRRepository {
         });
     }
 
-    public void queryAllAssessments(String sheetTypeFilter, String assessmentTypeFilter, String classIdFilter,
+    public void queryAllAssessments(int teacherId, String sheetTypeFilter, String assessmentTypeFilter, String classIdFilter,
                                     String search, String sortKey, Callback<List<AssessmentListRow>> callback) {
         executor.execute(() -> {
-            List<AssessmentListRow> list = db.assessmentDao().queryAllAssessments(sheetTypeFilter,
+            List<AssessmentListRow> list = db.assessmentDao().queryAllAssessments(teacherId, sheetTypeFilter,
                     assessmentTypeFilter, classIdFilter, search, sortKey);
             if (callback != null)
                 callback.onResult(list);
@@ -391,13 +391,13 @@ public class OMRRepository {
     });
   }
 
-  public void queryAllQuizzes(String termFilter, String classIdFilter, String search, String sortKey,
-                              Callback<List<AssessmentListRow>> callback) {
-    executor.execute(() -> {
-      List<AssessmentListRow> list = db.quizDao().queryAllQuizzes(termFilter, classIdFilter, search, sortKey);
-      if (callback != null) callback.onResult(list);
-    });
-  }
+    public void queryAllQuizzes(int teacherId, String termFilter, String classIdFilter, String search, String sortKey,
+                                Callback<List<AssessmentListRow>> callback) {
+        executor.execute(() -> {
+            List<AssessmentListRow> list = db.quizDao().queryAllQuizzes(teacherId, termFilter, classIdFilter, search, sortKey);
+            if (callback != null) callback.onResult(list);
+        });
+    }
 
   /** Quizzes have no scans, so linking is a plain column update — no grading pass. */
   public void linkAnswerKeyToQuiz(String quizId, String answerKeyId, Callback<Void> callback) {
@@ -458,16 +458,16 @@ public class OMRRepository {
     });
   }
 
-  /** All scans across all classes, for the read-only Scans tab. */
-  public void queryAllScans(String classIdFilter, String assessmentIdFilter, String sheetTypeFilter,
-                            String needsCorrectionFilter, String search, Callback<List<ScanListRow>> callback) {
-    executor.execute(() -> {
-      List<ScanListRow> list = db.scanDao().queryAllScans(classIdFilter, assessmentIdFilter,
-              sheetTypeFilter, needsCorrectionFilter, search);
-      if (callback != null)
-        callback.onResult(list);
-    });
-  }
+    /** All scans for the given teacher's classes, for the read-only Scans tab. */
+    public void queryAllScans(int teacherId, String classIdFilter, String assessmentIdFilter, String sheetTypeFilter,
+                              String needsCorrectionFilter, String search, Callback<List<ScanListRow>> callback) {
+        executor.execute(() -> {
+            List<ScanListRow> list = db.scanDao().queryAllScans(teacherId, classIdFilter, assessmentIdFilter,
+                    sheetTypeFilter, needsCorrectionFilter, search);
+            if (callback != null)
+                callback.onResult(list);
+        });
+    }
 
   /** Called when the external scoring system sends back a score. */
   public void updateScanScore(int scanId, int score, Callback<Void> callback) {
@@ -685,50 +685,50 @@ public class OMRRepository {
     });
   }
 
-  /** Load all answer keys, newest-first. */
-  public void getAllAnswerKeys(Callback<List<AnswerKeyEntity>> callback) {
-    executor.execute(() -> {
-      List<AnswerKeyEntity> list = db.answerKeyDao().getAll();
-      if (callback != null)
-        callback.onResult(list);
-    });
-  }
+    /** Load all of this teacher's answer keys, newest-first. */
+    public void getAllAnswerKeys(int teacherId, Callback<List<AnswerKeyEntity>> callback) {
+        executor.execute(() -> {
+            List<AnswerKeyEntity> list = db.answerKeyDao().getAll(teacherId);
+            if (callback != null)
+                callback.onResult(list);
+        });
+    }
 
-  /** Load link status (linked assessment name + sheet type, if any) for every answer key. */
-  public void getAnswerKeyLinkInfo(Callback<List<AnswerKeyLinkInfo>> callback) {
-    executor.execute(() -> {
-      List<AnswerKeyLinkInfo> list = db.answerKeyDao().getLinkInfo();
-      if (callback != null)
-        callback.onResult(list);
-    });
-  }
+    /** Load link status (linked assessment name + sheet type, if any) for every one of this teacher's answer keys. */
+    public void getAnswerKeyLinkInfo(int teacherId, Callback<List<AnswerKeyLinkInfo>> callback) {
+        executor.execute(() -> {
+            List<AnswerKeyLinkInfo> list = db.answerKeyDao().getLinkInfo(teacherId);
+            if (callback != null)
+                callback.onResult(list);
+        });
+    }
 
-  /** Load every assessment currently linked to any answer key (for the "Linked to" dropdown). */
-  public void getAnswerKeyLinkedAssessments(Callback<List<AnswerKeyLinkedAssessment>> callback) {
-    executor.execute(() -> {
-      List<AnswerKeyLinkedAssessment> list = db.answerKeyDao().getLinkedAssessments();
-      if (callback != null)
-        callback.onResult(list);
-    });
-  }
+    /** Load every assessment of this teacher's currently linked to any answer key (for the "Linked to" dropdown). */
+    public void getAnswerKeyLinkedAssessments(int teacherId, Callback<List<AnswerKeyLinkedAssessment>> callback) {
+        executor.execute(() -> {
+            List<AnswerKeyLinkedAssessment> list = db.answerKeyDao().getLinkedAssessments(teacherId);
+            if (callback != null)
+                callback.onResult(list);
+        });
+    }
 
-  /** Load every quiz currently linked to any answer key (for the "Linked to Quiz" dropdown). */
-  public void getAnswerKeyLinkedQuizzes(Callback<List<com.example.omrscanner.database.projections.AnswerKeyLinkedQuiz>> callback) {
-    executor.execute(() -> {
-      List<com.example.omrscanner.database.projections.AnswerKeyLinkedQuiz> list = db.answerKeyDao().getLinkedQuizzes();
-      if (callback != null)
-        callback.onResult(list);
-    });
-  }
+    /** Load every quiz of this teacher's currently linked to any answer key (for the "Linked to Quiz" dropdown). */
+    public void getAnswerKeyLinkedQuizzes(int teacherId, Callback<List<com.example.omrscanner.database.projections.AnswerKeyLinkedQuiz>> callback) {
+        executor.execute(() -> {
+            List<com.example.omrscanner.database.projections.AnswerKeyLinkedQuiz> list = db.answerKeyDao().getLinkedQuizzes(teacherId);
+            if (callback != null)
+                callback.onResult(list);
+        });
+    }
 
-  /** Load answer keys for a specific sheet type (for contextual assignment UI). */
-  public void getAnswerKeysBySheetType(String sheetType, Callback<List<AnswerKeyEntity>> callback) {
-    executor.execute(() -> {
-      List<AnswerKeyEntity> list = db.answerKeyDao().getBySheetType(sheetType);
-      if (callback != null)
-        callback.onResult(list);
-    });
-  }
+    /** Load this teacher's answer keys for a specific sheet type (for contextual assignment UI). */
+    public void getAnswerKeysBySheetType(int teacherId, String sheetType, Callback<List<AnswerKeyEntity>> callback) {
+        executor.execute(() -> {
+            List<AnswerKeyEntity> list = db.answerKeyDao().getBySheetType(teacherId, sheetType);
+            if (callback != null)
+                callback.onResult(list);
+        });
+    }
 
   /** Load a single answer key by its ID. */
   public void getAnswerKeyById(String id, Callback<AnswerKeyEntity> callback) {

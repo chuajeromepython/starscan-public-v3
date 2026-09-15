@@ -59,11 +59,15 @@ import com.example.omrscanner.database.entities.UserEntity;
  *   21 → 22: Added quiz_scans + quiz_scan_answers tables. Quiz scans are
  *            stored separately from assessments' scans/answers tables so
  *            quizzes stay fully isolated, per their local-only design.
- *
+ *   22 → 23: Added answer_keys.teacher_id (FK -> teachers.id, CASCADE).
+ *            Answer keys were previously global/unowned — every teacher on
+ *            a shared device could read every other teacher's answer keys.
+ *            Backfilled from each key's linked assessment/quiz's class
+ *            owner; keys with no surviving link are dropped (unattributable).
  *
  * Usage:
  * AppDatabase db = AppDatabase.getInstance(context);
- * db.answerKeyDao().getAll();
+ * db.answerKeyDao().getAll(teacherId);
  */
 @Database(entities = {
         TeacherEntity.class,
@@ -77,7 +81,7 @@ import com.example.omrscanner.database.entities.UserEntity;
         QuizEntity.class,
         QuizScanEntity.class,
         QuizScanAnswerEntity.class
-}, version = 22, exportSchema = false)
+}, version = 23, exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase {
 
   private static final String DATABASE_NAME = "omrscanner.db";
@@ -401,6 +405,54 @@ public abstract class AppDatabase extends RoomDatabase {
     }
   };
 
+  private static final Migration MIGRATION_22_23 = new Migration(22, 23) {
+    @Override
+    public void migrate(@NonNull SupportSQLiteDatabase db) {
+      // answer_keys previously had no owner at all (see class doc history) —
+      // every teacher on a shared device could see every other teacher's
+      // answer keys, including the correct answers themselves, through
+      // AnswerKeyDao's unfiltered queries. Same table-rebuild pattern as
+      // MIGRATION_17_18: SQLite's ALTER TABLE ADD COLUMN can't attach a new
+      // FOREIGN KEY constraint to an existing table.
+      db.execSQL("CREATE TABLE answer_keys_new ("
+              + "id TEXT NOT NULL PRIMARY KEY, "
+              + "teacher_id INTEGER, "
+              + "name TEXT, "
+              + "school_year TEXT, "
+              + "sheet_type TEXT, "
+              + "answers TEXT, "
+              + "created_at INTEGER NOT NULL DEFAULT 0, "
+              + "updated_at INTEGER NOT NULL DEFAULT 0, "
+              + "FOREIGN KEY(teacher_id) REFERENCES teachers(id) ON DELETE CASCADE)");
+
+      // Backfill teacher_id from whichever assessment or quiz currently
+      // references this key, tracing assessment/quiz -> class -> teacher.
+      // A key with no live links (never assigned to anything) can't be
+      // attributed to anyone and is dropped below rather than left as a
+      // permanently-invisible, unowned row.
+      db.execSQL("INSERT INTO answer_keys_new "
+              + "(id, teacher_id, name, school_year, sheet_type, answers, created_at, updated_at) "
+              + "SELECT ak.id, "
+              + "COALESCE("
+              + "  (SELECT c.teacher_id FROM assessments a JOIN classes c ON c.id = a.class_id "
+              + "     WHERE a.answer_key_id = ak.id LIMIT 1), "
+              + "  (SELECT c.teacher_id FROM quizzes q JOIN classes c ON c.id = q.class_id "
+              + "     WHERE q.answer_key_id = ak.id LIMIT 1)"
+              + "), "
+              + "ak.name, ak.school_year, ak.sheet_type, ak.answers, ak.created_at, ak.updated_at "
+              + "FROM answer_keys ak");
+
+      db.execSQL("DELETE FROM answer_keys_new WHERE teacher_id IS NULL");
+
+      db.execSQL("DROP TABLE answer_keys");
+      db.execSQL("ALTER TABLE answer_keys_new RENAME TO answer_keys");
+
+      db.execSQL("CREATE INDEX IF NOT EXISTS index_answer_keys_sheet_type ON answer_keys(sheet_type)");
+      db.execSQL("CREATE INDEX IF NOT EXISTS index_answer_keys_created_at ON answer_keys(created_at)");
+      db.execSQL("CREATE INDEX IF NOT EXISTS index_answer_keys_teacher_id ON answer_keys(teacher_id)");
+    }
+  };
+
   // ── Abstract DAO accessors (Room generates the implementations) ──────────
   public abstract TeacherDao teacherDao();
 
@@ -433,7 +485,7 @@ public abstract class AppDatabase extends RoomDatabase {
               context.getApplicationContext(),
               AppDatabase.class,
               DATABASE_NAME)
-                  .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22)
+                  .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23)
               .build();
         }
       }

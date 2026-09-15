@@ -1398,6 +1398,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 com.example.omrscanner.database.AppDatabase db =
                         com.example.omrscanner.database.AppDatabase.getInstance(context);
 
+                com.example.omrscanner.database.entities.ClassEntity syncClass = db.classDao().getById(localClassId);
+                Integer syncTeacherId = (syncClass != null) ? syncClass.teacherId : null;
+
                 int savedCount = 0;
                 if (assessments != null) {
                     for (int i = 0; i < assessments.length(); i++) {
@@ -1472,7 +1475,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                             String keyId = java.util.UUID.randomUUID().toString().substring(0, 7).toUpperCase();
                             com.example.omrscanner.database.entities.AnswerKeyEntity key =
                                     new com.example.omrscanner.database.entities.AnswerKeyEntity(
-                                            keyId, title, schoolYear, sheetType, answers.toString());
+                                            keyId, syncTeacherId, title, schoolYear, sheetType, answers.toString());
                             db.answerKeyDao().insert(key);
 
                             String assessmentId = java.util.UUID.randomUUID().toString().substring(0, 7).toUpperCase();
@@ -2813,8 +2816,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 userStatAssessments.setText(String.valueOf(count))));
         repo.countScans(count -> runOnUiThread(() ->
                 userStatScans.setText(String.valueOf(count))));
-        repo.getAllAnswerKeys(keys -> runOnUiThread(() ->
-                userStatAnswerKeys.setText(String.valueOf(keys != null ? keys.size() : 0))));
+        ensureTeacherId(teacherId -> repo.getAllAnswerKeys(teacherId, keys -> runOnUiThread(() ->
+                userStatAnswerKeys.setText(String.valueOf(keys != null ? keys.size() : 0)))));
 
         // Local teacher profile timestamps
         repo.getFirstTeacher(teacher -> runOnUiThread(() -> {
@@ -3507,7 +3510,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     ? "Teacher: " + summaryTeacherName : "Teacher: Unknown");
         }
 
-        repo.queryAllScans(null, null, null, null, "",
+        ensureTeacherId(teacherId -> repo.queryAllScans(teacherId, null, null, null, null, "",
                 allRows -> runOnUiThread(() -> {
                     if (!SCREEN_SCANS.equals(currentScreen)) return;
 
@@ -3606,7 +3609,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     for (ScanListRow row : rows) {
                         scansAllList.addView(scansRenderer.createScanCard(row));
                     }
-                }));
+                })));
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -3664,7 +3667,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         String activeTypeFilter = "TYPE".equals(myAssessmentsGroupBy) ? selectedMyAssessmentsTypeFilter : null;
         String activeClassFilter = "CLASS".equals(myAssessmentsGroupBy) ? selectedMyAssessmentsClassFilter : null;
 
-        repo.queryAllAssessments(activeSheetFilter, activeTypeFilter, activeClassFilter,
+        ensureTeacherId(teacherId -> repo.queryAllAssessments(teacherId, activeSheetFilter, activeTypeFilter, activeClassFilter,
                 myAssessmentsSearchQuery, selectedMyAssessmentsSort, rows -> runOnUiThread(() -> {
                     if (!SCREEN_ASSESSMENTS.equals(currentScreen)) return;
 
@@ -3713,7 +3716,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                     showScreen(SCREEN_ACTIVITY);
                                 }));
                     }
-                }));
+                })));
     }
 
     /** Renders the Quizzes tab. Card, sort, and filter bay mirror Assessments. */
@@ -3739,7 +3742,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         });
 
         // Unfiltered pass first — used only to populate the term/class tab options.
-        repo.queryAllQuizzes(null, null, null, ASSESSMENT_SORT_NEWEST, tabRows -> runOnUiThread(() -> {
+        ensureTeacherId(teacherId -> repo.queryAllQuizzes(teacherId, null, null, null, ASSESSMENT_SORT_NEWEST, tabRows -> runOnUiThread(() -> {
             if (!SCREEN_QUIZZES.equals(currentScreen)) return;
 
             List<ActivityFolder> allQuizzesAcrossClasses = new ArrayList<>();
@@ -3772,7 +3775,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             String activeTermFilter = "TYPE".equals(myQuizzesGroupBy) ? selectedMyQuizzesTypeFilter : null;
             String activeClassFilter = "CLASS".equals(myQuizzesGroupBy) ? selectedMyQuizzesClassFilter : null;
 
-            repo.queryAllQuizzes(activeTermFilter, activeClassFilter, myQuizzesSearchQuery,
+            repo.queryAllQuizzes(teacherId, activeTermFilter, activeClassFilter, myQuizzesSearchQuery,
                     selectedMyQuizzesSort, rows -> runOnUiThread(() -> {
                         if (!SCREEN_QUIZZES.equals(currentScreen)) return;
 
@@ -3803,7 +3806,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                     false));
                         }
                     }));
-        }));
+        })));
     }
 
     /** Fetches the full QuizEntity by id (async) and hands (ActivityFolder, classId) to the consumer. */
@@ -4721,14 +4724,14 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
     @Override
     public void reloadAnswerKeys() {
-        repo.getAllAnswerKeys(keys -> runOnUiThread(() -> {
+        ensureTeacherId(teacherId -> repo.getAllAnswerKeys(teacherId, keys -> runOnUiThread(() -> {
             answerKeys = (keys != null) ? keys : new ArrayList<>();
-            repo.getAnswerKeyLinkInfo(links -> runOnUiThread(() -> {
+            repo.getAnswerKeyLinkInfo(teacherId, links -> runOnUiThread(() -> {
                 answerKeyLinkInfo.clear();
                 if (links != null) {
                     for (AnswerKeyLinkInfo l : links) answerKeyLinkInfo.put(l.id, l);
                 }
-                repo.getAnswerKeyLinkedAssessments(rows -> runOnUiThread(() -> {
+                repo.getAnswerKeyLinkedAssessments(teacherId, rows -> runOnUiThread(() -> {
                     answerKeyLinkedAssessments.clear();
                     if (rows != null) {
                         for (AnswerKeyLinkedAssessment r : rows) {
@@ -4737,7 +4740,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                     .add(r);
                         }
                     }
-                    repo.getAnswerKeyLinkedQuizzes(quizRows -> runOnUiThread(() -> {
+                    repo.getAnswerKeyLinkedQuizzes(teacherId, quizRows -> runOnUiThread(() -> {
                         answerKeyLinkedQuizzes.clear();
                         if (quizRows != null) {
                             for (com.example.omrscanner.database.projections.AnswerKeyLinkedQuiz r : quizRows) {
@@ -4750,6 +4753,6 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     }));
                 }));
             }));
-        }));
+        })));
     }
 }

@@ -1615,13 +1615,20 @@ public class DashboardDialogs {
             }
             String answerKeyStr = answerKeyBuilder.toString();
 
-            AnswerKeyEntity entity = DataMapper.toAnswerKeyEntity(
-                    name, selectedSY[0], selectedType[0], answerKeyStr);
-            repo.insertAnswerKey(entity, ignored -> activity.runOnUiThread(() -> {
-                dialog.dismiss();
-                ui.showToast("Answer Key \"" + name + "\" saved ✓");
-                host.reloadAnswerKeys();
-            }));
+            host.ensureTeacherId(teacherId -> {
+                if (teacherId <= 0) {
+                    activity.runOnUiThread(() -> ui.showErrorDialog("Save Failed",
+                            "Teacher profile is not ready yet. Please try again."));
+                    return;
+                }
+                AnswerKeyEntity entity = DataMapper.toAnswerKeyEntity(
+                        teacherId, name, selectedSY[0], selectedType[0], answerKeyStr);
+                repo.insertAnswerKey(entity, ignored -> activity.runOnUiThread(() -> {
+                    dialog.dismiss();
+                    ui.showToast("Answer Key \"" + name + "\" saved ✓");
+                    host.reloadAnswerKeys();
+                }));
+            });
         });
 
         dialog.setContentView(root);

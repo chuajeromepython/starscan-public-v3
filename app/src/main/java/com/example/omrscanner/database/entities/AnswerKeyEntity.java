@@ -4,6 +4,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.room.ColumnInfo;
 import androidx.room.Entity;
+import androidx.room.ForeignKey;
 import androidx.room.Index;
 import androidx.room.PrimaryKey;
 
@@ -11,19 +12,25 @@ import androidx.room.PrimaryKey;
  * Room Entity for the answer_keys table.
  * Represents a reusable answer key that can be assigned to any assessment.
  *
- * Answer keys are globally scoped — one key can be shared across many
- * assessments in different classes.  There is no hard foreign-key back to
- * assessments; the link is soft (assessments hold a nullable answer_key_id).
+ * Answer keys are scoped to a single teacher (teacher_id, cascade-deleted with
+ * the owning teacher, matching classes/assessments/scans/quizzes) — a key can
+ * still be shared across many assessments/quizzes in different classes, as
+ * long as those classes belong to the same teacher. There is no hard
+ * foreign-key back to assessments; that link is soft (assessments hold a
+ * nullable answer_key_id).
  *
  * answers — comma-separated correct answers, e.g. "A,B,C,D,A,..."
  *           length matches the numItems implied by sheet_type.
  */
 @Entity(
-    tableName = "answer_keys",
-    indices = {
-        @Index("sheet_type"),
-        @Index("created_at")
-    }
+        tableName = "answer_keys",
+        foreignKeys = @ForeignKey(entity = TeacherEntity.class, parentColumns = "id",
+                childColumns = "teacher_id", onDelete = ForeignKey.CASCADE),
+        indices = {
+                @Index("sheet_type"),
+                @Index("created_at"),
+                @Index("teacher_id")
+        }
 )
 public class AnswerKeyEntity {
 
@@ -31,6 +38,10 @@ public class AnswerKeyEntity {
     @NonNull
     @ColumnInfo(name = "id")
     public String id = ""; // 7-char short UUID, same style as AssessmentEntity
+
+    @Nullable
+    @ColumnInfo(name = "teacher_id")
+    public Integer teacherId; // owning teacher — nullable only to keep the no-arg/legacy constructors valid pre-insert
 
     @Nullable
     @ColumnInfo(name = "name")
@@ -57,10 +68,11 @@ public class AnswerKeyEntity {
     public AnswerKeyEntity() {
     }
 
-    public AnswerKeyEntity(@NonNull String id, @Nullable String name,
-            @Nullable String schoolYear, @Nullable String sheetType,
-            @Nullable String answers) {
+    public AnswerKeyEntity(@NonNull String id, @Nullable Integer teacherId, @Nullable String name,
+                           @Nullable String schoolYear, @Nullable String sheetType,
+                           @Nullable String answers) {
         this.id = id;
+        this.teacherId = teacherId;
         this.name = name;
         this.schoolYear = schoolYear;
         this.sheetType = sheetType;

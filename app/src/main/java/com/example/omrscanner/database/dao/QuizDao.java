@@ -55,8 +55,9 @@ public interface QuizDao {
             + "FROM quizzes q "
             + "LEFT JOIN quiz_scans qs ON qs.quiz_id = q.id "
             + "LEFT JOIN answer_keys ak ON ak.id = q.answer_key_id "
-            + "LEFT JOIN classes c ON c.id = q.class_id "
-            + "WHERE (:termFilter IS NULL OR :termFilter = '' OR q.term = :termFilter) "
+            + "JOIN classes c ON c.id = q.class_id "
+            + "WHERE c.teacher_id = :teacherId "
+            + "AND (:termFilter IS NULL OR :termFilter = '' OR q.term = :termFilter) "
             + "AND (:classIdFilter IS NULL OR :classIdFilter = '' OR q.class_id = :classIdFilter) "
             + "AND (:search IS NULL OR :search = '' "
             + "OR q.name LIKE '%' || :search || '%' "
@@ -71,6 +72,6 @@ public interface QuizDao {
             + "CASE WHEN :sortKey = 'EXAM_DATE_NEWEST' THEN q.exam_date_epoch END DESC, "
             + "CASE WHEN :sortKey = 'EXAM_DATE_OLDEST' THEN q.exam_date_epoch END ASC, "
             + "q.created_at DESC")
-    List<AssessmentListRow> queryAllQuizzes(String termFilter, String classIdFilter,
+    List<AssessmentListRow> queryAllQuizzes(int teacherId, String termFilter, String classIdFilter,
                                             String search, String sortKey);
 }

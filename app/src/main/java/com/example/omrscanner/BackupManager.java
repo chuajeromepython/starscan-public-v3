@@ -224,11 +224,11 @@ public class BackupManager {
                 manifest.put("quizScanAnswers", quizScanAnswersJson);
 
                 JSONArray keysJson = new JSONArray();
-                for (AnswerKeyEntity k : db.answerKeyDao().getAll()) {
-                    // answer_keys is a shared/global bank (no teacher_id column),
-                    // so scope the export to keys this teacher's kept assessments
-                    // and quizzes actually reference, rather than dumping the
-                    // whole bank.
+                for (AnswerKeyEntity k : db.answerKeyDao().getAll(teacherId)) {
+                    // answer_keys is now teacher-scoped at the DB level, but keep
+                    // this membership check too: it further narrows to only the
+                    // keys this teacher's *kept* assessments/quizzes reference,
+                    // rather than every key the teacher owns.
                     if (!keptAnswerKeyIds.contains(k.id)) continue;
                     keysJson.put(answerKeyToJson(k));
                 }
@@ -386,7 +386,7 @@ public class BackupManager {
                 JSONArray keysJson = manifest.optJSONArray("answerKeys");
                 if (keysJson != null) {
                     for (int i = 0; i < keysJson.length(); i++) {
-                        db.answerKeyDao().insert(answerKeyFromJson(keysJson.getJSONObject(i)));
+                        db.answerKeyDao().insert(answerKeyFromJson(keysJson.getJSONObject(i), activeTeacher.id));
                         restoredAnswerKeys++;
                     }
                 }
@@ -692,9 +692,14 @@ public class BackupManager {
         return o;
     }
 
-    private AnswerKeyEntity answerKeyFromJson(JSONObject o) throws JSONException {
+    private AnswerKeyEntity answerKeyFromJson(JSONObject o, int restoringTeacherId) throws JSONException {
         AnswerKeyEntity k = new AnswerKeyEntity();
         k.id = o.getString("id");
+        // Re-parented to whoever is running the restore, same as classId is
+        // remapped via classroomId above — never trust an id carried in the
+        // backup file itself, since it could be stale or (on a shared device)
+        // belong to a previous teacher entirely.
+        k.teacherId = restoringTeacherId;
         k.name = o.optString("name", null);
         k.schoolYear = o.optString("schoolYear", null);
         k.sheetType = o.optString("sheetType", null);

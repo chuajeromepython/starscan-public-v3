@@ -193,16 +193,17 @@ public final class DataMapper {
      * Create a new {@link AnswerKeyEntity} from raw fields.
      * Generates a 7-character UUID and sets timestamps automatically.
      *
+     * @param teacherId  owning teacher — the signed-in teacher creating this key
      * @param name       display name, e.g. "Midterm Science Q1"
      * @param schoolYear e.g. "2025-2026"
      * @param sheetType  e.g. "ZPH50"
      * @param answers    comma-separated answers, e.g. "A,B,C,D,..."
      */
-    public static AnswerKeyEntity toAnswerKeyEntity(String name, String schoolYear,
-            String sheetType, String answers) {
+    public static AnswerKeyEntity toAnswerKeyEntity(int teacherId, String name, String schoolYear,
+                                                    String sheetType, String answers) {
         // 7-char short UUID — consistent with AssessmentEntity / ClassEntity style
         String id = UUID.randomUUID().toString().replace("-", "").substring(0, 7);
-        return new AnswerKeyEntity(id, name, schoolYear, sheetType, answers);
+        return new AnswerKeyEntity(id, teacherId, name, schoolYear, sheetType, answers);
     }
 
     /**

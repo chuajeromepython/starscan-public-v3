@@ -107,9 +107,10 @@ public interface ScanDao {
           "EXISTS(SELECT 1 FROM answers ans WHERE ans.scan_id = s.id AND LENGTH(ans.answer) > 1) AS needsCorrection " +
           "FROM scans s " +
           "JOIN assessments a ON a.id = s.assessment_id " +
-          "LEFT JOIN classes c ON c.id = a.class_id " +
+          "JOIN classes c ON c.id = a.class_id " +
           "LEFT JOIN student_lrn sl ON sl.lrn = s.student_lrn AND sl.className = a.class_id " +
-          "WHERE (:classIdFilter IS NULL OR :classIdFilter = '' OR a.class_id = :classIdFilter) " +
+          "WHERE c.teacher_id = :teacherId " +
+          "AND (:classIdFilter IS NULL OR :classIdFilter = '' OR a.class_id = :classIdFilter) " +
           "AND (:assessmentIdFilter IS NULL OR :assessmentIdFilter = '' OR a.id = :assessmentIdFilter) " +
           "AND (:sheetTypeFilter IS NULL OR :sheetTypeFilter = '' OR a.sheet_type = :sheetTypeFilter) " +
           "AND (:needsCorrectionFilter IS NULL OR :needsCorrectionFilter = '' " +
@@ -121,6 +122,6 @@ public interface ScanDao {
           "     OR a.sheet_type LIKE '%' || :search || '%' " +
           "     OR (c.grade || ' ' || c.section) LIKE '%' || :search || '%') " +
           "ORDER BY s.timestamp DESC")
-  List<ScanListRow> queryAllScans(String classIdFilter, String assessmentIdFilter,
+  List<ScanListRow> queryAllScans(int teacherId, String classIdFilter, String assessmentIdFilter,
                                   String sheetTypeFilter, String needsCorrectionFilter, String search);
 }

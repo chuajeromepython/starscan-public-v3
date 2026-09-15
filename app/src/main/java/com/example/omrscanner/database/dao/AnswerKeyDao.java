@@ -33,37 +33,40 @@ public interface AnswerKeyDao {
     @Query("SELECT * FROM answer_keys WHERE id = :id")
     AnswerKeyEntity getById(String id);
 
-    /** All keys, newest-first. */
-    @Query("SELECT * FROM answer_keys ORDER BY created_at DESC")
-    List<AnswerKeyEntity> getAll();
+    /** All of this teacher's keys, newest-first. */
+    @Query("SELECT * FROM answer_keys WHERE teacher_id = :teacherId ORDER BY created_at DESC")
+    List<AnswerKeyEntity> getAll(int teacherId);
 
     /** Filter by sheet type — useful when assigning a key to a specific assessment. */
-    @Query("SELECT * FROM answer_keys WHERE sheet_type = :sheetType ORDER BY created_at DESC")
-    List<AnswerKeyEntity> getBySheetType(String sheetType);
+    @Query("SELECT * FROM answer_keys WHERE teacher_id = :teacherId AND sheet_type = :sheetType ORDER BY created_at DESC")
+    List<AnswerKeyEntity> getBySheetType(int teacherId, String sheetType);
 
-    /** For each key: is it linked to an assessment and/or a quiz, and if so which one (most recent) + its sheet type. */
+    /** For each of this teacher's keys: is it linked to an assessment and/or a quiz, and if so which one (most recent) + its sheet type. */
     @Query("SELECT ak.id AS id, " +
             "(SELECT a.name FROM assessments a WHERE a.answer_key_id = ak.id ORDER BY a.created_at DESC LIMIT 1) AS linkedAssessmentName, " +
             "(SELECT a.sheet_type FROM assessments a WHERE a.answer_key_id = ak.id ORDER BY a.created_at DESC LIMIT 1) AS linkedSheetType, " +
             "(SELECT COUNT(*) FROM assessments a WHERE a.answer_key_id = ak.id) AS linkedCount, " +
             "(SELECT q.name FROM quizzes q WHERE q.answer_key_id = ak.id ORDER BY q.created_at DESC LIMIT 1) AS linkedQuizName, " +
             "(SELECT COUNT(*) FROM quizzes q WHERE q.answer_key_id = ak.id) AS linkedQuizCount " +
-            "FROM answer_keys ak")
-    List<AnswerKeyLinkInfo> getLinkInfo();
+            "FROM answer_keys ak " +
+            "WHERE ak.teacher_id = :teacherId")
+    List<AnswerKeyLinkInfo> getLinkInfo(int teacherId);
 
-    /** Every assessment currently linked to any answer key, newest-first — grouped
+    /** Every assessment belonging to this teacher currently linked to any answer key, newest-first — grouped
      *  client-side by answerKeyId to populate the "Linked to" dropdown per card. */
     @Query("SELECT a.answer_key_id AS answerKeyId, a.id AS id, a.name AS name, a.sheet_type AS sheetType " +
             "FROM assessments a " +
-            "WHERE a.answer_key_id IS NOT NULL " +
+            "JOIN classes c ON c.id = a.class_id " +
+            "WHERE a.answer_key_id IS NOT NULL AND c.teacher_id = :teacherId " +
             "ORDER BY a.created_at DESC")
-    List<AnswerKeyLinkedAssessment> getLinkedAssessments();
+    List<AnswerKeyLinkedAssessment> getLinkedAssessments(int teacherId);
 
-    /** Every quiz currently linked to any answer key, newest-first — grouped
+    /** Every quiz belonging to this teacher currently linked to any answer key, newest-first — grouped
      *  client-side by answerKeyId to populate the "Linked to Quiz" dropdown per card. */
     @Query("SELECT q.answer_key_id AS answerKeyId, q.id AS id, q.name AS name, q.sheet_type AS sheetType " +
             "FROM quizzes q " +
-            "WHERE q.answer_key_id IS NOT NULL " +
+            "JOIN classes c ON c.id = q.class_id " +
+            "WHERE q.answer_key_id IS NOT NULL AND c.teacher_id = :teacherId " +
             "ORDER BY q.created_at DESC")
-    List<AnswerKeyLinkedQuiz> getLinkedQuizzes();
+    List<AnswerKeyLinkedQuiz> getLinkedQuizzes(int teacherId);
 }
