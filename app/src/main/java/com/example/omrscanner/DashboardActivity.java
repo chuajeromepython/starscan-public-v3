@@ -2539,14 +2539,6 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 updateSortPickers();
                 breadcrumbBar.setVisibility(View.VISIBLE);
                 breadcrumbDivider.setVisibility(View.VISIBLE);
-                // SCREEN_ACTIVITY is never reached from SCREEN_ECD_CLASS (that screen
-                // has no assessment list of its own), so the root crumb is always
-                // "Classes" here — regardless of which tab (Class screen, Assessments,
-                // Quizzes, or a post-sync restore) sent us here. Set it explicitly
-                // instead of inheriting whatever breadcrumbRoot was last left as,
-                // which previously leaked a stale "ECDC" label after visiting the
-                // ECDC tab earlier in the session.
-                breadcrumbRoot.setText("Classes");
                 breadcrumbSep1.setVisibility(View.VISIBLE);
                 breadcrumbClass.setVisibility(View.VISIBLE);
                 breadcrumbClass.setText(selectedClass.getDisplayName());
@@ -2569,6 +2561,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 topBarBadge.setText(selectedActivity.getSheetType());
                 breadcrumbBar.setVisibility(View.VISIBLE);
                 breadcrumbDivider.setVisibility(View.VISIBLE);
+                breadcrumbRoot.setText("Classes");
                 breadcrumbSep1.setVisibility(View.VISIBLE);
                 breadcrumbClass.setVisibility(View.VISIBLE);
                 breadcrumbClass.setText(selectedClass.getDisplayName());
