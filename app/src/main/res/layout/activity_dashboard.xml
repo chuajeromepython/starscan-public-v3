@@ -2929,6 +2929,70 @@
                             </FrameLayout>
                         </com.google.android.material.card.MaterialCardView>
 
+                        <!-- Step 1: pick the assessment period. Always visible on this
+                             screen; the search bar below only appears once a period is
+                             chosen, since a student's ECCD scores are scoped to a period. -->
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="8dp"
+                            android:text="Assessment Period"
+                            android:textColor="#64748B"
+                            android:textSize="10sp"
+                            android:textStyle="bold" />
+
+                        <LinearLayout
+                            android:id="@+id/ecdPeriodSwitcher"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="16dp"
+                            android:orientation="horizontal" />
+
+                        <!-- Step 2: search for a student, revealed once a period is picked. -->
+                        <LinearLayout
+                            android:id="@+id/ecdStudentSearchBlock"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:visibility="gone">
+
+                            <EditText
+                                android:id="@+id/ecdStudentSearchInput"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="12dp"
+                                android:background="@drawable/input_modern_bg"
+                                android:hint="🔍  Search by name or LRN..."
+                                android:imeOptions="actionDone"
+                                android:inputType="text"
+                                android:maxLines="1"
+                                android:paddingStart="12dp"
+                                android:paddingTop="9dp"
+                                android:paddingEnd="12dp"
+                                android:paddingBottom="9dp"
+                                android:textColor="#1E293B"
+                                android:textColorHint="#94A3B8"
+                                android:textSize="12sp" />
+
+                            <LinearLayout
+                                android:id="@+id/ecdStudentResultsList"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="vertical" />
+
+                            <TextView
+                                android:id="@+id/ecdStudentResultsEmpty"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="12dp"
+                                android:gravity="center"
+                                android:text="Type a name or LRN to find a student."
+                                android:textColor="#94A3B8"
+                                android:textSize="12sp"
+                                android:visibility="gone" />
+
+                        </LinearLayout>
+
                     </LinearLayout>
                 </ScrollView>
                 <ScrollView

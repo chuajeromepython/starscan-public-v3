@@ -898,6 +898,14 @@ public class OMRRepository {
     });
   }
 
+  // ECDC "select a student" search: scoped to one class, matches LRN or name.
+  public void searchStudentsInClass(String classId, String query, Callback<List<StudentLrnEntity>> callback) {
+    executor.execute(() -> {
+      List<StudentLrnEntity> result = db.studentLrnDao().searchInClass(classId, query);
+      if (callback != null) callback.onResult(result);
+    });
+  }
+
   public void insertStudentLrnFromSync(String lrn, String classId,
                                        Integer sectionId, Integer gradeLevelId, Integer classroomId, Callback<Void> callback) {
     executor.execute(() -> {

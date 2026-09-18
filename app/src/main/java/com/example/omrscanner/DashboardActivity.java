@@ -133,6 +133,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private boolean activityOpenedFromQuizzesTab = false;
     private List<ClassFolder> classFolders = new ArrayList<>();
     private ClassFolder selectedClass = null;
+    // Home's class selection can be clobbered by ECDC-tab navigation (they share
+    // selectedClass). This snapshot lets Home restore its own class after that.
+    private ClassFolder homeSelectedClassSnapshot = null;
     private ActivityFolder selectedActivity = null;
     private String selectedSheetType = null;
     private String selectedSheetFilter = null;
@@ -160,6 +163,17 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private String selectedEcdSort = CLASS_SORT_NEWEST;
     private String ecdGroupBy = "GRADE"; // GRADE or YEAR
     private boolean ecdFilterPanelVisible = false;
+
+    // ECDC class screen state: which period is selected, the in-progress
+    // student search, and which class this state currently belongs to (so
+    // switching classes resets it instead of leaking a stale period/query).
+    private static final String ECD_PERIOD_BOSY = "BOSY"; // Beginning of School Year
+    private static final String ECD_PERIOD_MOSY = "MOSY"; // Middle of School Year
+    private static final String ECD_PERIOD_EOSY = "EOSY"; // End of School Year
+    private String selectedEcdPeriod = null;
+    private String ecdStudentSearchQuery = "";
+    private String ecdStudentSearchLoadedForClassId = null;
+    private int ecdStudentSearchGeneration = 0;
 
     private String assessmentSearchQuery = "";
     private String selectedAssessmentSort = ASSESSMENT_SORT_NEWEST;
@@ -195,6 +209,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private final Handler searchDebounceHandler = new Handler(Looper.getMainLooper());
     private Runnable pendingHomeSearchRunnable;
     private Runnable pendingEcdSearchRunnable;
+    private Runnable pendingEcdStudentSearchRunnable;
     private Runnable pendingAssessmentSearchRunnable;
     private Runnable pendingMyAssessmentsSearchRunnable;
     private Runnable pendingAnswerKeysSearchRunnable;
@@ -283,6 +298,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private LinearLayout ecdFilterPanel, ecdGroupSwitcher, ecdGradeFilterBlock, ecdSchoolYearFilterBlock;
     private LinearLayout ecdGradeFilterChips, ecdSchoolYearFilterChips;
     private android.widget.ImageView ecdFilterToggle;
+    // ECDC class screen: period picker -> student search -> result cards.
+    private LinearLayout ecdPeriodSwitcher, ecdStudentSearchBlock, ecdStudentResultsList;
+    private EditText ecdStudentSearchInput;
+    private TextView ecdStudentResultsEmpty;
     private TextView homeSummaryClassCount, homeSummaryAssessmentCount;
     private EditText homeClassSearchInput;
     private TextView homeClassSortPicker;
@@ -669,6 +688,11 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         screenEcdClass = findViewById(R.id.screenEcdClass);
         ecdClassTeacherLabel = findViewById(R.id.ecdClassTeacherLabel);
         ecdClassStudentCount = findViewById(R.id.ecdClassStudentCount);
+        ecdPeriodSwitcher = findViewById(R.id.ecdPeriodSwitcher);
+        ecdStudentSearchBlock = findViewById(R.id.ecdStudentSearchBlock);
+        ecdStudentSearchInput = findViewById(R.id.ecdStudentSearchInput);
+        ecdStudentResultsList = findViewById(R.id.ecdStudentResultsList);
+        ecdStudentResultsEmpty = findViewById(R.id.ecdStudentResultsEmpty);
         screenClass = findViewById(R.id.screenClass);
         screenActivity = findViewById(R.id.screenActivity);
         screenUser = findViewById(R.id.screenUser);
@@ -967,6 +991,21 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             public void afterTextChanged(Editable s) {
                 ecdSearchQuery = s != null ? s.toString().trim() : "";
                 scheduleEcdSearchRefresh();
+            }
+        });
+        ecdStudentSearchInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int st, int c, int a) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int st, int b, int c) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                ecdStudentSearchQuery = s != null ? s.toString().trim() : "";
+                scheduleEcdStudentSearchRefresh();
             }
         });
         classAssessmentSearchInput.addTextChangedListener(new TextWatcher() {
@@ -1856,6 +1895,15 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         searchDebounceHandler.postDelayed(pendingEcdSearchRunnable, 220);
     }
 
+    private void scheduleEcdStudentSearchRefresh() {
+        if (pendingEcdStudentSearchRunnable != null)
+            searchDebounceHandler.removeCallbacks(pendingEcdStudentSearchRunnable);
+        pendingEcdStudentSearchRunnable = () -> {
+            if (SCREEN_ECD_CLASS.equals(currentScreen)) renderEcdStudentResults();
+        };
+        searchDebounceHandler.postDelayed(pendingEcdStudentSearchRunnable, 220);
+    }
+
     private void scheduleAssessmentSearchRefresh() {
         if (pendingAssessmentSearchRunnable != null)
             searchDebounceHandler.removeCallbacks(pendingAssessmentSearchRunnable);
@@ -2534,6 +2582,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
             case SCREEN_CLASS:
                 if (selectedClass == null) {
+                    selectedClass = homeSelectedClassSnapshot;
+                }
+                if (selectedClass == null) {
                     showScreen(SCREEN_HOME);
                     return;
                 }
@@ -2679,6 +2730,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                             ? "Teacher: " + globalTeacherName : "Teacher: Unknown");
                 }
                 refreshStudentSyncSubtitle(selectedClass.getId());
+                setupEcdClassStudentSearch();
                 break;
         }
 
@@ -2687,9 +2739,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
     /** True for the "chrome" tabs that sit alongside Home in the bottom nav. */
     private boolean isChromeTab(String screen) {
+        // isEcdFamily covers both SCREEN_ECD and SCREEN_ECD_CLASS, so leaving
+        // either one (not just the ECD root) is treated as leaving to another
+        // tab — otherwise Home's own remembered screen gets skipped or
+        // overwritten by whatever screen ECDC happened to be on.
         return SCREEN_USER.equals(screen) || SCREEN_ASSESSMENTS.equals(screen)
                 || SCREEN_ANSWERKEYS.equals(screen) || SCREEN_SCANS.equals(screen)
-                || SCREEN_QUIZZES.equals(screen) || SCREEN_ECD.equals(screen);
+                || SCREEN_QUIZZES.equals(screen) || isEcdFamily(screen);
     }
 
     /** True for the ECD tab's own root list and any screen inside its stack (e.g. a class). */
@@ -3286,6 +3342,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                                 "The selected class could not be loaded. Please try again.");
                                         return;
                                     }
+                                    homeSelectedClassSnapshot = selectedClass;
                                     selectedSheetFilter = null;
                                     assessmentSearchQuery = "";
                                     selectedAssessmentSort = ASSESSMENT_SORT_NEWEST;
@@ -3412,6 +3469,82 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             }
             if (SCREEN_ECD_CLASS.equals(currentScreen) && ecdClassStudentCount != null) {
                 ecdClassStudentCount.setText(label);
+            }
+        }));
+    }
+
+    /**
+     * Sets up the ECDC class screen's period picker + student search. Called
+     * every time SCREEN_ECD_CLASS is shown. If we've switched to a different
+     * class since last time, the period/search/results are reset so nothing
+     * from the previous class lingers.
+     */
+    private void setupEcdClassStudentSearch() {
+        if (selectedClass == null) return;
+
+        if (!selectedClass.getId().equals(ecdStudentSearchLoadedForClassId)) {
+            ecdStudentSearchLoadedForClassId = selectedClass.getId();
+            selectedEcdPeriod = null;
+            ecdStudentSearchQuery = "";
+            ecdStudentSearchInput.setText("");
+            ecdStudentResultsList.removeAllViews();
+        }
+
+        classRenderer.buildGroupBySwitcher(ecdPeriodSwitcher, new String[][]{
+                {"Beginning", ECD_PERIOD_BOSY},
+                {"Middle", ECD_PERIOD_MOSY},
+                {"End", ECD_PERIOD_EOSY},
+        }, selectedEcdPeriod, key -> {
+            selectedEcdPeriod = key;
+            setupEcdClassStudentSearch();
+            renderEcdStudentResults();
+        });
+
+        boolean periodChosen = selectedEcdPeriod != null;
+        ecdStudentSearchBlock.setVisibility(periodChosen ? View.VISIBLE : View.GONE);
+        if (periodChosen) {
+            renderEcdStudentResults();
+        }
+    }
+
+    /** Runs the LRN/name search against the currently selected class + period and renders result cards. */
+    private void renderEcdStudentResults() {
+        if (selectedClass == null || selectedEcdPeriod == null) return;
+
+        final String classId = selectedClass.getId();
+        final String query = ecdStudentSearchQuery;
+        final int requestId = ++ecdStudentSearchGeneration;
+
+        if (query.isEmpty()) {
+            ecdStudentResultsList.removeAllViews();
+            ecdStudentResultsEmpty.setVisibility(View.VISIBLE);
+            ecdStudentResultsEmpty.setText("Type a name or LRN to find a student.");
+            return;
+        }
+
+        repo.searchStudentsInClass(classId, query, results -> runOnUiThread(() -> {
+            if (requestId != ecdStudentSearchGeneration || !SCREEN_ECD_CLASS.equals(currentScreen))
+                return;
+            if (selectedClass == null || !classId.equals(selectedClass.getId()))
+                return;
+
+            ecdStudentResultsList.removeAllViews();
+
+            if (results == null || results.isEmpty()) {
+                ecdStudentResultsEmpty.setVisibility(View.VISIBLE);
+                ecdStudentResultsEmpty.setText("No students match \"" + query + "\".");
+                return;
+            }
+            ecdStudentResultsEmpty.setVisibility(View.GONE);
+
+            for (com.example.omrscanner.database.entities.StudentLrnEntity s : results) {
+                String fullName = ((s.lastName != null ? s.lastName : "") + ", "
+                        + (s.firstName != null ? s.firstName : "")
+                        + (s.middleName != null && !s.middleName.isEmpty() ? " " + s.middleName : "")).trim();
+                final String lrn = s.lrn;
+                ecdStudentResultsList.addView(homeRenderer.createStudentResultCard(fullName, lrn, () -> {
+                    // TODO: open this student's ECCD checklist for selectedEcdPeriod once that screen exists.
+                }));
             }
         }));
     }
