@@ -20,9 +20,13 @@ import com.example.omrscanner.database.dao.ScanDao;
 import com.example.omrscanner.database.dao.StudentLrnDao;
 import com.example.omrscanner.database.dao.TeacherDao;
 import com.example.omrscanner.database.dao.UserDao;
+import com.example.omrscanner.database.dao.EcdcDomainDao;
+import com.example.omrscanner.database.dao.EcdcCompetencyDao;
 import com.example.omrscanner.database.entities.AnswerEntity;
 import com.example.omrscanner.database.entities.AnswerKeyEntity;
 import com.example.omrscanner.database.entities.AssessmentEntity;
+import com.example.omrscanner.database.entities.EcdcDomainEntity;
+import com.example.omrscanner.database.entities.EcdcCompetencyEntity;
 import com.example.omrscanner.database.entities.QuizEntity;
 import com.example.omrscanner.database.entities.QuizScanEntity;
 import com.example.omrscanner.database.entities.QuizScanAnswerEntity;
@@ -64,6 +68,10 @@ import com.example.omrscanner.database.entities.UserEntity;
  *            a shared device could read every other teacher's answer keys.
  *            Backfilled from each key's linked assessment/quiz's class
  *            owner; keys with no surviving link are dropped (unattributable).
+ *   23 → 24: Added ecdc_domains + ecdc_competencies tables. Reference data
+ *            synced verbatim from GET /api/ecdc/domains (Sync ECCD button);
+ *            rows are keyed by the server's own numeric id and fully
+ *            replaced on every sync, not appended to.
  *
  * Usage:
  * AppDatabase db = AppDatabase.getInstance(context);
@@ -80,8 +88,10 @@ import com.example.omrscanner.database.entities.UserEntity;
         StudentLrnEntity.class,
         QuizEntity.class,
         QuizScanEntity.class,
-        QuizScanAnswerEntity.class
-}, version = 23, exportSchema = false)
+        QuizScanAnswerEntity.class,
+        EcdcDomainEntity.class,
+        EcdcCompetencyEntity.class
+}, version = 24, exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase {
 
   private static final String DATABASE_NAME = "omrscanner.db";
@@ -453,6 +463,23 @@ public abstract class AppDatabase extends RoomDatabase {
     }
   };
 
+  private static final Migration MIGRATION_23_24 = new Migration(23, 24) {
+    @Override
+    public void migrate(@NonNull SupportSQLiteDatabase db) {
+      db.execSQL("CREATE TABLE IF NOT EXISTS ecdc_domains ("
+              + "id INTEGER NOT NULL PRIMARY KEY, "
+              + "domain TEXT)");
+
+      db.execSQL("CREATE TABLE IF NOT EXISTS ecdc_competencies ("
+              + "id INTEGER NOT NULL PRIMARY KEY, "
+              + "domain_id INTEGER NOT NULL, "
+              + "competency TEXT, "
+              + "FOREIGN KEY(domain_id) REFERENCES ecdc_domains(id) ON DELETE CASCADE)");
+      db.execSQL("CREATE INDEX IF NOT EXISTS index_ecdc_competencies_domain_id "
+              + "ON ecdc_competencies(domain_id)");
+    }
+  };
+
   // ── Abstract DAO accessors (Room generates the implementations) ──────────
   public abstract TeacherDao teacherDao();
 
@@ -476,7 +503,11 @@ public abstract class AppDatabase extends RoomDatabase {
 
   public abstract QuizScanAnswerDao quizScanAnswerDao();
 
-  // ── Singleton ────────────────────────────────────────────────────────────
+  public abstract EcdcDomainDao ecdcDomainDao();
+
+  public abstract EcdcCompetencyDao ecdcCompetencyDao();
+
+  // ── Singleton────────────────────────────────────────────────────────────
   public static AppDatabase getInstance(Context context) {
     if (INSTANCE == null) {
       synchronized (AppDatabase.class) {
@@ -485,7 +516,7 @@ public abstract class AppDatabase extends RoomDatabase {
               context.getApplicationContext(),
               AppDatabase.class,
               DATABASE_NAME)
-                  .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23)
+                  .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24)
               .build();
         }
       }

@@ -365,6 +365,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private static final String SYNC_PATH = "/api/classrooms/sync"; // route to the STARS system (classes)
     private static final String ASSESSMENT_SYNC_PATH = "/api/students/sync"; // (student_lrn)
     private static final String ASSESSMENTS_SYNC_PATH = "/api/assessment/sync"; // pulls a teacher's assessments + answer keys (user_id)
+    private static final String ECDC_DOMAINS_SYNC_PATH = "/api/ecdc/domains"; // pulls the ECDC domain + competency reference list (GET, not classroom-scoped)
     private static final String UPLOAD_ASSESSMENT_PATH = "/api/upload/assessment"; // multipart CSV upload
     /** Matches Toast.LENGTH_SHORT's on-screen duration — used to delay a UI refresh until the sync toast has finished showing. */
     private static final long TOAST_SHORT_DELAY_MS = 2000;
@@ -911,7 +912,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
         findViewById(R.id.homeSyncClassRow).setOnClickListener(v -> onSyncClicked());
         findViewById(R.id.classSyncStudentsRow).setOnClickListener(v -> onAssessmentSyncClicked());
-        findViewById(R.id.ecdSyncStudentsRow).setOnClickListener(v -> onAssessmentSyncClicked());
+        findViewById(R.id.ecdSyncStudentsRow).setOnClickListener(v -> onEcdcDomainsSyncClicked());
 
         fabAssessmentSyncRow.setOnClickListener(v -> {
             closeFabMenu();
@@ -1281,6 +1282,17 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 return;
             }
             performAssessmentSync(selectedClass.getClassroomId(), user.serverIp);
+        });
+    }
+
+    private void onEcdcDomainsSyncClicked() {
+        repo.getActiveUser(user -> {
+            if (user == null || user.serverIp == null || user.serverIp.trim().isEmpty()) {
+                runOnUiThread(() -> ui.showErrorDialog("Scan required",
+                        "Please scan your QR code from the website system before syncing."));
+                return;
+            }
+            syncEcdcDomains(this, user.serverIp);
         });
     }
 
@@ -4636,6 +4648,93 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 mainHandler.post(() -> new com.google.android.material.dialog.MaterialAlertDialogBuilder(context, R.style.ThemeOverlay_OMRScanner_Dialog)
                         .setTitle("Sync failed")
                         .setMessage("Could not sync students: " + e.getMessage())
+                        .setPositiveButton("OK", null)
+                        .show());
+            } finally {
+                if (conn != null) conn.disconnect();
+            }
+        }).start();
+    }
+
+    public static void syncEcdcDomains(android.content.Context context, String serverIp) {
+        android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+        mainHandler.post(() -> android.widget.Toast.makeText(context, "Syncing ECCD domains…", android.widget.Toast.LENGTH_SHORT).show());
+
+        new Thread(() -> {
+            java.net.HttpURLConnection conn = null;
+            try {
+                java.net.URL url = new java.net.URL(serverIp + ECDC_DOMAINS_SYNC_PATH);
+                conn = (java.net.HttpURLConnection) url.openConnection();
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
+                conn.setRequestMethod("GET");
+                conn.setRequestProperty("Accept", "application/json");
+
+                int code = conn.getResponseCode();
+                java.io.InputStream is = (code >= 200 && code < 300)
+                        ? conn.getInputStream() : conn.getErrorStream();
+
+                StringBuilder sb = new StringBuilder();
+                try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(is, "UTF-8"))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) sb.append(line);
+                }
+
+                String responseBody = sb.toString();
+                android.util.Log.d("OMR_ECDC_SYNC", "HTTP " + code + " — raw response: " + responseBody);
+
+                org.json.JSONObject root = new org.json.JSONObject(responseBody);
+                org.json.JSONArray domains = root.optJSONArray("data");
+
+                if (domains == null || domains.length() == 0) {
+                    mainHandler.post(() -> android.widget.Toast.makeText(context,
+                            "No ECCD domains returned.", android.widget.Toast.LENGTH_SHORT).show());
+                    return;
+                }
+
+                int domainCount = domains.length();
+                java.util.List<com.example.omrscanner.database.entities.EcdcDomainEntity> domainEntities =
+                        new java.util.ArrayList<>();
+                java.util.List<com.example.omrscanner.database.entities.EcdcCompetencyEntity> competencyEntities =
+                        new java.util.ArrayList<>();
+
+                for (int i = 0; i < domainCount; i++) {
+                    org.json.JSONObject domainObj = domains.getJSONObject(i);
+
+                    com.example.omrscanner.database.entities.EcdcDomainEntity domainEntity =
+                            new com.example.omrscanner.database.entities.EcdcDomainEntity();
+                    domainEntity.id = domainObj.optInt("id");
+                    domainEntity.domain = domainObj.optString("domain", null);
+                    domainEntities.add(domainEntity);
+
+                    org.json.JSONArray competencies = domainObj.optJSONArray("competencies");
+                    if (competencies != null) {
+                        for (int j = 0; j < competencies.length(); j++) {
+                            org.json.JSONObject c = competencies.getJSONObject(j);
+                            com.example.omrscanner.database.entities.EcdcCompetencyEntity competencyEntity =
+                                    new com.example.omrscanner.database.entities.EcdcCompetencyEntity();
+                            competencyEntity.id = c.optInt("id");
+                            competencyEntity.domainId = c.optInt("domain_id");
+                            competencyEntity.competency = c.optString("competency", null);
+                            competencyEntities.add(competencyEntity);
+                        }
+                    }
+                }
+
+                final int finalCompetencyCount = competencyEntities.size();
+                com.example.omrscanner.database.OMRRepository repo =
+                        new com.example.omrscanner.database.OMRRepository(context);
+                repo.replaceEcdcDomains(domainEntities, competencyEntities, ignored ->
+                        mainHandler.post(() -> android.widget.Toast.makeText(context,
+                                "Synced " + domainCount + " domains (" + finalCompetencyCount + " competencies)",
+                                android.widget.Toast.LENGTH_SHORT).show()));
+
+            } catch (Exception e) {
+                android.util.Log.e("OMR_ECDC_SYNC", "Sync failed: " + e.getClass().getSimpleName() + ": " + e.getMessage(), e);
+                mainHandler.post(() -> new com.google.android.material.dialog.MaterialAlertDialogBuilder(context, R.style.ThemeOverlay_OMRScanner_Dialog)
+                        .setTitle("Sync failed")
+                        .setMessage("Could not sync ECCD domains: " + e.getMessage())
                         .setPositiveButton("OK", null)
                         .show());
             } finally {

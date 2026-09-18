@@ -13,6 +13,8 @@ import com.example.omrscanner.database.entities.QuizScanEntity;
 import com.example.omrscanner.database.entities.QuizScanAnswerEntity;
 import com.example.omrscanner.database.entities.StudentLrnEntity;
 import com.example.omrscanner.database.entities.TeacherEntity;
+import com.example.omrscanner.database.entities.EcdcDomainEntity;
+import com.example.omrscanner.database.entities.EcdcCompetencyEntity;
 import com.example.omrscanner.database.projections.AssessmentListRow;
 import com.example.omrscanner.database.projections.ClassListRow;
 import com.example.omrscanner.database.projections.ScanListRow;
@@ -863,6 +865,36 @@ public class OMRRepository {
       }
       if (callback != null)
         callback.onResult(null);
+    });
+  }
+
+  public void replaceEcdcDomains(List<EcdcDomainEntity> domains,
+                                 List<EcdcCompetencyEntity> competencies,
+                                 Callback<Void> callback) {
+    executor.execute(() -> {
+      try {
+        db.ecdcCompetencyDao().deleteAll();
+        db.ecdcDomainDao().deleteAll();
+        db.ecdcDomainDao().insertAll(domains);
+        db.ecdcCompetencyDao().insertAll(competencies);
+      } catch (Exception e) {
+        Log.e("EcdcSync", "Failed to replace ECDC domains/competencies", e);
+      }
+      if (callback != null) callback.onResult(null);
+    });
+  }
+
+  public void getEcdcDomains(Callback<List<EcdcDomainEntity>> callback) {
+    executor.execute(() -> {
+      List<EcdcDomainEntity> result = db.ecdcDomainDao().getAll();
+      if (callback != null) callback.onResult(result);
+    });
+  }
+
+  public void getEcdcCompetenciesForDomain(int domainId, Callback<List<EcdcCompetencyEntity>> callback) {
+    executor.execute(() -> {
+      List<EcdcCompetencyEntity> result = db.ecdcCompetencyDao().getByDomain(domainId);
+      if (callback != null) callback.onResult(result);
     });
   }
 
