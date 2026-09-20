@@ -2995,6 +2995,176 @@
 
                     </LinearLayout>
                 </ScrollView>
+
+                <!-- ECDC student checklist: header card, domain pills, then one card per
+                     competency with Present / Not present / Not tested radio buttons.
+                     Save is pinned below the scrolling list so it stays reachable on the
+                     long domains (Self Help has 27 items). -->
+                <LinearLayout
+                    android:id="@+id/screenEcdStudent"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <ScrollView
+                        android:id="@+id/ecdStudentScroll"
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_weight="1"
+                        android:fillViewport="true"
+                        android:overScrollMode="never"
+                        android:scrollbars="none">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:paddingStart="14dp"
+                            android:paddingEnd="14dp"
+                            android:paddingTop="14dp"
+                            android:paddingBottom="16dp">
+
+                            <com.google.android.material.card.MaterialCardView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="16dp"
+                                app:cardCornerRadius="20dp"
+                                app:cardElevation="3dp"
+                                app:strokeWidth="0dp">
+                                <FrameLayout
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:background="@drawable/bg_header_gradient">
+                                    <View
+                                        android:layout_width="110dp"
+                                        android:layout_height="110dp"
+                                        android:layout_gravity="top|end"
+                                        android:layout_marginTop="-24dp"
+                                        android:layout_marginEnd="-16dp"
+                                        android:background="@drawable/shape_circle_white"
+                                        android:alpha="0.08" />
+                                    <LinearLayout
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:orientation="vertical"
+                                        android:padding="14dp">
+
+                                        <TextView
+                                            android:id="@+id/ecdStudentName"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:maxLines="2"
+                                            android:ellipsize="end"
+                                            android:textColor="#FFFFFF"
+                                            android:textSize="16sp"
+                                            android:textStyle="bold"
+                                            android:fontFamily="@font/poppins_bold" />
+
+                                        <TextView
+                                            android:id="@+id/ecdStudentMeta"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_marginTop="2dp"
+                                            android:textColor="#CCFFFFFF"
+                                            android:textSize="11sp" />
+
+                                        <TextView
+                                            android:id="@+id/ecdStudentProgress"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_marginTop="6dp"
+                                            android:textColor="#FFFFFF"
+                                            android:textSize="11sp"
+                                            android:textStyle="bold" />
+                                    </LinearLayout>
+                                </FrameLayout>
+                            </com.google.android.material.card.MaterialCardView>
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="8dp"
+                                android:text="Domain"
+                                android:textColor="#64748B"
+                                android:textSize="10sp"
+                                android:textStyle="bold" />
+
+                            <!-- Seven domains don't fit one row on a phone, so the pills scroll sideways. -->
+                            <HorizontalScrollView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="16dp"
+                                android:overScrollMode="never"
+                                android:scrollbars="none">
+                                <LinearLayout
+                                    android:id="@+id/ecdDomainSwitcher"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:orientation="horizontal" />
+                            </HorizontalScrollView>
+
+                            <TextView
+                                android:id="@+id/ecdDomainHint"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="12dp"
+                                android:gravity="center"
+                                android:text="Select a domain to see its competencies."
+                                android:textColor="#94A3B8"
+                                android:textSize="12sp" />
+
+                            <TextView
+                                android:id="@+id/ecdDomainTitle"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="10dp"
+                                android:textColor="#1E293B"
+                                android:textSize="13sp"
+                                android:textStyle="bold"
+                                android:fontFamily="@font/poppins_medium"
+                                android:visibility="gone" />
+
+                            <LinearLayout
+                                android:id="@+id/ecdCompetencyList"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="vertical" />
+
+                        </LinearLayout>
+                    </ScrollView>
+
+                    <LinearLayout
+                        android:id="@+id/ecdSaveBar"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:background="#FFFFFF"
+                        android:elevation="6dp"
+                        android:visibility="gone">
+                        <View
+                            android:layout_width="match_parent"
+                            android:layout_height="1dp"
+                            android:background="#E2E8F0" />
+                        <TextView
+                            android:id="@+id/ecdSaveButton"
+                            android:layout_width="match_parent"
+                            android:layout_height="46dp"
+                            android:layout_marginStart="14dp"
+                            android:layout_marginEnd="14dp"
+                            android:layout_marginTop="10dp"
+                            android:layout_marginBottom="10dp"
+                            android:gravity="center"
+                            android:text="Save"
+                            android:textColor="#FFFFFF"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:fontFamily="@font/poppins_bold"
+                            android:clickable="true"
+                            android:focusable="true" />
+                    </LinearLayout>
+
+                </LinearLayout>
                 <ScrollView
                     android:id="@+id/screenClass"
                     android:layout_width="match_parent"

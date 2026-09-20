@@ -15,6 +15,7 @@ import com.example.omrscanner.database.entities.StudentLrnEntity;
 import com.example.omrscanner.database.entities.TeacherEntity;
 import com.example.omrscanner.database.entities.EcdcDomainEntity;
 import com.example.omrscanner.database.entities.EcdcCompetencyEntity;
+import com.example.omrscanner.database.entities.EcdcResponseEntity;
 import com.example.omrscanner.database.projections.AssessmentListRow;
 import com.example.omrscanner.database.projections.ClassListRow;
 import com.example.omrscanner.database.projections.ScanListRow;
@@ -891,10 +892,41 @@ public class OMRRepository {
     });
   }
 
+  /** Every synced competency across all domains, ordered by id. */
+  public void getAllEcdcCompetencies(Callback<List<EcdcCompetencyEntity>> callback) {
+    executor.execute(() -> {
+      List<EcdcCompetencyEntity> result = db.ecdcCompetencyDao().getAll();
+      if (callback != null) callback.onResult(result);
+    });
+  }
+
   public void getEcdcCompetenciesForDomain(int domainId, Callback<List<EcdcCompetencyEntity>> callback) {
     executor.execute(() -> {
       List<EcdcCompetencyEntity> result = db.ecdcCompetencyDao().getByDomain(domainId);
       if (callback != null) callback.onResult(result);
+    });
+  }
+
+  // ECDC checklist marks (Present / Not present / Not tested) for one student + period.
+  public void getEcdcResponses(String classId, String lrn, String period,
+                               Callback<List<EcdcResponseEntity>> callback) {
+    executor.execute(() -> {
+      List<EcdcResponseEntity> result = db.ecdcResponseDao().getForStudentPeriod(classId, lrn, period);
+      if (callback != null) callback.onResult(result);
+    });
+  }
+
+  /** Upserts the given marks; callback receives true on success, false if the write failed. */
+  public void saveEcdcResponses(List<EcdcResponseEntity> responses, Callback<Boolean> callback) {
+    executor.execute(() -> {
+      boolean ok = true;
+      try {
+        db.ecdcResponseDao().insertAll(responses);
+      } catch (Exception e) {
+        ok = false;
+        Log.e("EcdcResponses", "Failed to save ECDC responses", e);
+      }
+      if (callback != null) callback.onResult(ok);
     });
   }
 

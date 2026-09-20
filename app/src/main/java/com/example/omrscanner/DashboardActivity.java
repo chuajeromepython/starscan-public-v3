@@ -37,6 +37,7 @@ import com.example.omrscanner.dashboard.ClassExporter;
 import com.example.omrscanner.dashboard.ClassScreenRenderer;
 import com.example.omrscanner.dashboard.DashboardDialogs;
 import com.example.omrscanner.dashboard.DashboardUiHelper;
+import com.example.omrscanner.dashboard.EcdcScreenRenderer;
 import com.example.omrscanner.dashboard.HomeScreenRenderer;
 import com.example.omrscanner.database.DataMapper;
 import com.example.omrscanner.database.OMRRepository;
@@ -114,6 +115,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private static final String SCREEN_QUIZZES = "quizzes";
     private static final String SCREEN_ECD = "ecd";
     private static final String SCREEN_ECD_CLASS = "ecd_class";
+    private static final String SCREEN_ECD_STUDENT = "ecd_student";
 
     // ── Sort constants (delegated to renderers, kept here for initialisation) ──
     private static final String CLASS_SORT_NEWEST = HomeScreenRenderer.CLASS_SORT_NEWEST;
@@ -175,6 +177,21 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private String ecdStudentSearchLoadedForClassId = null;
     private int ecdStudentSearchGeneration = 0;
 
+    // ECDC student checklist screen state. The "saved" map mirrors what's in the
+    // ecdc_responses table; the "draft" map is what's currently on screen. They
+    // differ exactly when there are unsaved changes (competency id -> STATUS_*).
+    private String selectedEcdStudentLrn = null;
+    private String selectedEcdStudentName = null;
+    // Class the open student belongs to. selectedClass is shared with Home, so
+    // this is how a stale student is detected after the user roams other tabs.
+    private String ecdStudentClassId = null;
+    private Integer selectedEcdDomainId = null;
+    private List<com.example.omrscanner.database.entities.EcdcDomainEntity> ecdDomains = new ArrayList<>();
+    private List<com.example.omrscanner.database.entities.EcdcCompetencyEntity> ecdCompetencies = new ArrayList<>();
+    private Map<Integer, String> ecdSavedStatuses = new java.util.HashMap<>();
+    private Map<Integer, String> ecdDraftStatuses = new java.util.HashMap<>();
+    private int ecdChecklistLoadGeneration = 0;
+
     private String assessmentSearchQuery = "";
     private String selectedAssessmentSort = ASSESSMENT_SORT_NEWEST;
     private String classGroupBy = "SHEET"; // SHEET or TYPE
@@ -228,6 +245,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private DashboardUiHelper ui;
     private HomeScreenRenderer homeRenderer;
     private ClassScreenRenderer classRenderer;
+    private EcdcScreenRenderer ecdcRenderer;
     private ActivityScreenRenderer activityRenderer;
     private DashboardDialogs dialogs;
 
@@ -241,7 +259,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private TextView tvLastSynced;
     private LinearLayout teacherNameRow;
 
-    private View screenHome, screenAssessments, screenAnswerKeys, screenScans, screenQuizzes, screenECD, screenEcdClass;
+    private View screenHome, screenAssessments, screenAnswerKeys, screenScans, screenQuizzes, screenECD, screenEcdClass, screenEcdStudent;
     private ScrollView screenClass, screenActivity, screenUser;
 
     private android.widget.FrameLayout bottomNav;
@@ -302,6 +320,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private LinearLayout ecdPeriodSwitcher, ecdStudentSearchBlock, ecdStudentResultsList;
     private EditText ecdStudentSearchInput;
     private TextView ecdStudentResultsEmpty;
+    // ECDC student checklist screen: domain pills -> competency cards -> Save.
+    private LinearLayout ecdDomainSwitcher, ecdCompetencyList, ecdSaveBar;
+    private TextView ecdStudentName, ecdStudentMeta, ecdStudentProgress;
+    private TextView ecdDomainHint, ecdDomainTitle, ecdSaveButton;
     private TextView homeSummaryClassCount, homeSummaryAssessmentCount;
     private EditText homeClassSearchInput;
     private TextView homeClassSortPicker;
@@ -566,6 +588,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         ui = new DashboardUiHelper(this);
         homeRenderer = new HomeScreenRenderer(this, ui);
         classRenderer = new ClassScreenRenderer(this, ui);
+        ecdcRenderer = new EcdcScreenRenderer(this, ui);
         activityRenderer = new ActivityScreenRenderer(this, ui);
         scansRenderer = new ScansScreenRenderer(this, ui);
         dialogs = new DashboardDialogs(this, ui, repo, this);
@@ -654,6 +677,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 } else if (SCREEN_CLASS.equals(currentScreen)) {
                     selectedClass = null;
                     showScreen(SCREEN_HOME);
+                } else if (SCREEN_ECD_STUDENT.equals(currentScreen)) {
+                    // showScreen() asks about unsaved marks before actually leaving.
+                    showScreen(SCREEN_ECD_CLASS);
                 } else if (SCREEN_ECD_CLASS.equals(currentScreen)) {
                     selectedClass = null;
                     showScreen(SCREEN_ECD);
@@ -693,6 +719,16 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         ecdStudentSearchInput = findViewById(R.id.ecdStudentSearchInput);
         ecdStudentResultsList = findViewById(R.id.ecdStudentResultsList);
         ecdStudentResultsEmpty = findViewById(R.id.ecdStudentResultsEmpty);
+        screenEcdStudent = findViewById(R.id.screenEcdStudent);
+        ecdStudentName = findViewById(R.id.ecdStudentName);
+        ecdStudentMeta = findViewById(R.id.ecdStudentMeta);
+        ecdStudentProgress = findViewById(R.id.ecdStudentProgress);
+        ecdDomainSwitcher = findViewById(R.id.ecdDomainSwitcher);
+        ecdDomainHint = findViewById(R.id.ecdDomainHint);
+        ecdDomainTitle = findViewById(R.id.ecdDomainTitle);
+        ecdCompetencyList = findViewById(R.id.ecdCompetencyList);
+        ecdSaveBar = findViewById(R.id.ecdSaveBar);
+        ecdSaveButton = findViewById(R.id.ecdSaveButton);
         screenClass = findViewById(R.id.screenClass);
         screenActivity = findViewById(R.id.screenActivity);
         screenUser = findViewById(R.id.screenUser);
@@ -937,6 +973,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         findViewById(R.id.homeSyncClassRow).setOnClickListener(v -> onSyncClicked());
         findViewById(R.id.classSyncStudentsRow).setOnClickListener(v -> onAssessmentSyncClicked());
         findViewById(R.id.ecdSyncStudentsRow).setOnClickListener(v -> onEcdcDomainsSyncClicked());
+        ecdSaveButton.setOnClickListener(v -> saveEcdcDraft(null));
 
         fabAssessmentSyncRow.setOnClickListener(v -> {
             closeFabMenu();
@@ -945,15 +982,17 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
         //teacherNameRow.setOnClickListener(v -> dialogs.showEditTeacherNameDialog());
 
-        breadcrumbRoot.setOnClickListener(v -> {
+        breadcrumbRoot.setOnClickListener(v -> runAfterEcdChecklistExitCheck(() -> {
             selectedClass = null;
             selectedActivity = null;
-            showScreen(SCREEN_ECD_CLASS.equals(currentScreen) ? SCREEN_ECD : SCREEN_HOME);
-        });
+            showScreen(isEcdFamily(currentScreen) ? SCREEN_ECD : SCREEN_HOME);
+        }));
         breadcrumbClass.setOnClickListener(v -> {
             if (SCREEN_ACTIVITY.equals(currentScreen)) {
                 selectedActivity = null;
                 showScreen(getActivityBackScreen());
+            } else if (SCREEN_ECD_STUDENT.equals(currentScreen)) {
+                showScreen(SCREEN_ECD_CLASS);
             }
         });
         // Go directly to camera — no scan method picker
@@ -2544,6 +2583,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     // ═══════════════════════════════════════════════════════════════
 
     private void showScreen(String screen) {
+        // Leaving the ECDC checklist with marks that were never saved: ask first.
+        // Every route out (back, breadcrumb, bottom-nav tabs) funnels through here.
+        if (SCREEN_ECD_STUDENT.equals(currentScreen) && !SCREEN_ECD_STUDENT.equals(screen)
+                && hasEcdUnsavedChanges()) {
+            confirmLeaveEcdChecklist(() -> showScreen(screen));
+            return;
+        }
         closeFabMenu();
         boolean leavingEcdFamily = isEcdFamily(currentScreen) && !isEcdFamily(screen);
         if (leavingEcdFamily) {
@@ -2561,6 +2607,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         screenQuizzes.setVisibility(View.GONE);
         screenECD.setVisibility(View.GONE);
         screenEcdClass.setVisibility(View.GONE);
+        screenEcdStudent.setVisibility(View.GONE);
 
         switch (screen) {
             case SCREEN_HOME:
@@ -2732,6 +2779,34 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 refreshStudentSyncSubtitle(selectedClass.getId());
                 setupEcdClassStudentSearch();
                 break;
+
+            case SCREEN_ECD_STUDENT:
+                if (selectedClass == null || selectedEcdPeriod == null
+                        || selectedEcdStudentLrn == null
+                        || !selectedClass.getId().equals(ecdStudentClassId)) {
+                    // Stale student (e.g. the shared selectedClass changed while the
+                    // user was on another tab) — fall back one level.
+                    showScreen(selectedClass != null ? SCREEN_ECD_CLASS : SCREEN_ECD);
+                    return;
+                }
+                screenEcdStudent.setVisibility(View.VISIBLE);
+                btnBack.setVisibility(View.VISIBLE);
+                fabMain.setVisibility(View.GONE);
+                topBarTitle.setText(selectedEcdStudentName);
+                topBarBadge.setVisibility(View.VISIBLE);
+                topBarBadge.setText(selectedEcdPeriod);
+                breadcrumbBar.setVisibility(View.VISIBLE);
+                breadcrumbDivider.setVisibility(View.VISIBLE);
+                breadcrumbRoot.setText("ECDC");
+                breadcrumbSep1.setVisibility(View.VISIBLE);
+                breadcrumbClass.setVisibility(View.VISIBLE);
+                breadcrumbClass.setText(selectedClass.getDisplayName());
+                breadcrumbClass.setTextColor(Color.parseColor("#0038A8"));
+                breadcrumbSep2.setVisibility(View.VISIBLE);
+                breadcrumbActivity.setVisibility(View.VISIBLE);
+                breadcrumbActivity.setText(selectedEcdStudentName);
+                setupEcdStudentScreen();
+                break;
         }
 
         updateBottomNavSelection(screen);
@@ -2750,7 +2825,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
     /** True for the ECD tab's own root list and any screen inside its stack (e.g. a class). */
     private boolean isEcdFamily(String screen) {
-        return SCREEN_ECD.equals(screen) || SCREEN_ECD_CLASS.equals(screen);
+        return SCREEN_ECD.equals(screen) || SCREEN_ECD_CLASS.equals(screen)
+                || SCREEN_ECD_STUDENT.equals(screen);
     }
 
     /** Switches to the Home tab's remembered screen (called by the tab tap or back button). */
@@ -2814,7 +2890,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     }
 
     private void selectECDTab() {
-        if (SCREEN_ECD_CLASS.equals(currentScreen)) {
+        if (SCREEN_ECD_CLASS.equals(currentScreen) || SCREEN_ECD_STUDENT.equals(currentScreen)) {
             // Already inside the ECD tab's own stack — a second tap on the tab
             // jumps back to its root, same as Home's behavior.
             showScreen(SCREEN_ECD);
@@ -2841,7 +2917,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         boolean answerKeysActive = SCREEN_ANSWERKEYS.equals(screen);
         boolean scansActive = SCREEN_SCANS.equals(screen);
         boolean quizzesActive = SCREEN_QUIZZES.equals(screen);
-        boolean ecdActive = SCREEN_ECD.equals(screen) || SCREEN_ECD_CLASS.equals(screen);
+        boolean ecdActive = isEcdFamily(screen);
         boolean homeActive = !userActive && !assessmentsActive && !answerKeysActive && !scansActive && !quizzesActive && !ecdActive;
 
         navHomeIcon.setColorFilter(activeColor);
@@ -3206,6 +3282,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 selectedActivity = null;
                 showScreen(getActivityBackScreen());
                 break;
+            case SCREEN_ECD_STUDENT:
+                showScreen(SCREEN_ECD_CLASS);
+                break;
             case SCREEN_ECD_CLASS:
                 selectedClass = null;
                 showScreen(SCREEN_ECD);
@@ -3542,11 +3621,247 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                         + (s.firstName != null ? s.firstName : "")
                         + (s.middleName != null && !s.middleName.isEmpty() ? " " + s.middleName : "")).trim();
                 final String lrn = s.lrn;
-                ecdStudentResultsList.addView(homeRenderer.createStudentResultCard(fullName, lrn, () -> {
-                    // TODO: open this student's ECCD checklist for selectedEcdPeriod once that screen exists.
-                }));
+                ecdStudentResultsList.addView(homeRenderer.createStudentResultCard(fullName, lrn,
+                        () -> openEcdStudent(lrn, fullName)));
             }
         }));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // RENDER — ECDC STUDENT CHECKLIST
+    // ═══════════════════════════════════════════════════════════════
+
+    /** Opens the checklist for one student under the currently selected class + period. */
+    private void openEcdStudent(String lrn, String fullName) {
+        if (selectedClass == null || selectedEcdPeriod == null) return;
+        if (lrn == null || lrn.trim().isEmpty()) {
+            // Marks are keyed by (class, LRN, period), so without an LRN they couldn't be saved.
+            ui.showErrorDialog("No LRN on record",
+                    "This student has no LRN, so their checklist can't be saved. "
+                            + "Re-sync the class students and try again.");
+            return;
+        }
+        selectedEcdStudentLrn = lrn;
+        selectedEcdStudentName = fullName;
+        ecdStudentClassId = selectedClass.getId();
+        selectedEcdDomainId = null;
+        ecdSavedStatuses = new java.util.HashMap<>();
+        ecdDraftStatuses = new java.util.HashMap<>();
+        showScreen(SCREEN_ECD_STUDENT);
+    }
+
+    /**
+     * Loads the synced domains + competencies and this student's saved marks, then
+     * renders the domain pills. Runs every time the screen is shown, so returning
+     * from another tab always reflects what's actually in the database.
+     */
+    private void setupEcdStudentScreen() {
+        final String classId = ecdStudentClassId;
+        final String lrn = selectedEcdStudentLrn;
+        final String period = selectedEcdPeriod;
+        final int requestId = ++ecdChecklistLoadGeneration;
+
+        ecdStudentName.setText(selectedEcdStudentName);
+        ecdStudentMeta.setText("LRN: " + lrn + "  \u2022  " + EcdcScreenRenderer.periodLabel(period));
+        ecdStudentProgress.setText("Loading\u2026");
+        ecdCompetencyList.removeAllViews();
+
+        repo.getEcdcDomains(domains -> repo.getAllEcdcCompetencies(competencies ->
+                repo.getEcdcResponses(classId, lrn, period, responses -> runOnUiThread(() -> {
+                    if (requestId != ecdChecklistLoadGeneration
+                            || !SCREEN_ECD_STUDENT.equals(currentScreen)) return;
+
+                    ecdDomains = domains != null ? domains : new ArrayList<>();
+                    ecdCompetencies = competencies != null ? competencies : new ArrayList<>();
+
+                    ecdSavedStatuses = new java.util.HashMap<>();
+                    if (responses != null) {
+                        for (com.example.omrscanner.database.entities.EcdcResponseEntity r : responses) {
+                            ecdSavedStatuses.put(r.competencyId, r.status);
+                        }
+                    }
+                    ecdDraftStatuses = new java.util.HashMap<>(ecdSavedStatuses);
+
+                    // A re-sync can remove a domain; don't keep a selection that no longer exists.
+                    if (selectedEcdDomainId != null && findEcdDomain(selectedEcdDomainId) == null) {
+                        selectedEcdDomainId = null;
+                    }
+
+                    renderEcdDomainPills();
+                    renderEcdCompetencies();
+                }))));
+    }
+
+    private com.example.omrscanner.database.entities.EcdcDomainEntity findEcdDomain(int domainId) {
+        for (com.example.omrscanner.database.entities.EcdcDomainEntity d : ecdDomains) {
+            if (d.id == domainId) return d;
+        }
+        return null;
+    }
+
+    /** The row of domain pills — same pill style as the Assessment Period picker. */
+    private void renderEcdDomainPills() {
+        String[][] options = new String[ecdDomains.size()][];
+        for (int i = 0; i < ecdDomains.size(); i++) {
+            com.example.omrscanner.database.entities.EcdcDomainEntity d = ecdDomains.get(i);
+            options[i] = new String[]{EcdcScreenRenderer.shortDomainName(d.domain), String.valueOf(d.id)};
+        }
+        classRenderer.buildGroupBySwitcher(ecdDomainSwitcher, options,
+                selectedEcdDomainId != null ? String.valueOf(selectedEcdDomainId) : null, key -> {
+                    selectedEcdDomainId = Integer.valueOf(key);
+                    renderEcdDomainPills();
+                    renderEcdCompetencies();
+                });
+    }
+
+    /**
+     * The competency cards for the selected domain, built from the in-memory list
+     * and the working draft — so switching pills never loses unsaved marks.
+     */
+    private void renderEcdCompetencies() {
+        ecdCompetencyList.removeAllViews();
+
+        boolean hasDomains = !ecdDomains.isEmpty();
+        ecdSaveBar.setVisibility(hasDomains ? View.VISIBLE : View.GONE);
+        updateEcdProgress();
+
+        if (!hasDomains) {
+            ecdDomainHint.setText("No ECDC domains on this device yet. "
+                    + "Go back to the class and tap Sync ECCD first.");
+            ecdDomainHint.setVisibility(View.VISIBLE);
+            ecdDomainTitle.setVisibility(View.GONE);
+            return;
+        }
+        if (selectedEcdDomainId == null) {
+            ecdDomainHint.setText("Select a domain to see its competencies.");
+            ecdDomainHint.setVisibility(View.VISIBLE);
+            ecdDomainTitle.setVisibility(View.GONE);
+            return;
+        }
+
+        final int domainId = selectedEcdDomainId;
+        int number = 0;
+        for (com.example.omrscanner.database.entities.EcdcCompetencyEntity c : ecdCompetencies) {
+            if (c.domainId != domainId) continue;
+            number++;
+            final int competencyId = c.id;
+            ecdCompetencyList.addView(ecdcRenderer.createCompetencyRow(number, c.competency,
+                    ecdDraftStatuses.get(competencyId), status -> {
+                        ecdDraftStatuses.put(competencyId, status);
+                        updateEcdProgress();
+                    }));
+        }
+
+        if (number == 0) {
+            ecdDomainHint.setText("This domain has no competencies.");
+            ecdDomainHint.setVisibility(View.VISIBLE);
+            ecdDomainTitle.setVisibility(View.GONE);
+        } else {
+            ecdDomainHint.setVisibility(View.GONE);
+            ecdDomainTitle.setVisibility(View.VISIBLE);
+            updateEcdProgress(); // fills in the domain title now that the domain is known
+        }
+    }
+
+    /** Refreshes the overall + per-domain "x of y marked" counters and the Save button state. */
+    private void updateEcdProgress() {
+        int total = ecdCompetencies.size();
+        int marked = 0;
+        for (com.example.omrscanner.database.entities.EcdcCompetencyEntity c : ecdCompetencies) {
+            if (ecdDraftStatuses.get(c.id) != null) marked++;
+        }
+        boolean dirty = hasEcdUnsavedChanges();
+        ecdStudentProgress.setText(marked + " of " + total + " marked"
+                + (dirty ? "  \u2022  unsaved changes" : ""));
+
+        if (selectedEcdDomainId != null) {
+            int domainTotal = 0;
+            int domainMarked = 0;
+            for (com.example.omrscanner.database.entities.EcdcCompetencyEntity c : ecdCompetencies) {
+                if (c.domainId != selectedEcdDomainId) continue;
+                domainTotal++;
+                if (ecdDraftStatuses.get(c.id) != null) domainMarked++;
+            }
+            com.example.omrscanner.database.entities.EcdcDomainEntity d = findEcdDomain(selectedEcdDomainId);
+            ecdDomainTitle.setText((d != null && d.domain != null ? d.domain : "")
+                    + "  \u2022  " + domainMarked + " of " + domainTotal + " marked");
+        }
+        ecdcRenderer.styleSaveButton(ecdSaveButton, dirty);
+    }
+
+    private boolean hasEcdUnsavedChanges() {
+        return !ecdDraftStatuses.equals(ecdSavedStatuses);
+    }
+
+    /**
+     * Writes every mark that differs from what's already saved. {@code afterSave}
+     * (may be null) runs on the UI thread only if the write succeeded.
+     */
+    private void saveEcdcDraft(Runnable afterSave) {
+        if (ecdStudentClassId == null || selectedEcdStudentLrn == null || selectedEcdPeriod == null) {
+            return;
+        }
+        final long now = System.currentTimeMillis();
+        List<com.example.omrscanner.database.entities.EcdcResponseEntity> changed = new ArrayList<>();
+        for (Map.Entry<Integer, String> e : ecdDraftStatuses.entrySet()) {
+            if (e.getValue().equals(ecdSavedStatuses.get(e.getKey()))) continue;
+            com.example.omrscanner.database.entities.EcdcResponseEntity r =
+                    new com.example.omrscanner.database.entities.EcdcResponseEntity();
+            r.classId = ecdStudentClassId;
+            r.lrn = selectedEcdStudentLrn;
+            r.period = selectedEcdPeriod;
+            r.competencyId = e.getKey();
+            r.status = e.getValue();
+            r.updatedAt = now;
+            changed.add(r);
+        }
+        if (changed.isEmpty()) {
+            if (afterSave != null) afterSave.run();
+            return;
+        }
+
+        // Snapshot what is being written: anything the user taps while the write is in
+        // flight stays "unsaved" instead of being silently marked as saved.
+        final Map<Integer, String> snapshot = new java.util.HashMap<>(ecdDraftStatuses);
+        final int requestId = ecdChecklistLoadGeneration;
+        repo.saveEcdcResponses(changed, ok -> runOnUiThread(() -> {
+            if (!Boolean.TRUE.equals(ok)) {
+                ui.showErrorDialog("Couldn't save",
+                        "The checklist could not be saved. Your marks are still on screen \u2014 please try again.");
+                return;
+            }
+            // If the checklist was reloaded (or another student opened) while the write was
+            // in flight, the fresh load already reflects what's in the DB — leave it alone.
+            if (requestId == ecdChecklistLoadGeneration) {
+                ecdSavedStatuses = snapshot;
+                if (SCREEN_ECD_STUDENT.equals(currentScreen)) updateEcdProgress();
+            }
+            ui.showToast("Saved \u2713");
+            if (afterSave != null) afterSave.run();
+        }));
+    }
+
+    /** Runs {@code proceed} now, or after the unsaved-changes prompt if the checklist has unsaved marks. */
+    private void runAfterEcdChecklistExitCheck(Runnable proceed) {
+        if (SCREEN_ECD_STUDENT.equals(currentScreen) && hasEcdUnsavedChanges()) {
+            confirmLeaveEcdChecklist(proceed);
+        } else {
+            proceed.run();
+        }
+    }
+
+    private void confirmLeaveEcdChecklist(Runnable proceed) {
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(
+                this, R.style.ThemeOverlay_OMRScanner_Dialog)
+                .setTitle("Unsaved changes")
+                .setMessage("You've marked competencies for this student that haven't been saved yet.")
+                .setPositiveButton("Save", (d, w) -> saveEcdcDraft(proceed))
+                .setNegativeButton("Discard", (d, w) -> {
+                    ecdDraftStatuses = new java.util.HashMap<>(ecdSavedStatuses);
+                    proceed.run();
+                })
+                .setNeutralButton("Keep editing", null)
+                .show();
     }
 
     private void renderClassScreen() {
