@@ -3701,17 +3701,11 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
     /** The row of domain pills — same pill style as the Assessment Period picker. */
     private void renderEcdDomainPills() {
-        String[][] options = new String[ecdDomains.size()][];
-        for (int i = 0; i < ecdDomains.size(); i++) {
-            com.example.omrscanner.database.entities.EcdcDomainEntity d = ecdDomains.get(i);
-            options[i] = new String[]{EcdcScreenRenderer.shortDomainName(d.domain), String.valueOf(d.id)};
-        }
-        classRenderer.buildGroupBySwitcher(ecdDomainSwitcher, options,
-                selectedEcdDomainId != null ? String.valueOf(selectedEcdDomainId) : null, key -> {
-                    selectedEcdDomainId = Integer.valueOf(key);
-                    renderEcdDomainPills();
-                    renderEcdCompetencies();
-                });
+        ecdcRenderer.buildDomainPills(ecdDomainSwitcher, ecdDomains, selectedEcdDomainId, domainId -> {
+            selectedEcdDomainId = domainId;
+            renderEcdDomainPills();
+            renderEcdCompetencies();
+        });
     }
 
     /**
@@ -3740,14 +3734,21 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         }
 
         final int domainId = selectedEcdDomainId;
+        com.example.omrscanner.database.entities.EcdcDomainEntity selectedDomain = findEcdDomain(domainId);
+        final String domainName = selectedDomain != null ? selectedDomain.domain : null;
         int number = 0;
         for (com.example.omrscanner.database.entities.EcdcCompetencyEntity c : ecdCompetencies) {
             if (c.domainId != domainId) continue;
             number++;
             final int competencyId = c.id;
-            ecdCompetencyList.addView(ecdcRenderer.createCompetencyRow(number, c.competency,
+            ecdCompetencyList.addView(ecdcRenderer.createCompetencyRow(number, c.competency, domainName,
                     ecdDraftStatuses.get(competencyId), status -> {
-                        ecdDraftStatuses.put(competencyId, status);
+                        // null = the teacher un-selected the mark
+                        if (status == null) {
+                            ecdDraftStatuses.remove(competencyId);
+                        } else {
+                            ecdDraftStatuses.put(competencyId, status);
+                        }
                         updateEcdProgress();
                     }));
         }
@@ -3815,7 +3816,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             r.updatedAt = now;
             changed.add(r);
         }
-        if (changed.isEmpty()) {
+        // Marks that were saved earlier but have since been un-selected.
+        List<Integer> cleared = new ArrayList<>();
+        for (Integer competencyId : ecdSavedStatuses.keySet()) {
+            if (!ecdDraftStatuses.containsKey(competencyId)) cleared.add(competencyId);
+        }
+        if (changed.isEmpty() && cleared.isEmpty()) {
             if (afterSave != null) afterSave.run();
             return;
         }
@@ -3824,7 +3830,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         // flight stays "unsaved" instead of being silently marked as saved.
         final Map<Integer, String> snapshot = new java.util.HashMap<>(ecdDraftStatuses);
         final int requestId = ecdChecklistLoadGeneration;
-        repo.saveEcdcResponses(changed, ok -> runOnUiThread(() -> {
+        final String saveClassId = ecdStudentClassId;
+        final String saveLrn = selectedEcdStudentLrn;
+        final String savePeriod = selectedEcdPeriod;
+        repo.saveEcdcResponses(saveClassId, saveLrn, savePeriod, changed, cleared, ok -> runOnUiThread(() -> {
             if (!Boolean.TRUE.equals(ok)) {
                 ui.showErrorDialog("Couldn't save",
                         "The checklist could not be saved. Your marks are still on screen \u2014 please try again.");
@@ -3851,17 +3860,54 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     }
 
     private void confirmLeaveEcdChecklist(Runnable proceed) {
-        new com.google.android.material.dialog.MaterialAlertDialogBuilder(
-                this, R.style.ThemeOverlay_OMRScanner_Dialog)
-                .setTitle("Unsaved changes")
+        final com.google.android.material.dialog.MaterialAlertDialogBuilder builder =
+                new com.google.android.material.dialog.MaterialAlertDialogBuilder(
+                        this, R.style.ThemeOverlay_OMRScanner_Dialog);
+
+        // The stock button bar stacks three buttons vertically. Same buttons (same dialog
+        // button style), but placed in our own horizontal row under the message.
+        LinearLayout buttonRow = new LinearLayout(builder.getContext());
+        buttonRow.setOrientation(LinearLayout.HORIZONTAL);
+        buttonRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        buttonRow.setPadding(ui.dp(16), ui.dp(8), ui.dp(16), ui.dp(12));
+
+        builder.setTitle("Unsaved changes")
                 .setMessage("You've marked competencies for this student that haven't been saved yet.")
-                .setPositiveButton("Save", (d, w) -> saveEcdcDraft(proceed))
-                .setNegativeButton("Discard", (d, w) -> {
-                    ecdDraftStatuses = new java.util.HashMap<>(ecdSavedStatuses);
-                    proceed.run();
-                })
-                .setNeutralButton("Keep editing", null)
-                .show();
+                .setView(buttonRow);
+        final androidx.appcompat.app.AlertDialog dialog = builder.create();
+
+        buttonRow.addView(createEcdDialogButton(builder.getContext(), "Keep editing",
+                dialog::dismiss));
+        buttonRow.addView(createEcdDialogButton(builder.getContext(), "Discard", () -> {
+            dialog.dismiss();
+            ecdDraftStatuses = new java.util.HashMap<>(ecdSavedStatuses);
+            proceed.run();
+        }));
+        buttonRow.addView(createEcdDialogButton(builder.getContext(), "Save", () -> {
+            dialog.dismiss();
+            saveEcdcDraft(proceed);
+        }));
+
+        dialog.show();
+    }
+
+    /**
+     * A stock dialog text button (same look as setPositiveButton etc.) for the unsaved-changes
+     * row. Equal width per button; the text shrinks slightly instead of wrapping if it's tight.
+     */
+    private com.google.android.material.button.MaterialButton createEcdDialogButton(
+            android.content.Context dialogContext, String label, Runnable onClick) {
+        com.google.android.material.button.MaterialButton b =
+                new com.google.android.material.button.MaterialButton(dialogContext, null,
+                        androidx.appcompat.R.attr.buttonBarPositiveButtonStyle);
+        b.setText(label);
+        b.setMaxLines(1);
+        b.setAutoSizeTextTypeUniformWithConfiguration(
+                10, 14, 1, android.util.TypedValue.COMPLEX_UNIT_SP);
+        b.setLayoutParams(new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        b.setOnClickListener(v -> onClick.run());
+        return b;
     }
 
     private void renderClassScreen() {

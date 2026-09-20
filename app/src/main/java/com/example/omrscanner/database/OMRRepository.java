@@ -916,12 +916,26 @@ public class OMRRepository {
     });
   }
 
-  /** Upserts the given marks; callback receives true on success, false if the write failed. */
-  public void saveEcdcResponses(List<EcdcResponseEntity> responses, Callback<Boolean> callback) {
+  /**
+   * Upserts the given marks and deletes the marks for {@code clearedCompetencyIds}
+   * (competencies the teacher un-selected) in a single transaction. Either list may be
+   * empty/null. Callback receives true on success, false if the write failed.
+   */
+  public void saveEcdcResponses(String classId, String lrn, String period,
+                                List<EcdcResponseEntity> responses,
+                                List<Integer> clearedCompetencyIds,
+                                Callback<Boolean> callback) {
     executor.execute(() -> {
       boolean ok = true;
       try {
-        db.ecdcResponseDao().insertAll(responses);
+        db.runInTransaction(() -> {
+          if (clearedCompetencyIds != null && !clearedCompetencyIds.isEmpty()) {
+            db.ecdcResponseDao().deleteForCompetencies(classId, lrn, period, clearedCompetencyIds);
+          }
+          if (responses != null && !responses.isEmpty()) {
+            db.ecdcResponseDao().insertAll(responses);
+          }
+        });
       } catch (Exception e) {
         ok = false;
         Log.e("EcdcResponses", "Failed to save ECDC responses", e);
