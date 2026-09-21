@@ -26,4 +26,10 @@ public interface EcdcResponseDao {
     @Query("SELECT * FROM ecdc_responses "
             + "WHERE class_id = :classId AND lrn = :lrn AND period = :period")
     List<EcdcResponseEntity> getForStudentPeriod(String classId, String lrn, String period);
+
+    // Every saved mark for one class + period (all students) -- used to build the upload JSON.
+    @Query("SELECT * FROM ecdc_responses "
+            + "WHERE class_id = :classId AND period = :period "
+            + "ORDER BY lrn ASC, competency_id ASC")
+    List<EcdcResponseEntity> getForClassPeriod(String classId, String period);
 }

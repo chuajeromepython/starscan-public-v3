@@ -973,6 +973,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         findViewById(R.id.homeSyncClassRow).setOnClickListener(v -> onSyncClicked());
         findViewById(R.id.classSyncStudentsRow).setOnClickListener(v -> onAssessmentSyncClicked());
         findViewById(R.id.ecdSyncStudentsRow).setOnClickListener(v -> onEcdcDomainsSyncClicked());
+        findViewById(R.id.ecdUploadButton).setOnClickListener(v -> onEcdcUploadClicked());
         ecdSaveButton.setOnClickListener(v -> saveEcdcDraft(null));
 
         fabAssessmentSyncRow.setOnClickListener(v -> {
@@ -1371,6 +1372,60 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 return;
             }
             syncEcdcDomains(this, user.serverIp);
+        });
+    }
+
+    /**
+     * ECDC class screen "Upload". For now this only BUILDS the upload JSON from the
+     * saved marks of the open class + period and prints it to logcat (tag
+     * OMR_ECDC_UPLOAD) -- nothing is sent to the server yet.
+     */
+    private void onEcdcUploadClicked() {
+        if (selectedClass == null) {
+            ui.showErrorDialog("No class selected", "Open a class before uploading its ECDC data.");
+            return;
+        }
+        if (selectedClass.getClassroomId() == null) {
+            ui.showErrorDialog("Missing classroom ID", "This class wasn't synced from the server, so it has no classroom ID to upload ECDC data for.");
+            return;
+        }
+        if (selectedEcdPeriod == null) {
+            ui.showErrorDialog("Choose a period", "Pick Beginning, Middle or End first, then tap Upload.");
+            return;
+        }
+        // Capture now: the selection can change while the DB reads run in the background.
+        final String classId = selectedClass.getId();
+        final int classroomId = selectedClass.getClassroomId();
+        final String period = selectedEcdPeriod;
+
+        repo.getActiveUser(user -> {
+            if (user == null || user.userId == null) {
+                runOnUiThread(() -> ui.showErrorDialog("Sign-in required",
+                        "Please sign in before uploading ECDC data."));
+                return;
+            }
+            final int userId = user.userId;
+            repo.getEcdcDomains(domains -> repo.getAllEcdcCompetencies(competencies ->
+                    repo.getEcdcResponsesForClassPeriod(classId, period, responses -> {
+                        if (responses == null || responses.isEmpty()) {
+                            runOnUiThread(() -> ui.showErrorDialog("Nothing to upload",
+                                    "No saved ECDC marks for " + EcdcScreenRenderer.periodLabel(period)
+                                            + " in this class yet."));
+                            return;
+                        }
+                        try {
+                            org.json.JSONObject payload = com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder
+                                    .build(classroomId, userId, period, responses, domains, competencies);
+                            final int studentCount = payload.getJSONArray("students").length();
+                            com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder.logPayload(payload.toString());
+                            runOnUiThread(() -> ui.showToast("ECDC JSON for " + studentCount + " student"
+                                    + (studentCount == 1 ? "" : "s") + " written to logcat"));
+                        } catch (org.json.JSONException e) {
+                            android.util.Log.e("OMR_ECDC_UPLOAD", "Could not build upload JSON: " + e.getMessage(), e);
+                            runOnUiThread(() -> ui.showErrorDialog("Upload failed",
+                                    "Could not build the upload data: " + e.getMessage()));
+                        }
+                    })));
         });
     }
 

@@ -907,6 +907,15 @@ public class OMRRepository {
     });
   }
 
+  // All saved ECDC marks for one class + period (every student), ordered by LRN then competency id.
+  public void getEcdcResponsesForClassPeriod(String classId, String period,
+                                             Callback<List<EcdcResponseEntity>> callback) {
+    executor.execute(() -> {
+      List<EcdcResponseEntity> result = db.ecdcResponseDao().getForClassPeriod(classId, period);
+      if (callback != null) callback.onResult(result);
+    });
+  }
+
   // ECDC checklist marks (Present / Not present / Not tested) for one student + period.
   public void getEcdcResponses(String classId, String lrn, String period,
                                Callback<List<EcdcResponseEntity>> callback) {

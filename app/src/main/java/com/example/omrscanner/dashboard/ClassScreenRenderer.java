@@ -843,13 +843,16 @@ public class ClassScreenRenderer {
 
         boolean isLinkedToAssessment = link != null && link.linkedAssessmentName != null;
         boolean isLinkedToQuiz = link != null && link.linkedQuizName != null;
-        boolean isLinkedForBorder = isLinkedToAssessment || isLinkedToQuiz;
 
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(Color.WHITE);
         bg.setCornerRadius(ui.dp(16));
-        if (isLinkedForBorder) {
-            // Green border to flag that this key is currently used by an assessment or a quiz.
+        if (isLinkedToAssessment) {
+            // Blue border: this key is used by an assessment. Blue also wins when the key is
+            // linked to a quiz too -- the quiz link still shows in its own badge below.
+            bg.setStroke(ui.dp(2), Color.parseColor("#3B82F6"));
+        } else if (isLinkedToQuiz) {
+            // Green border: this key is used by a quiz (and no assessment).
             bg.setStroke(ui.dp(2), Color.parseColor("#22C55E"));
         } else {
             bg.setStroke(ui.dp(1), Color.parseColor("#E2E8F0"));
