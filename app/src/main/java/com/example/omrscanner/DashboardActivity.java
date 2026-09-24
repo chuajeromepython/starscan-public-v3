@@ -1393,10 +1393,23 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             ui.showErrorDialog("Choose a period", "Pick Beginning, Middle or End first, then tap Upload.");
             return;
         }
+        List<String> incompleteDomains = incompleteEcdDomainNames();
+        if (!incompleteDomains.isEmpty()) {
+            ui.showErrorDialog("Complete all domains first",
+                    "You need to complete these domains to proceed with the upload: "
+                            + String.join(", ", incompleteDomains));
+            return;
+        }
+        if (selectedEcdStudentLrn == null || selectedEcdStudentLrn.trim().isEmpty()) {
+            ui.showErrorDialog("No student selected", "Open a student before uploading their ECDC data.");
+            return;
+        }
+
         // Capture now: the selection can change while the DB reads run in the background.
         final String classId = selectedClass.getId();
         final int classroomId = selectedClass.getClassroomId();
         final String period = selectedEcdPeriod;
+        final String lrn = selectedEcdStudentLrn;
 
         repo.getActiveUser(user -> {
             if (user == null || user.userId == null) {
@@ -1406,20 +1419,19 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             }
             final int userId = user.userId;
             repo.getEcdcDomains(domains -> repo.getAllEcdcCompetencies(competencies ->
-                    repo.getEcdcResponsesForClassPeriod(classId, period, responses -> {
+                    repo.getEcdcResponses(classId, lrn, period, responses -> {
                         if (responses == null || responses.isEmpty()) {
                             runOnUiThread(() -> ui.showErrorDialog("Nothing to upload",
                                     "No saved ECDC marks for " + EcdcScreenRenderer.periodLabel(period)
-                                            + " in this class yet."));
+                                            + " for this student yet."));
                             return;
                         }
                         try {
                             org.json.JSONObject payload = com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder
                                     .build(classroomId, userId, period, responses, domains, competencies);
-                            final int studentCount = payload.getJSONArray("students").length();
                             com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder.logPayload(payload.toString());
-                            runOnUiThread(() -> ui.showToast("ECDC JSON for " + studentCount + " student"
-                                    + (studentCount == 1 ? "" : "s") + " written to logcat"));
+                            runOnUiThread(() -> ui.showToast("ECDC JSON for " + selectedEcdStudentName
+                                    + " written to logcat"));
                         } catch (org.json.JSONException e) {
                             android.util.Log.e("OMR_ECDC_UPLOAD", "Could not build upload JSON: " + e.getMessage(), e);
                             runOnUiThread(() -> ui.showErrorDialog("Upload failed",
@@ -1427,6 +1439,29 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                         }
                     })));
         });
+    }
+
+    /**
+     * Domain names that still have at least one competency without a saved
+     * status, for the student currently open on the checklist screen. An
+     * empty list means every domain is fully marked.
+     */
+    private List<String> incompleteEcdDomainNames() {
+        List<String> incomplete = new ArrayList<>();
+        for (com.example.omrscanner.database.entities.EcdcDomainEntity d : ecdDomains) {
+            boolean domainComplete = true;
+            for (com.example.omrscanner.database.entities.EcdcCompetencyEntity c : ecdCompetencies) {
+                if (c.domainId != d.id) continue;
+                if (!ecdSavedStatuses.containsKey(c.id)) {
+                    domainComplete = false;
+                    break;
+                }
+            }
+            if (!domainComplete) {
+                incomplete.add(EcdcScreenRenderer.shortDomainName(d.domain));
+            }
+        }
+        return incomplete;
     }
 
     private void onClassAssessmentsSyncClicked() {

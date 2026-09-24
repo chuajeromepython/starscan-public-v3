@@ -2856,34 +2856,6 @@
                                                 android:textSize="11sp" />
                                         </LinearLayout>
 
-                                        <LinearLayout
-                                            android:id="@+id/ecdUploadButton"
-                                            android:layout_width="wrap_content"
-                                            android:layout_height="30dp"
-                                            android:orientation="horizontal"
-                                            android:gravity="center_vertical"
-                                            android:paddingStart="9dp"
-                                            android:paddingEnd="11dp"
-                                            android:background="@drawable/bg_icon_box_white"
-                                            android:clickable="true"
-                                            android:focusable="true"
-                                            android:foreground="?attr/selectableItemBackgroundBorderless">
-                                            <ImageView
-                                                android:layout_width="12dp"
-                                                android:layout_height="12dp"
-                                                android:src="@drawable/ic_upload"
-                                                app:tint="#FFFFFF" />
-                                            <TextView
-                                                android:layout_width="wrap_content"
-                                                android:layout_height="wrap_content"
-                                                android:layout_marginStart="4dp"
-                                                android:text="Upload"
-                                                android:textColor="#FFFFFF"
-                                                android:textSize="10sp"
-                                                android:textStyle="bold"
-                                                android:includeFontPadding="false" />
-                                        </LinearLayout>
-
                                     </LinearLayout>
 
                                     <View
@@ -3425,14 +3397,50 @@
                                             android:textColor="#CCFFFFFF"
                                             android:textSize="11sp" />
 
-                                        <TextView
-                                            android:id="@+id/ecdStudentProgress"
+                                        <LinearLayout
                                             android:layout_width="match_parent"
                                             android:layout_height="wrap_content"
                                             android:layout_marginTop="6dp"
-                                            android:textColor="#FFFFFF"
-                                            android:textSize="11sp"
-                                            android:textStyle="bold" />
+                                            android:orientation="horizontal"
+                                            android:gravity="center_vertical">
+
+                                            <TextView
+                                                android:id="@+id/ecdStudentProgress"
+                                                android:layout_width="0dp"
+                                                android:layout_height="wrap_content"
+                                                android:layout_weight="1"
+                                                android:textColor="#FFFFFF"
+                                                android:textSize="11sp"
+                                                android:textStyle="bold" />
+
+                                            <LinearLayout
+                                                android:id="@+id/ecdUploadButton"
+                                                android:layout_width="wrap_content"
+                                                android:layout_height="30dp"
+                                                android:orientation="horizontal"
+                                                android:gravity="center_vertical"
+                                                android:paddingStart="9dp"
+                                                android:paddingEnd="11dp"
+                                                android:background="@drawable/bg_icon_box_white"
+                                                android:clickable="true"
+                                                android:focusable="true"
+                                                android:foreground="?attr/selectableItemBackgroundBorderless">
+                                                <ImageView
+                                                    android:layout_width="12dp"
+                                                    android:layout_height="12dp"
+                                                    android:src="@drawable/ic_upload"
+                                                    app:tint="#FFFFFF" />
+                                                <TextView
+                                                    android:layout_width="wrap_content"
+                                                    android:layout_height="wrap_content"
+                                                    android:layout_marginStart="4dp"
+                                                    android:text="Upload"
+                                                    android:textColor="#FFFFFF"
+                                                    android:textSize="10sp"
+                                                    android:textStyle="bold"
+                                                    android:includeFontPadding="false" />
+                                            </LinearLayout>
+                                        </LinearLayout>
                                     </LinearLayout>
                                 </FrameLayout>
                             </com.google.android.material.card.MaterialCardView>

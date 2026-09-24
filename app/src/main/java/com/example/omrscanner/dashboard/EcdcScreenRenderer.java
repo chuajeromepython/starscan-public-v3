@@ -224,8 +224,7 @@ public class EcdcScreenRenderer {
             ids[i] = View.generateViewId();
             rb.setId(ids[i]);
             rb.setText(labels[i]);
-            rb.setTextSize(11);
-            rb.setMaxLines(1);
+            rb.setTextSize(10);
             rb.setTextColor(Color.parseColor("#334155"));
             rb.setGravity(Gravity.CENTER_VERTICAL);
             rb.setButtonTintList(new ColorStateList(
