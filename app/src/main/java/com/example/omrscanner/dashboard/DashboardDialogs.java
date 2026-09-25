@@ -751,6 +751,15 @@ public class DashboardDialogs {
     // ─────────────────────────────────────────────────────────────
 
     public void showUploadAssessmentDialog(ActivityFolder act, ClassFolder cls) {
+        // Synced assessments already carry the server's assessment id (captured
+        // during "Sync assessments"), so there's nothing to ask the teacher for —
+        // upload straight away. Only assessments created locally in the app (no
+        // server id yet) need the teacher to type one in below.
+        if (act.getServerAssessmentId() != null) {
+            host.uploadAssessment(act, cls, act.getServerAssessmentId());
+            return;
+        }
+
         Dialog dialog = new Dialog(activity);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setCancelable(true);

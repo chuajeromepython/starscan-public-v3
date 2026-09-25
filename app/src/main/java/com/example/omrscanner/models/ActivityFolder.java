@@ -19,6 +19,9 @@ public class ActivityFolder {
     /** Soft-link to the assigned answer key's ID; null if none assigned. */
     private String answerKeyId;
 
+    /** The server's numeric assessment id, once this card has been synced from STARS; null for a locally-created assessment. */
+    private Integer serverAssessmentId;
+
     private String assessmentType; // Assessment type, [diagnostic, summative, term]
 
     public ActivityFolder() {
@@ -103,6 +106,9 @@ public class ActivityFolder {
 
     public String getAssessmentType() { return assessmentType; }
     public void setAssessmentType(String assessmentType) { this.assessmentType = assessmentType; }
+
+    public Integer getServerAssessmentId() { return serverAssessmentId; }
+    public void setServerAssessmentId(Integer serverAssessmentId) { this.serverAssessmentId = serverAssessmentId; }
 
     public void addScan(ScanEntry scan) {
         if (this.scans == null) {

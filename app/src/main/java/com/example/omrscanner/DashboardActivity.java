@@ -253,7 +253,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     // VIEWS
     // ═══════════════════════════════════════════════════════════════
 
-    private ImageButton btnBack, btnUpload, btnHelp;
+    private ImageButton btnBack, btnUpload, btnGoToUsers;
     private TextView topBarTitle, topBarBadge;
     private TextView tvTeacherName;
     private TextView tvLastSynced;
@@ -299,6 +299,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private LinearLayout userRescanRow;
     private LinearLayout userBackupRow, userRestoreRow;
     private LinearLayout userCalibrateProModeRow, userResetProModeRow;
+    private LinearLayout userHelpFaqRow;
     private BackupManager backupManager;
     private androidx.activity.result.ActivityResultLauncher<String> createBackupFileLauncher;
     private androidx.activity.result.ActivityResultLauncher<String[]> openBackupFileLauncher;
@@ -698,7 +699,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private void initViews() {
         btnBack = findViewById(R.id.btnBack);
         btnUpload = findViewById(R.id.btnUpload);
-        btnHelp = findViewById(R.id.btnHelp);
+        btnGoToUsers = findViewById(R.id.btnGoToUsers);
         topBarTitle = findViewById(R.id.topBarTitle);
         topBarBadge = findViewById(R.id.topBarBadge);
         tvTeacherName = findViewById(R.id.tvTeacherName);
@@ -782,6 +783,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         userRestoreRow = findViewById(R.id.userRestoreRow);
         userCalibrateProModeRow = findViewById(R.id.userCalibrateProModeRow);
         userResetProModeRow = findViewById(R.id.userResetProModeRow);
+        userHelpFaqRow = findViewById(R.id.userHelpFaqRow);
         userStatClasses = findViewById(R.id.userStatClasses);
         userStatAssessments = findViewById(R.id.userStatAssessments);
         userStatScans = findViewById(R.id.userStatScans);
@@ -924,6 +926,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         userRestoreRow.setOnClickListener(v -> openBackupFileLauncher.launch(new String[]{"application/zip"}));
         userCalibrateProModeRow.setOnClickListener(v -> showProModeCalibrationGuide());
         userResetProModeRow.setOnClickListener(v -> showResetProModeDialog());
+        userHelpFaqRow.setOnClickListener(v -> showFaqDialog());
 
         navHomeTab.setOnClickListener(v -> selectHomeTab());
         navUserTab.setOnClickListener(v -> selectUserTab());
@@ -935,7 +938,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
         btnBack.setOnClickListener(v -> navigateBack());
         btnUpload.setOnClickListener(v -> dialogs.showGlobalUploadClassDialog());
-        btnHelp.setOnClickListener(v -> showFaqDialog());
+        btnGoToUsers.setOnClickListener(v -> selectUserTab());
         fabMain.setOnClickListener(v -> toggleFabMenu());
         fabScrim.setOnClickListener(v -> closeFabMenu());
 
@@ -4819,6 +4822,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                         for (AssessmentEntity ae : assessmentEntities) {
                             ActivityFolder af = DataMapper.toActivityFolder(ae);
                             af.setAnswerKeyId(ae.answerKeyId); // carry the soft-link into the in-memory model
+                            af.setServerAssessmentId(ae.serverAssessmentId); // synced assessments already have a server id
                             repo.getScansByAssessment(ae.id, scanEntities -> {
                                 List<ScanEntry> scanEntries = new ArrayList<>();
                                 Map<Integer, Integer> scanNumbers = DataMapper.computeScanNumbers(scanEntities);
