@@ -34,7 +34,7 @@ import java.util.TimeZone;
  *   "students": [
  *     {
  *       "lrn": "108357260002",
- *       "last_ticked_at": "2026-10-10T14:32:05+08:00",
+ *       "last_ticked_at": "2026-10-10",
  *       "responses": [
  *         { "domain_id": 1, "domain": "GROSS MOTOR DOMAIN",
  *           "competency_id": 1, "competency": "Nakaaakyat na ng mga silya...",
@@ -48,13 +48,14 @@ import java.util.TimeZone;
  * - There is no single top-level date: each student carries {@code last_ticked_at},
  *   the newest {@code updated_at} among that student's saved marks. Saving only
  *   stamps the marks that actually changed, so this is the last time the teacher
- *   ticked something for that student.
+ *   ticked something for that student. It's sent as a plain "yyyy-MM-dd" date,
+ *   fixed to GMT-8 regardless of the device's own time zone.
  * - Every mark carries the domain and the competency it was ticked under (ids AND
  *   the server's wording). If a competency is no longer in the local reference
  *   list (e.g. removed by a later ECDC sync) its id and status are still sent and
  *   the domain/competency fields are null.
- * - {@code status} is sent raw (PRESENT / NOT_PRESENT / NOT_TESTED) so nothing is
- *   lost here; how the server scores each status is decided on the server side.
+ * - {@code status} is encoded as a single character: "1" = PRESENT,
+ *   "-" = NOT_PRESENT, "*" = NOT_TESTED (see {@link #encodeStatus}).
  * - Only students with at least one saved mark appear. Competencies the teacher
  *   never marked are simply absent.
  * - The LRN is a string so leading zeros survive.
@@ -119,7 +120,7 @@ public final class EcdcUploadPayloadBuilder {
                 mark.put("competency_id", r.competencyId);
                 mark.put("competency", competency != null && competency.competency != null
                         ? (Object) competency.competency : JSONObject.NULL);
-                mark.put("status", r.status);
+                mark.put("status", encodeStatus(r.status));
                 marksJson.put(mark);
             }
 
@@ -139,10 +140,25 @@ public final class EcdcUploadPayloadBuilder {
         return root;
     }
 
-    /** ISO-8601 in the device's time zone, e.g. 2026-10-10T14:32:05+08:00. */
+    /**
+     * Maps a {@code EcdcResponseEntity.STATUS_*} value to the single-character
+     * code the JSON payload uses: "1" = present, "-" = not present, "*" = not
+     * tested. Falls back to "*" for anything unrecognized.
+     */
+    static String encodeStatus(String status) {
+        if (EcdcResponseEntity.STATUS_PRESENT.equals(status)) {
+            return "1";
+        } else if (EcdcResponseEntity.STATUS_NOT_PRESENT.equals(status)) {
+            return "-";
+        } else {
+            return "*";
+        }
+    }
+
+    /** Date-only, fixed to GMT-8 regardless of the device's time zone, e.g. 2026-10-10. */
     static String formatTimestamp(long epochMillis) {
-        SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US);
-        f.setTimeZone(TimeZone.getDefault());
+        SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+        f.setTimeZone(TimeZone.getTimeZone("GMT-8"));
         return f.format(new Date(epochMillis));
     }
 
