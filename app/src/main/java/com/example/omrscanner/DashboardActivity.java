@@ -1368,6 +1368,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     }
 
     private void onEcdcDomainsSyncClicked() {
+        // Only teachers who actually have an ECDC (Kinder) class may sync ECDC data.
+        if (getEcdcClassFolders().isEmpty()) {
+            ui.showErrorDialog("No ECDC classes",
+                    "ECDC sync is only available to teachers with an ECDC (Kinder) class.");
+            return;
+        }
         repo.getActiveUser(user -> {
             if (user == null || user.serverIp == null || user.serverIp.trim().isEmpty()) {
                 runOnUiThread(() -> ui.showErrorDialog("Scan required",
@@ -3524,6 +3530,20 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 })));
     }
 
+    /** An ECDC class is a Kinder class -- the same rule the STARS server uses. This enforces a guard rail against syncs from teachers without ECDC classes. Refer to ECDC sync from EcdcUploadPayloadBuilder.java*/
+    private static boolean isEcdcGrade(String grade) {
+        return grade != null && grade.trim().toLowerCase(java.util.Locale.ROOT).startsWith("kinder");
+    }
+
+    /** The synced classes (from memory) that belong on the ECDC tab. */
+    private List<ClassFolder> getEcdcClassFolders() {
+        List<ClassFolder> ecdcClasses = new ArrayList<>();
+        for (ClassFolder c : classFolders) {
+            if (isEcdcGrade(c.getGrade())) ecdcClasses.add(c);
+        }
+        return ecdcClasses;
+    }
+
     /**
      * ECD tab: shows the same synced classes as Home, read from the classFolders
      * already loaded into memory. No separate sync action — this just reflects
@@ -3532,8 +3552,11 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private void renderEcdScreen() {
         ecdAllList.removeAllViews();
 
-        if (ecdSummaryCount != null) ecdSummaryCount.setText(String.valueOf(classFolders.size()));
-        if (ecdAllCount != null) ecdAllCount.setText(String.valueOf(classFolders.size()));
+        //checks if a teacher contains ECDC data, and creates a folder to store the data
+
+        final List<ClassFolder> ecdcClassFolders = getEcdcClassFolders();
+        if (ecdSummaryCount != null) ecdSummaryCount.setText(String.valueOf(ecdcClassFolders.size()));
+        if (ecdAllCount != null) ecdAllCount.setText(String.valueOf(ecdcClassFolders.size()));
 
         homeRenderer.updateFilterToggleAppearance(ecdFilterToggle, ecdFilterPanelVisible,
                 selectedEcdGradeFilter, selectedEcdSchoolYearFilter, selectedEcdSort);
@@ -3557,8 +3580,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     if (requestId != ecdQueryGeneration || !SCREEN_ECD.equals(currentScreen))
                         return;
 
-                    List<String> grades = homeRenderer.getDistinctGrades(classFolders);
-                    List<String> years = homeRenderer.getDistinctSchoolYears(classFolders);
+                    List<String> grades = homeRenderer.getDistinctGrades(ecdcClassFolders);
+                    List<String> years = homeRenderer.getDistinctSchoolYears(ecdcClassFolders);
 
                     boolean stale = homeRenderer.buildHomeFilterChips(
                             ecdGradeFilterChips, ecdSchoolYearFilterChips,
@@ -3575,16 +3598,23 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                             () -> SCREEN_ECD.equals(currentScreen));
                     if (stale) return;
 
-                    int rowCount = (rows != null) ? rows.size() : 0;
+                    // Keep only ECDC (Kinder) classes; everything else belongs to Home.
+                    // Refer to teacher table, it will be stored there.
+                    List<ClassListRow> ecdcRows = new ArrayList<>();
+                    if (rows != null) {
+                        for (ClassListRow row : rows) {
+                            if (isEcdcGrade(row.grade)) ecdcRows.add(row);
+                        }
+                    }
 
-                    if (rowCount == 0) {
+                    if (ecdcRows.isEmpty()) {
                         ecdAllEmpty.setVisibility(View.VISIBLE);
                         ecdAllList.setVisibility(View.GONE);
                         return;
                     }
                     ecdAllEmpty.setVisibility(View.GONE);
                     ecdAllList.setVisibility(View.VISIBLE);
-                    for (ClassListRow row : rows) {
+                    for (ClassListRow row : ecdcRows) {
                         ecdAllList.addView(homeRenderer.createClassCard(
                                 row, globalTeacherName,
                                 () -> {
