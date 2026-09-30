@@ -470,6 +470,162 @@ public class DashboardUiHelper {
         dialog.show();
     }
 
+    /** One student who can't be mass-uploaded yet, with the domains still missing marks. */
+    public static class IncompleteStudent {
+        public final String name;
+        public final java.util.List<IncompleteDomain> domains;
+
+        public IncompleteStudent(String name, java.util.List<IncompleteDomain> domains) {
+            this.name = name;
+            this.domains = domains;
+        }
+    }
+
+    /** Like showIncompleteDomainsDialog, but groups the incomplete domains under each student (scrolls when long). */
+    public void showIncompleteStudentsDialog(String title, String intro,
+                                             java.util.List<IncompleteStudent> students) {
+        if (activeErrorDialog != null && activeErrorDialog.isShowing())
+            activeErrorDialog.dismiss();
+
+        Dialog dialog = new Dialog(activity);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setCancelable(true);
+
+        LinearLayout root = new LinearLayout(activity);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setGravity(Gravity.CENTER_HORIZONTAL);
+        root.setPadding(dp(28), dp(28), dp(28), dp(28));
+        GradientDrawable dBg = new GradientDrawable();
+        dBg.setColor(Color.WHITE);
+        dBg.setCornerRadius(dp(24));
+        root.setBackground(dBg);
+
+        TextView iconView = new TextView(activity);
+        iconView.setText("⚠️");
+        iconView.setTextSize(32);
+        iconView.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(dp(60), dp(60));
+        ilp.gravity = Gravity.CENTER_HORIZONTAL;
+        ilp.bottomMargin = dp(16);
+        iconView.setLayoutParams(ilp);
+        root.addView(iconView);
+
+        TextView titleView = new TextView(activity);
+        titleView.setText(title);
+        titleView.setTextSize(17);
+        titleView.setTypeface(null, Typeface.BOLD);
+        titleView.setTextColor(Color.parseColor("#CE1126"));
+        titleView.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        tlp.bottomMargin = dp(8);
+        titleView.setLayoutParams(tlp);
+        root.addView(titleView);
+
+        TextView introView = new TextView(activity);
+        introView.setText(intro);
+        introView.setTextSize(13);
+        introView.setTextColor(Color.parseColor("#64748B"));
+        introView.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams plp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        plp.bottomMargin = dp(16);
+        introView.setLayoutParams(plp);
+        root.addView(introView);
+
+        LinearLayout list = new LinearLayout(activity);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(dp(16), dp(8), dp(16), dp(8));
+        GradientDrawable listBg = new GradientDrawable();
+        listBg.setColor(Color.parseColor("#F8FAFC"));
+        listBg.setCornerRadius(dp(14));
+        list.setBackground(listBg);
+
+        for (IncompleteStudent st : students) {
+            TextView nameView = new TextView(activity);
+            nameView.setText(st.name);
+            nameView.setTextSize(14);
+            nameView.setTypeface(null, Typeface.BOLD);
+            nameView.setTextColor(Color.parseColor("#1E293B"));
+            nameView.setPadding(0, dp(10), 0, dp(2));
+            list.addView(nameView);
+
+            for (IncompleteDomain d : st.domains) {
+                LinearLayout row = new LinearLayout(activity);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                row.setPadding(dp(8), dp(2), 0, dp(2));
+
+                TextView dn = new TextView(activity);
+                dn.setText("•  " + d.label);
+                dn.setTextSize(12);
+                dn.setTextColor(d.color);
+                dn.setLayoutParams(new LinearLayout.LayoutParams(
+                        0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+                row.addView(dn);
+
+                TextView count = new TextView(activity);
+                count.setText(d.remaining + " remaining");
+                count.setTextSize(11);
+                count.setTextColor(d.color);
+                row.addView(count);
+
+                list.addView(row);
+            }
+        }
+
+        android.widget.ScrollView scroll = new android.widget.ScrollView(activity);
+        scroll.addView(list);
+        int maxListHeight = (int) (activity.getResources().getDisplayMetrics().heightPixels * 0.4f);
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        slp.bottomMargin = dp(24);
+        scroll.setLayoutParams(slp);
+        // Cap the list height so many students scroll instead of pushing the button off-screen.
+        scroll.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
+            if (scroll.getHeight() > maxListHeight) {
+                ViewGroup.LayoutParams lp = scroll.getLayoutParams();
+                lp.height = maxListHeight;
+                scroll.setLayoutParams(lp);
+            }
+        });
+        root.addView(scroll);
+
+        TextView btnDismiss = new TextView(activity);
+        btnDismiss.setText("Got it");
+        btnDismiss.setTextSize(14);
+        btnDismiss.setTypeface(null, Typeface.BOLD);
+        btnDismiss.setGravity(Gravity.CENTER);
+        btnDismiss.setTextColor(Color.WHITE);
+        GradientDrawable dismissBg = new GradientDrawable();
+        dismissBg.setColor(Color.parseColor("#CE1126"));
+        dismissBg.setCornerRadius(dp(12));
+        btnDismiss.setBackground(dismissBg);
+        btnDismiss.setPadding(dp(20), dp(12), dp(20), dp(12));
+        btnDismiss.setClickable(true);
+        btnDismiss.setFocusable(true);
+        btnDismiss.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        btnDismiss.setOnClickListener(v -> dialog.dismiss());
+        root.addView(btnDismiss);
+
+        dialog.setContentView(root);
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setLayout(
+                    (int) (activity.getResources().getDisplayMetrics().widthPixels * 0.86),
+                    WindowManager.LayoutParams.WRAP_CONTENT);
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            dialog.getWindow().setGravity(Gravity.CENTER);
+            dialog.getWindow().setWindowAnimations(android.R.style.Animation_Dialog);
+        }
+        activeErrorDialog = dialog;
+        dialog.setOnDismissListener(d -> {
+            if (activeErrorDialog == dialog)
+                activeErrorDialog = null;
+        });
+        dialog.show();
+    }
+
     public void showErrorDialog(String title, String message) {
         if (activeErrorDialog != null && activeErrorDialog.isShowing())
             activeErrorDialog.dismiss();

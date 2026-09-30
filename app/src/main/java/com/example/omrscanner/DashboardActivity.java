@@ -1551,28 +1551,94 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             }
             final int userId = user.userId;
             repo.getEcdcDomains(domains -> repo.getAllEcdcCompetencies(competencies ->
-                    repo.getEcdcResponsesForClassPeriod(classId, period, responses -> {
-                        if (responses == null || responses.isEmpty()) {
-                            runOnUiThread(() -> ui.showErrorDialog("Nothing to upload",
-                                    "No saved ECDC marks for " + EcdcScreenRenderer.periodLabel(period)
-                                            + " in this class yet."));
-                            return;
-                        }
-                        try {
-                            org.json.JSONObject payload = com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder
-                                    .build(classroomId, userId, period, responses, domains, competencies);
-                            com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder.logPayload(payload.toString());
-                            final int studentCount = payload.getJSONArray("students").length();
-                            runOnUiThread(() -> ui.showToast("ECDC JSON for " + studentCount
-                                    + " student" + (studentCount == 1 ? "" : "s")
-                                    + " written to logcat"));
-                        } catch (org.json.JSONException e) {
-                            android.util.Log.e("OMR_ECDC_UPLOAD", "Could not build mass upload JSON: " + e.getMessage(), e);
-                            runOnUiThread(() -> ui.showErrorDialog("Upload failed",
-                                    "Could not build the upload data: " + e.getMessage()));
-                        }
-                    })));
+                    repo.getEcdcResponsesForClassPeriod(classId, period, responses ->
+                            repo.getStudentsByClass(classId, roster -> {
+                                if (responses == null || responses.isEmpty()) {
+                                    runOnUiThread(() -> ui.showErrorDialog("Nothing to upload",
+                                            "No saved ECDC marks for " + EcdcScreenRenderer.periodLabel(period)
+                                                    + " in this class yet."));
+                                    return;
+                                }
+                                // Guard: every student in the class must have every domain fully marked
+                                // for this period, or the whole mass upload is blocked.
+                                List<DashboardUiHelper.IncompleteStudent> incompleteStudents =
+                                        findIncompleteEcdcStudents(roster, responses, domains, competencies);
+                                if (!incompleteStudents.isEmpty()) {
+                                    final int n = incompleteStudents.size();
+                                    runOnUiThread(() -> ui.showIncompleteStudentsDialog(
+                                            "Complete all students first",
+                                            n + (n == 1 ? " student has" : " students have")
+                                                    + " unmarked competencies for "
+                                                    + EcdcScreenRenderer.periodLabel(period)
+                                                    + ". Finish these before uploading:",
+                                            incompleteStudents));
+                                    return;
+                                }
+                                try {
+                                    org.json.JSONObject payload = com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder
+                                            .build(classroomId, userId, period, responses, domains, competencies);
+                                    com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder.logPayload(payload.toString());
+                                    final int studentCount = payload.getJSONArray("students").length();
+                                    runOnUiThread(() -> ui.showToast("ECDC JSON for " + studentCount
+                                            + " student" + (studentCount == 1 ? "" : "s")
+                                            + " written to logcat"));
+                                } catch (org.json.JSONException e) {
+                                    android.util.Log.e("OMR_ECDC_UPLOAD", "Could not build mass upload JSON: " + e.getMessage(), e);
+                                    runOnUiThread(() -> ui.showErrorDialog("Upload failed",
+                                            "Could not build the upload data: " + e.getMessage()));
+                                }
+                            }))));
         });
+    }
+
+    /**
+     * For a mass upload: every roster student with at least one competency that has no saved
+     * status for the chosen period, together with the domains still missing marks. Students with
+     * no saved marks at all are skipped (they aren't uploaded). Empty list = safe to upload.
+     */
+    private List<DashboardUiHelper.IncompleteStudent> findIncompleteEcdcStudents(
+            List<com.example.omrscanner.database.entities.StudentLrnEntity> roster,
+            List<com.example.omrscanner.database.entities.EcdcResponseEntity> responses,
+            List<com.example.omrscanner.database.entities.EcdcDomainEntity> domains,
+            List<com.example.omrscanner.database.entities.EcdcCompetencyEntity> competencies) {
+        List<DashboardUiHelper.IncompleteStudent> result = new ArrayList<>();
+        if (roster == null || domains == null || competencies == null) return result;
+
+        Map<String, java.util.Set<Integer>> markedByLrn = new java.util.HashMap<>();
+        if (responses != null) {
+            for (com.example.omrscanner.database.entities.EcdcResponseEntity r : responses) {
+                markedByLrn.computeIfAbsent(r.lrn, k -> new java.util.HashSet<>()).add(r.competencyId);
+            }
+        }
+
+        for (com.example.omrscanner.database.entities.StudentLrnEntity s : roster) {
+            java.util.Set<Integer> marked = markedByLrn.get(s.lrn);
+            // Untouched students (no saved marks for this period) are simply not uploaded,
+            // so they don't block. Only students who started but didn't finish do.
+            if (marked == null || marked.isEmpty()) continue;
+            List<DashboardUiHelper.IncompleteDomain> missing = new ArrayList<>();
+            for (com.example.omrscanner.database.entities.EcdcDomainEntity d : domains) {
+                int remaining = 0;
+                for (com.example.omrscanner.database.entities.EcdcCompetencyEntity c : competencies) {
+                    if (c.domainId != d.id) continue;
+                    if (marked == null || !marked.contains(c.id)) remaining++;
+                }
+                if (remaining > 0) {
+                    missing.add(new DashboardUiHelper.IncompleteDomain(
+                            EcdcScreenRenderer.shortDomainName(d.domain),
+                            EcdcScreenRenderer.domainThemeColor(d.domain),
+                            remaining));
+                }
+            }
+            if (!missing.isEmpty()) {
+                String fullName = ((s.lastName != null ? s.lastName : "") + ", "
+                        + (s.firstName != null ? s.firstName : "")
+                        + (s.middleName != null && !s.middleName.isEmpty() ? " " + s.middleName : "")).trim();
+                result.add(new DashboardUiHelper.IncompleteStudent(fullName, missing));
+            }
+        }
+        Collections.sort(result, (a, b) -> a.name.compareToIgnoreCase(b.name));
+        return result;
     }
 
     private void onClassAssessmentsSyncClicked() {
