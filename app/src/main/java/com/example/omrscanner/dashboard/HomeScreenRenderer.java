@@ -206,8 +206,15 @@ public class HomeScreenRenderer {
      * @param onOpen     called when the card body is tapped
      */
     public View createClassCard(ClassListRow row,
-            String globalTeacherName,
-            Runnable onEdit, Runnable onDelete, Runnable onOpen) {
+                                String globalTeacherName,
+                                Runnable onEdit, Runnable onDelete, Runnable onOpen) {
+        return createClassCard(row, globalTeacherName, null, onEdit, onDelete, onOpen);
+    }
+
+    /** @param onMassUpload if non-null, adds a "Mass Upload" item to the card's 3-dots menu (ECDC tab only). */
+    public View createClassCard(ClassListRow row,
+                                String globalTeacherName, Runnable onMassUpload,
+                                Runnable onEdit, Runnable onDelete, Runnable onOpen) {
 
         LinearLayout card = new LinearLayout(activity);
         card.setOrientation(LinearLayout.HORIZONTAL);
@@ -298,7 +305,15 @@ public class HomeScreenRenderer {
             deleteTitle.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#1E293B")), 0, deleteTitle.length(), 0);
 
             popup.getMenu().add(0, 1, 0, editTitle).setIcon(editIcon);
-            popup.getMenu().add(0, 2, 1, deleteTitle).setIcon(deleteIcon);
+            if (onMassUpload != null) {
+                android.graphics.drawable.Drawable uploadIcon =
+                        androidx.core.content.ContextCompat.getDrawable(activity, R.drawable.ic_upload).mutate();
+                uploadIcon.setTint(Color.parseColor("#059669"));
+                android.text.SpannableString uploadTitle = new android.text.SpannableString("Mass Upload");
+                uploadTitle.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#1E293B")), 0, uploadTitle.length(), 0);
+                popup.getMenu().add(0, 3, 1, uploadTitle).setIcon(uploadIcon);
+            }
+            popup.getMenu().add(0, 2, 2, deleteTitle).setIcon(deleteIcon);
 
             try {
                 java.lang.reflect.Field field = popup.getClass().getDeclaredField("mPopup");
@@ -315,6 +330,9 @@ public class HomeScreenRenderer {
                     return true;
                 } else if (item.getItemId() == 2) {
                     onDelete.run();
+                    return true;
+                } else if (item.getItemId() == 3 && onMassUpload != null) {
+                    onMassUpload.run();
                     return true;
                 }
                 return false;

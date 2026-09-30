@@ -1492,6 +1492,89 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         return incomplete;
     }
 
+    /**
+     * ECDC class screen "Mass Upload". Same as the per-student Upload, but for every
+     * student in the open class who has saved marks for the chosen period: builds ONE
+     * payload (the "students" array holds all of them) and prints it to logcat (tag
+     * OMR_ECDC_UPLOAD). Nothing is sent to the server yet.
+     */
+    private void showEcdcMassUploadPeriodPicker(ClassFolder cls) {
+        final String[] periodKeys = {ECD_PERIOD_BOSY, ECD_PERIOD_MOSY, ECD_PERIOD_EOSY};
+        final int[] selected = {-1};
+
+        CharSequence[] items = new CharSequence[periodKeys.length];
+        for (int i = 0; i < periodKeys.length; i++) {
+            android.text.SpannableString s = new android.text.SpannableString(
+                    EcdcScreenRenderer.periodLabel(periodKeys[i]));
+            s.setSpan(new android.text.style.ForegroundColorSpan(Color.BLACK), 0, s.length(), 0);
+            items[i] = s;
+        }
+
+        androidx.appcompat.app.AlertDialog dialog =
+                new com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_OMRScanner_Dialog)
+                        .setTitle("Choose Assessment Period")
+                        .setSingleChoiceItems(items, -1, (d, which) -> {
+                            selected[0] = which;
+                            ((androidx.appcompat.app.AlertDialog) d)
+                                    .getButton(android.content.DialogInterface.BUTTON_POSITIVE)
+                                    .setEnabled(true);
+                        })
+                        .setPositiveButton("Upload", (d, which) -> {
+                            if (selected[0] >= 0) runEcdcMassUpload(cls, periodKeys[selected[0]]);
+                        })
+                        .setNegativeButton("Cancel", null)
+                        .show();
+
+        // Nothing is pre-selected, so "Upload" stays disabled until a period is picked.
+        dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).setEnabled(false);
+    }
+
+    private void runEcdcMassUpload(ClassFolder cls, String period) {
+        if (cls == null) {
+            ui.showErrorDialog("No class selected", "Choose a class before uploading its ECDC data.");
+            return;
+        }
+        if (cls.getClassroomId() == null) {
+            ui.showErrorDialog("Missing classroom ID", "This class wasn't synced from the server, so it has no classroom ID to upload ECDC data for.");
+            return;
+        }
+
+        // Capture now: the selection can change while the DB reads run in the background.
+        final String classId = cls.getId();
+        final int classroomId = cls.getClassroomId();
+
+        repo.getActiveUser(user -> {
+            if (user == null || user.userId == null) {
+                runOnUiThread(() -> ui.showErrorDialog("Sign-in required",
+                        "Please sign in before uploading ECDC data."));
+                return;
+            }
+            final int userId = user.userId;
+            repo.getEcdcDomains(domains -> repo.getAllEcdcCompetencies(competencies ->
+                    repo.getEcdcResponsesForClassPeriod(classId, period, responses -> {
+                        if (responses == null || responses.isEmpty()) {
+                            runOnUiThread(() -> ui.showErrorDialog("Nothing to upload",
+                                    "No saved ECDC marks for " + EcdcScreenRenderer.periodLabel(period)
+                                            + " in this class yet."));
+                            return;
+                        }
+                        try {
+                            org.json.JSONObject payload = com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder
+                                    .build(classroomId, userId, period, responses, domains, competencies);
+                            com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder.logPayload(payload.toString());
+                            final int studentCount = payload.getJSONArray("students").length();
+                            runOnUiThread(() -> ui.showToast("ECDC JSON for " + studentCount
+                                    + " student" + (studentCount == 1 ? "" : "s")
+                                    + " written to logcat"));
+                        } catch (org.json.JSONException e) {
+                            android.util.Log.e("OMR_ECDC_UPLOAD", "Could not build mass upload JSON: " + e.getMessage(), e);
+                            runOnUiThread(() -> ui.showErrorDialog("Upload failed",
+                                    "Could not build the upload data: " + e.getMessage()));
+                        }
+                    })));
+        });
+    }
+
     private void onClassAssessmentsSyncClicked() {
         if (selectedClass == null) {
             ui.showErrorDialog("No class selected", "Open a class before syncing its assessments.");
@@ -3776,6 +3859,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     for (ClassListRow row : ecdcRows) {
                         ecdAllList.addView(homeRenderer.createClassCard(
                                 row, globalTeacherName,
+                                () -> {
+                                    ClassFolder c = findClassById(row.id);
+                                    if (c != null) showEcdcMassUploadPeriodPicker(c);
+                                },
                                 () -> {
                                     ClassFolder c = findClassById(row.id);
                                     if (c != null) dialogs.showEditClassDialog(c);
