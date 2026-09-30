@@ -303,6 +303,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private BackupManager backupManager;
     private androidx.activity.result.ActivityResultLauncher<String> createBackupFileLauncher;
     private androidx.activity.result.ActivityResultLauncher<String[]> openBackupFileLauncher;
+    private androidx.activity.result.ActivityResultLauncher<String> pickProfilePhotoLauncher;
+    private View userAvatarContainer;
+    private ImageView userAvatarImage, userAvatarPlaceholder;
     private androidx.activity.result.ActivityResultLauncher<String> storagePermissionLauncher;
     private androidx.activity.result.ActivityResultLauncher<android.content.Intent> allFilesAccessLauncher;
     private Runnable pendingStorageAction;
@@ -492,6 +495,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                         + "read/write scan files in Downloads/OMRScanner. Please enable it, "
                                         + "then try again.");
                     }
+                });
+
+        pickProfilePhotoLauncher = registerForActivityResult(
+                new androidx.activity.result.contract.ActivityResultContracts.GetContent(),
+                uri -> {
+                    if (uri != null) saveProfilePhoto(uri);
                 });
 
         openBackupFileLauncher = registerForActivityResult(
@@ -776,6 +785,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         scansAssessmentFilterBlock = findViewById(R.id.scansAssessmentFilterBlock);
         scansNeedsCorrectionFilterBlock = findViewById(R.id.scansNeedsCorrectionFilterBlock);
         userNameText = findViewById(R.id.userNameText);
+        userAvatarContainer = findViewById(R.id.userAvatarContainer);
+        userAvatarImage = findViewById(R.id.userAvatarImage);
+        userAvatarPlaceholder = findViewById(R.id.userAvatarPlaceholder);
+        userAvatarContainer.setOnClickListener(v -> pickProfilePhotoLauncher.launch("image/*"));
         userSchoolText = findViewById(R.id.userSchoolText);
         userLastSynced = findViewById(R.id.userLastSynced);
         userRescanRow = findViewById(R.id.userRescanRow);
@@ -939,6 +952,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         btnBack.setOnClickListener(v -> navigateBack());
         btnUpload.setOnClickListener(v -> dialogs.showGlobalUploadClassDialog());
         btnGoToUsers.setOnClickListener(v -> selectUserTab());
+        btnGoToUsers.setOutlineProvider(new android.view.ViewOutlineProvider() {
+            @Override
+            public void getOutline(View view, android.graphics.Outline outline) {
+                outline.setOval(0, 0, view.getWidth(), view.getHeight());
+            }
+        });
+        btnGoToUsers.setClipToOutline(true);
         fabMain.setOnClickListener(v -> toggleFabMenu());
         fabScrim.setOnClickListener(v -> closeFabMenu());
 
@@ -3047,10 +3067,150 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         navECDLabel.setTextColor(ecdActive ? activeColor : inactiveColor);
     }
 
+    // ── Profile photo ────────────────────────────────────────────────────
+    // Saved as filesDir/images/profile_<userId>.jpg. BackupManager already zips and
+    // restores everything in filesDir/images, so the photo rides along with backups.
+    // users.profile_photo_path points at it; if that path is missing or stale (fresh
+    // install + restored backup), the file is found again by its userId-based name.
+
+    private static final int PROFILE_PHOTO_MAX_PX = 512;
+
+    private java.io.File profilePhotoFile(int userId) {
+        java.io.File dir = new java.io.File(getFilesDir(), "images");
+        //noinspection ResultOfMethodCallIgnored
+        dir.mkdirs();
+        return new java.io.File(dir, "profile_" + userId + ".jpg");
+    }
+
+    private void saveProfilePhoto(android.net.Uri uri) {
+        repo.getActiveUser(user -> {
+            if (user == null || user.userId == null) {
+                runOnUiThread(() -> ui.showErrorDialog("Sign-in required",
+                        "Scan your QR code before setting a profile photo."));
+                return;
+            }
+            final int userId = user.userId;
+            try {
+                android.graphics.Bitmap bmp = decodeSquareProfileBitmap(uri);
+                if (bmp == null) throw new java.io.IOException("Could not read that image.");
+                java.io.File out = profilePhotoFile(userId);
+                try (java.io.FileOutputStream fos = new java.io.FileOutputStream(out)) {
+                    bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, fos);
+                }
+                repo.setProfilePhotoPath(userId, out.getAbsolutePath(),
+                        v -> runOnUiThread(() -> showProfilePhoto(bmp)));
+            } catch (Exception e) {
+                runOnUiThread(() -> ui.showErrorDialog("Photo not saved",
+                        e.getMessage() != null ? e.getMessage() : "Could not save that photo."));
+            }
+        });
+    }
+
+    /** Decodes, applies EXIF rotation, center-crops to a square, and downsizes to PROFILE_PHOTO_MAX_PX. */
+    private android.graphics.Bitmap decodeSquareProfileBitmap(android.net.Uri uri)
+            throws java.io.IOException {
+        android.graphics.BitmapFactory.Options bounds = new android.graphics.BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        try (java.io.InputStream in = getContentResolver().openInputStream(uri)) {
+            android.graphics.BitmapFactory.decodeStream(in, null, bounds);
+        }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null;
+
+        int sample = 1;
+        int shortSide = Math.min(bounds.outWidth, bounds.outHeight);
+        while (shortSide / (sample * 2) >= PROFILE_PHOTO_MAX_PX) sample *= 2;
+
+        android.graphics.BitmapFactory.Options opts = new android.graphics.BitmapFactory.Options();
+        opts.inSampleSize = sample;
+        android.graphics.Bitmap decoded;
+        try (java.io.InputStream in = getContentResolver().openInputStream(uri)) {
+            decoded = android.graphics.BitmapFactory.decodeStream(in, null, opts);
+        }
+        if (decoded == null) return null;
+
+        int rotation = 0;
+        try (java.io.InputStream in = getContentResolver().openInputStream(uri)) {
+            if (in != null) {
+                int o = new androidx.exifinterface.media.ExifInterface(in).getAttributeInt(
+                        androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION,
+                        androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL);
+                if (o == androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90) rotation = 90;
+                else if (o == androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180) rotation = 180;
+                else if (o == androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270) rotation = 270;
+            }
+        } catch (Exception ignored) {
+            // No EXIF data — use the image as decoded.
+        }
+
+        int side = Math.min(decoded.getWidth(), decoded.getHeight());
+        int x = (decoded.getWidth() - side) / 2;
+        int y = (decoded.getHeight() - side) / 2;
+        android.graphics.Matrix m = new android.graphics.Matrix();
+        if (rotation != 0) m.postRotate(rotation);
+        float scale = Math.min(1f, (float) PROFILE_PHOTO_MAX_PX / side);
+        m.postScale(scale, scale);
+        return android.graphics.Bitmap.createBitmap(decoded, x, y, side, side, m, true);
+    }
+
+    /** Shows the active account's saved photo on the User tab, or the default person icon. */
+    private void loadProfilePhoto() {
+        repo.getActiveUser(user -> {
+            android.graphics.Bitmap bmp = null;
+            if (user != null && user.userId != null) {
+                java.io.File f = user.profilePhotoPath != null
+                        ? new java.io.File(user.profilePhotoPath) : null;
+                if (f == null || !f.isFile()) {
+                    f = profilePhotoFile(user.userId); // path unset/stale: find it by name
+                }
+                if (f.isFile()) {
+                    bmp = android.graphics.BitmapFactory.decodeFile(f.getAbsolutePath());
+                    if (bmp != null && !f.getAbsolutePath().equals(user.profilePhotoPath)) {
+                        repo.setProfilePhotoPath(user.userId, f.getAbsolutePath(), null);
+                    }
+                }
+            }
+            final android.graphics.Bitmap shown = bmp;
+            runOnUiThread(() -> showProfilePhoto(shown));
+        });
+    }
+
+    private void showProfilePhoto(android.graphics.Bitmap bmp) {
+        // User tab avatar
+        if (bmp != null) {
+            userAvatarImage.setImageBitmap(bmp);
+            userAvatarImage.setVisibility(View.VISIBLE);
+            userAvatarPlaceholder.setVisibility(View.GONE);
+        } else {
+            userAvatarImage.setImageDrawable(null);
+            userAvatarImage.setVisibility(View.GONE);
+            userAvatarPlaceholder.setVisibility(View.VISIBLE);
+        }
+
+        // Home header button: the photo fills the circle; with no photo, fall back to the
+        // white person icon (padded and tinted, as in the layout).
+        if (bmp != null) {
+            // Circular photo inside an opaque white circle (the padding is the white ring).
+            androidx.core.graphics.drawable.RoundedBitmapDrawable circle =
+                    androidx.core.graphics.drawable.RoundedBitmapDrawableFactory.create(getResources(), bmp);
+            circle.setCircular(true);
+            btnGoToUsers.setImageTintList(null);
+            btnGoToUsers.setBackgroundResource(R.drawable.bg_icon_circle_white);
+            btnGoToUsers.setPadding(ui.dp(4), ui.dp(4), ui.dp(4), ui.dp(4));
+            btnGoToUsers.setImageDrawable(circle);
+        } else {
+            // No photo: original translucent circle with the white person icon.
+            btnGoToUsers.setBackgroundResource(R.drawable.bg_icon_circle_white);
+            btnGoToUsers.setImageResource(R.drawable.ic_person);
+            btnGoToUsers.setImageTintList(android.content.res.ColorStateList.valueOf(Color.WHITE));
+            btnGoToUsers.setPadding(ui.dp(11), ui.dp(11), ui.dp(11), ui.dp(11));
+        }
+    }
+
     /** Populates the User tab with the currently active user's info, activity stats, and account details. */
     private void refreshUserScreen() {
         String displayName = globalTeacherName != null ? globalTeacherName.trim() : "";
         userNameText.setText(!displayName.isEmpty() ? displayName : "Scan your QR code to set your name");
+        loadProfilePhoto();
         updateLastSyncedLabel();
 
         SimpleDateFormat sdf = new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault());
@@ -4924,6 +5084,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     }
 
     private void refreshTeacherNameHeader() {
+        loadProfilePhoto();
         String displayName = (activeUserFirstName != null && !activeUserFirstName.isEmpty())
                 ? activeUserFirstName
                 : globalTeacherName;

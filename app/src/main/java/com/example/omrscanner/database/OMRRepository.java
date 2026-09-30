@@ -311,12 +311,25 @@ public class OMRRepository {
    */
   public void insertUserAsActive(UserEntity user, Callback<Long> callback) {
     executor.execute(() -> {
+      // Every QR scan inserts a brand-new users row, so carry the photo over from
+      // this account's earlier row(s); otherwise signing out and back in loses it.
+      if (user.profilePhotoPath == null && user.userId != null) {
+        user.profilePhotoPath = db.userDao().getProfilePhotoPathForUserId(user.userId);
+      }
       long[] idHolder = new long[1];
       db.runInTransaction(() -> {
         idHolder[0] = db.userDao().insertAsOnlyActive(user);
       });
       if (callback != null)
         callback.onResult(idHolder[0]);
+    });
+  }
+
+  public void setProfilePhotoPath(int userId, String path, Callback<Void> callback) {
+    executor.execute(() -> {
+      db.userDao().updateProfilePhotoPath(userId, path);
+      if (callback != null)
+        callback.onResult(null);
     });
   }
 
