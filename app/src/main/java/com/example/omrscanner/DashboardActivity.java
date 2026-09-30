@@ -415,6 +415,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     /** Matches Toast.LENGTH_SHORT's on-screen duration — used to delay a UI refresh until the sync toast has finished showing. */
     private static final long TOAST_SHORT_DELAY_MS = 2000;
     private static final String SYNC_PREFS = "omr_sync_prefs";
+    // ECDC class screen: the last few students opened from the search, per class.
+    private static final String ECD_RECENT_PREFS = "ecd_recent_students_prefs";
+    private static final int ECD_RECENT_MAX = 5;
     private static final String SYNC_PREFS_KEY_PREFIX = "last_sync_millis_";
     private static final String PREF_LAST_GLOBAL_SYNC = "last_global_sync_millis";
     private static final long STUDENT_SYNC_STALE_MS = 24L * 60 * 60 * 1000; // 24 hours
@@ -4031,8 +4034,28 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
         if (query.isEmpty()) {
             ecdStudentResultsList.removeAllViews();
-            ecdStudentResultsEmpty.setVisibility(View.VISIBLE);
-            ecdStudentResultsEmpty.setText("Type a name or LRN to find a student.");
+            List<String[]> recents = getEcdRecentStudents(classId);
+            if (recents.isEmpty()) {
+                ecdStudentResultsEmpty.setVisibility(View.VISIBLE);
+                ecdStudentResultsEmpty.setText("Type a name or LRN to find a student.");
+                return;
+            }
+            ecdStudentResultsEmpty.setVisibility(View.GONE);
+
+            TextView header = new TextView(this);
+            header.setText("Recent searches");
+            header.setTextColor(Color.parseColor("#64748B"));
+            header.setTextSize(11);
+            header.setTypeface(null, android.graphics.Typeface.BOLD);
+            header.setPadding(ui.dp(2), 0, 0, ui.dp(8));
+            ecdStudentResultsList.addView(header);
+
+            for (String[] r : recents) {
+                final String lrn = r[0];
+                final String fullName = r[1];
+                ecdStudentResultsList.addView(homeRenderer.createStudentResultCard(fullName, lrn,
+                        () -> openEcdStudent(lrn, fullName)));
+            }
             return;
         }
 
@@ -4066,6 +4089,45 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     // RENDER — ECDC STUDENT CHECKLIST
     // ═══════════════════════════════════════════════════════════════
 
+    /** Most-recent-first list of {lrn, fullName} students opened from this class's search. */
+    private List<String[]> getEcdRecentStudents(String classId) {
+        List<String[]> out = new ArrayList<>();
+        if (classId == null) return out;
+        String raw = getSharedPreferences(ECD_RECENT_PREFS, MODE_PRIVATE).getString(classId, null);
+        if (raw == null) return out;
+        try {
+            org.json.JSONArray arr = new org.json.JSONArray(raw);
+            for (int i = 0; i < arr.length() && out.size() < ECD_RECENT_MAX; i++) {
+                org.json.JSONObject o = arr.getJSONObject(i);
+                out.add(new String[]{o.optString("lrn"), o.optString("name")});
+            }
+        } catch (org.json.JSONException ignored) {
+            // Corrupt entry: treat as no recents.
+        }
+        return out;
+    }
+
+    /** Moves this student to the top of the class's recents and trims the list to the max. */
+    private void recordEcdRecentStudent(String classId, String lrn, String fullName) {
+        if (classId == null || lrn == null) return;
+        List<String[]> list = getEcdRecentStudents(classId);
+        for (int i = list.size() - 1; i >= 0; i--) {
+            if (lrn.equals(list.get(i)[0])) list.remove(i);
+        }
+        list.add(0, new String[]{lrn, fullName != null ? fullName : ""});
+        try {
+            org.json.JSONArray arr = new org.json.JSONArray();
+            for (int i = 0; i < list.size() && i < ECD_RECENT_MAX; i++) {
+                arr.put(new org.json.JSONObject()
+                        .put("lrn", list.get(i)[0])
+                        .put("name", list.get(i)[1]));
+            }
+            getSharedPreferences(ECD_RECENT_PREFS, MODE_PRIVATE).edit()
+                    .putString(classId, arr.toString()).apply();
+        } catch (org.json.JSONException ignored) {
+        }
+    }
+
     /** Opens the checklist for one student under the currently selected class + period. */
     private void openEcdStudent(String lrn, String fullName) {
         if (selectedClass == null || selectedEcdPeriod == null) return;
@@ -4079,6 +4141,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         selectedEcdStudentLrn = lrn;
         selectedEcdStudentName = fullName;
         ecdStudentClassId = selectedClass.getId();
+        recordEcdRecentStudent(ecdStudentClassId, lrn, fullName);
         selectedEcdDomainId = null;
         ecdSavedStatuses = new java.util.HashMap<>();
         ecdDraftStatuses = new java.util.HashMap<>();
