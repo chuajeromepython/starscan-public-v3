@@ -74,6 +74,11 @@ public class EcdcScreenRenderer {
         return new String[]{"#0038A8", "#0038A8", "#FFFFFF"};
     }
 
+    /** The domain's main theme color (same one used for its pill and card accent). */
+    public static int domainThemeColor(String serverName) {
+        return Color.parseColor(domainColors(serverName)[0]);
+    }
+
     /**
      * The row of domain pills, each in its own domain color: solid when selected,
      * a light tint with a colored outline when not.

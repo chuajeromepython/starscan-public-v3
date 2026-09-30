@@ -333,6 +333,143 @@ public class DashboardUiHelper {
 
     private Dialog activeErrorDialog = null;
 
+    /** One row in the "complete all domains" dialog. */
+    public static class IncompleteDomain {
+        public final String label;
+        public final int color;
+        public final int remaining;
+
+        public IncompleteDomain(String label, int color, int remaining) {
+            this.label = label;
+            this.color = color;
+            this.remaining = remaining;
+        }
+    }
+
+    /** Same look as showErrorDialog, but lists domains as bullets in their theme colors with a remaining count. */
+    public void showIncompleteDomainsDialog(String title, String intro,
+                                            java.util.List<IncompleteDomain> domains) {
+        if (activeErrorDialog != null && activeErrorDialog.isShowing())
+            activeErrorDialog.dismiss();
+
+        Dialog dialog = new Dialog(activity);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setCancelable(true);
+
+        LinearLayout root = new LinearLayout(activity);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setGravity(Gravity.CENTER_HORIZONTAL);
+        root.setPadding(dp(28), dp(28), dp(28), dp(28));
+        GradientDrawable dBg = new GradientDrawable();
+        dBg.setColor(Color.WHITE);
+        dBg.setCornerRadius(dp(24));
+        root.setBackground(dBg);
+
+        TextView iconView = new TextView(activity);
+        iconView.setText("⚠️");
+        iconView.setTextSize(32);
+        iconView.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(dp(60), dp(60));
+        ilp.gravity = Gravity.CENTER_HORIZONTAL;
+        ilp.bottomMargin = dp(16);
+        iconView.setLayoutParams(ilp);
+        root.addView(iconView);
+
+        TextView titleView = new TextView(activity);
+        titleView.setText(title);
+        titleView.setTextSize(17);
+        titleView.setTypeface(null, Typeface.BOLD);
+        titleView.setTextColor(Color.parseColor("#CE1126"));
+        titleView.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        tlp.bottomMargin = dp(8);
+        titleView.setLayoutParams(tlp);
+        root.addView(titleView);
+
+        TextView introView = new TextView(activity);
+        introView.setText(intro);
+        introView.setTextSize(13);
+        introView.setTextColor(Color.parseColor("#64748B"));
+        introView.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams plp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        plp.bottomMargin = dp(16);
+        introView.setLayoutParams(plp);
+        root.addView(introView);
+
+        LinearLayout list = new LinearLayout(activity);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(dp(16), dp(8), dp(16), dp(8));
+        GradientDrawable listBg = new GradientDrawable();
+        listBg.setColor(Color.parseColor("#F8FAFC"));
+        listBg.setCornerRadius(dp(14));
+        list.setBackground(listBg);
+        LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        llp.bottomMargin = dp(24);
+        list.setLayoutParams(llp);
+
+        for (IncompleteDomain d : domains) {
+            LinearLayout row = new LinearLayout(activity);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(0, dp(7), 0, dp(7));
+
+            TextView name = new TextView(activity);
+            name.setText("•  " + d.label);
+            name.setTextSize(14);
+            name.setTypeface(null, Typeface.BOLD);
+            name.setTextColor(d.color);
+            name.setLayoutParams(new LinearLayout.LayoutParams(
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            row.addView(name);
+
+            TextView count = new TextView(activity);
+            count.setText(d.remaining + " remaining");
+            count.setTextSize(12);
+            count.setTextColor(d.color);
+            row.addView(count);
+
+            list.addView(row);
+        }
+        root.addView(list);
+
+        TextView btnDismiss = new TextView(activity);
+        btnDismiss.setText("Got it");
+        btnDismiss.setTextSize(14);
+        btnDismiss.setTypeface(null, Typeface.BOLD);
+        btnDismiss.setGravity(Gravity.CENTER);
+        btnDismiss.setTextColor(Color.WHITE);
+        GradientDrawable dismissBg = new GradientDrawable();
+        dismissBg.setColor(Color.parseColor("#CE1126"));
+        dismissBg.setCornerRadius(dp(12));
+        btnDismiss.setBackground(dismissBg);
+        btnDismiss.setPadding(dp(20), dp(12), dp(20), dp(12));
+        btnDismiss.setClickable(true);
+        btnDismiss.setFocusable(true);
+        btnDismiss.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        btnDismiss.setOnClickListener(v -> dialog.dismiss());
+        root.addView(btnDismiss);
+
+        dialog.setContentView(root);
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setLayout(
+                    (int) (activity.getResources().getDisplayMetrics().widthPixels * 0.82),
+                    WindowManager.LayoutParams.WRAP_CONTENT);
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            dialog.getWindow().setGravity(Gravity.CENTER);
+            dialog.getWindow().setWindowAnimations(android.R.style.Animation_Dialog);
+        }
+        activeErrorDialog = dialog;
+        dialog.setOnDismissListener(d -> {
+            if (activeErrorDialog == dialog)
+                activeErrorDialog = null;
+        });
+        dialog.show();
+    }
+
     public void showErrorDialog(String title, String message) {
         if (activeErrorDialog != null && activeErrorDialog.isShowing())
             activeErrorDialog.dismiss();

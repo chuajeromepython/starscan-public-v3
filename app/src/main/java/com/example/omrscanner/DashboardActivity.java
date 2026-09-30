@@ -1402,11 +1402,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             ui.showErrorDialog("Choose a period", "Pick Beginning, Middle or End first, then tap Upload.");
             return;
         }
-        List<String> incompleteDomains = incompleteEcdDomainNames();
+        List<DashboardUiHelper.IncompleteDomain> incompleteDomains = incompleteEcdDomains();
         if (!incompleteDomains.isEmpty()) {
-            ui.showErrorDialog("Complete all domains first",
-                    "You need to complete these domains to proceed with the upload: "
-                            + String.join(", ", incompleteDomains));
+            ui.showIncompleteDomainsDialog("Complete all domains first",
+                    "Finish marking these domains before uploading:", incompleteDomains);
             return;
         }
         if (selectedEcdStudentLrn == null || selectedEcdStudentLrn.trim().isEmpty()) {
@@ -1455,19 +1454,19 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
      * status, for the student currently open on the checklist screen. An
      * empty list means every domain is fully marked.
      */
-    private List<String> incompleteEcdDomainNames() {
-        List<String> incomplete = new ArrayList<>();
+    private List<DashboardUiHelper.IncompleteDomain> incompleteEcdDomains() {
+        List<DashboardUiHelper.IncompleteDomain> incomplete = new ArrayList<>();
         for (com.example.omrscanner.database.entities.EcdcDomainEntity d : ecdDomains) {
-            boolean domainComplete = true;
+            int remaining = 0;
             for (com.example.omrscanner.database.entities.EcdcCompetencyEntity c : ecdCompetencies) {
                 if (c.domainId != d.id) continue;
-                if (!ecdSavedStatuses.containsKey(c.id)) {
-                    domainComplete = false;
-                    break;
-                }
+                if (!ecdSavedStatuses.containsKey(c.id)) remaining++;
             }
-            if (!domainComplete) {
-                incomplete.add(EcdcScreenRenderer.shortDomainName(d.domain));
+            if (remaining > 0) {
+                incomplete.add(new DashboardUiHelper.IncompleteDomain(
+                        EcdcScreenRenderer.shortDomainName(d.domain),
+                        EcdcScreenRenderer.domainThemeColor(d.domain),
+                        remaining));
             }
         }
         return incomplete;
