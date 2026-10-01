@@ -158,7 +158,7 @@ public final class EcdcUploadPayloadBuilder {
     /** Date-only, fixed to GMT-8 regardless of the device's time zone, e.g. 2026-10-10. */
     static String formatTimestamp(long epochMillis) {
         SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
-        f.setTimeZone(TimeZone.getTimeZone("GMT-8"));
+        f.setTimeZone(TimeZone.getDefault());
         return f.format(new Date(epochMillis));
     }
 

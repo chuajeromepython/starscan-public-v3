@@ -266,6 +266,164 @@ public class EcdcScreenRenderer {
     }
 
 
+    private View createStatBox(String label, int count, String hex) {
+        int c = Color.parseColor(hex);
+
+        LinearLayout box = new LinearLayout(activity);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER);
+        box.setPadding(ui.dp(2), ui.dp(8), ui.dp(2), ui.dp(8));
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(ui.dp(12));
+        bg.setColor(mixWithWhite(c, 0.12f));
+        box.setBackground(bg);
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        lp.rightMargin = ui.dp(6);
+        box.setLayoutParams(lp);
+
+        TextView number = new TextView(activity);
+        number.setText(String.valueOf(count));
+        number.setTextSize(18);
+        number.setTypeface(null, Typeface.BOLD);
+        number.setTextColor(c);
+        number.setGravity(Gravity.CENTER);
+        box.addView(number);
+
+        TextView text = new TextView(activity);
+        text.setText(label);
+        text.setTextSize(9);
+        text.setTextColor(Color.parseColor("#475569"));
+        text.setGravity(Gravity.CENTER);
+        box.addView(text);
+
+        return box;
+    }
+
+    /** Summary card for the eye button. statuses: competency id -> STATUS_*; missing id = unmarked. */
+    public View createSummaryCard(String studentName, String subtitle,
+                                  List<EcdcDomainEntity> domains,
+                                  List<com.example.omrscanner.database.entities.EcdcCompetencyEntity> competencies,
+                                  java.util.Map<Integer, String> statuses) {
+
+        // {present, notPresent, notTested, unmarked, total}
+        int[] overall = new int[5];
+        java.util.Map<Integer, int[]> perDomain = new java.util.LinkedHashMap<>();
+        for (EcdcDomainEntity d : domains) perDomain.put(d.id, new int[5]);
+
+        for (com.example.omrscanner.database.entities.EcdcCompetencyEntity c : competencies) {
+            String s = statuses.get(c.id);
+            int idx;
+            if (EcdcResponseEntity.STATUS_PRESENT.equals(s)) idx = 0;
+            else if (EcdcResponseEntity.STATUS_NOT_PRESENT.equals(s)) idx = 1;
+            else if (EcdcResponseEntity.STATUS_NOT_TESTED.equals(s)) idx = 2;
+            else idx = 3;
+            overall[idx]++;
+            overall[4]++;
+            int[] row = perDomain.get(c.domainId);
+            if (row != null) {
+                row[idx]++;
+                row[4]++;
+            }
+        }
+
+        LinearLayout root = new LinearLayout(activity);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(ui.dp(18), ui.dp(18), ui.dp(12), ui.dp(8));
+
+        TextView name = new TextView(activity);
+        name.setText(studentName != null ? studentName : "");
+        name.setTextSize(16);
+        name.setTypeface(null, Typeface.BOLD);
+        name.setTextColor(Color.parseColor("#1E293B"));
+        root.addView(name);
+
+        TextView sub = new TextView(activity);
+        sub.setText(subtitle);
+        sub.setTextSize(11);
+        sub.setTextColor(Color.parseColor("#64748B"));
+        root.addView(sub);
+
+        int marked = overall[4] - overall[3];
+        TextView progress = new TextView(activity);
+        progress.setText(marked + " of " + overall[4] + " marked");
+        progress.setTextSize(12);
+        progress.setTypeface(null, Typeface.BOLD);
+        progress.setTextColor(Color.parseColor(COLOR_CHECKED));
+        LinearLayout.LayoutParams pLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        pLp.topMargin = ui.dp(10);
+        progress.setLayoutParams(pLp);
+        root.addView(progress);
+
+        LinearLayout stats = new LinearLayout(activity);
+        stats.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams sLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        sLp.topMargin = ui.dp(8);
+        stats.setLayoutParams(sLp);
+        stats.addView(createStatBox("Present", overall[0], "#16A34A"));
+        stats.addView(createStatBox("Not present", overall[1], "#DC2626"));
+        stats.addView(createStatBox("Not tested", overall[2], "#EA580C"));
+        stats.addView(createStatBox("Unmarked", overall[3], "#64748B"));
+        root.addView(stats);
+
+        TextView byDomain = new TextView(activity);
+        byDomain.setText("By domain");
+        byDomain.setTextSize(10);
+        byDomain.setTypeface(null, Typeface.BOLD);
+        byDomain.setTextColor(Color.parseColor("#64748B"));
+        LinearLayout.LayoutParams bdLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        bdLp.topMargin = ui.dp(14);
+        bdLp.bottomMargin = ui.dp(6);
+        byDomain.setLayoutParams(bdLp);
+        root.addView(byDomain);
+
+        for (EcdcDomainEntity d : domains) {
+            int[] r = perDomain.get(d.id);
+            if (r == null || r[4] == 0) continue;
+            int accent = Color.parseColor(domainColors(d.domain)[0]);
+
+            LinearLayout row = new LinearLayout(activity);
+            row.setOrientation(LinearLayout.VERTICAL);
+            row.setPadding(ui.dp(12), ui.dp(8), ui.dp(10), ui.dp(8));
+            GradientDrawable rowBg = new GradientDrawable();
+            rowBg.setCornerRadius(ui.dp(12));
+            rowBg.setColor(mixWithWhite(accent, 0.08f));
+            rowBg.setStroke(ui.dp(1), accent);
+            row.setBackground(rowBg);
+            LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            rowLp.bottomMargin = ui.dp(6);
+            rowLp.rightMargin = ui.dp(6);
+            row.setLayoutParams(rowLp);
+
+            TextView title = new TextView(activity);
+            title.setText(shortDomainName(d.domain) + "  \u2022  " + (r[4] - r[3]) + " of " + r[4] + " marked");
+            title.setTextSize(12);
+            title.setTypeface(null, Typeface.BOLD);
+            title.setTextColor(Color.parseColor(domainColors(d.domain)[1]));
+            row.addView(title);
+
+            TextView counts = new TextView(activity);
+            counts.setText("Present " + r[0] + "   Not present " + r[1]
+                    + "   Not tested " + r[2] + "   Unmarked " + r[3]);
+            counts.setTextSize(10);
+            counts.setTextColor(Color.parseColor("#334155"));
+            row.addView(counts);
+
+            root.addView(row);
+        }
+
+        android.widget.ScrollView scroll = new android.widget.ScrollView(activity);
+        scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        scroll.addView(root);
+        return scroll;
+    }
+
     /** Filled blue when there are unsaved changes, muted grey when there's nothing to save. */
     public void styleSaveButton(TextView button, boolean hasChanges) {
         GradientDrawable bg = new GradientDrawable();

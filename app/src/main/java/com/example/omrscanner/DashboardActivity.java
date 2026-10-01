@@ -1001,6 +1001,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         findViewById(R.id.classSyncStudentsRow).setOnClickListener(v -> onAssessmentSyncClicked());
         findViewById(R.id.ecdSyncStudentsRow).setOnClickListener(v -> onEcdcDomainsSyncClicked());
         findViewById(R.id.ecdUploadButton).setOnClickListener(v -> onEcdcUploadClicked());
+        findViewById(R.id.ecdSummaryButton).setOnClickListener(v -> showEcdcSummaryCard());
         ecdSaveButton.setOnClickListener(v -> saveEcdcDraft(null));
 
         fabAssessmentSyncRow.setOnClickListener(v -> {
@@ -4392,6 +4393,24 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     + "  \u2022  " + domainMarked + " of " + domainTotal + " marked");
         }
         ecdcRenderer.styleSaveButton(ecdSaveButton, dirty);
+    }
+
+    /** Eye button on the ECDC student screen: tallies of the marks currently on screen. */
+    private void showEcdcSummaryCard() {
+        if (ecdDomains.isEmpty() || ecdCompetencies.isEmpty()) {
+            ui.showToast("No ECDC checklist loaded yet.");
+            return;
+        }
+        View card = ecdcRenderer.createSummaryCard(
+                selectedEcdStudentName,
+                "LRN: " + selectedEcdStudentLrn + "  \u2022  "
+                        + EcdcScreenRenderer.periodLabel(selectedEcdPeriod),
+                ecdDomains, ecdCompetencies, ecdDraftStatuses);
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(
+                this, R.style.ThemeOverlay_OMRScanner_Dialog)
+                .setView(card)
+                .setPositiveButton("Close", null)
+                .show();
     }
 
     private boolean hasEcdUnsavedChanges() {

@@ -3382,6 +3382,7 @@
 
                                         <TextView
                                             android:id="@+id/ecdStudentName"
+                                            android:layout_marginEnd="38dp"
                                             android:layout_width="match_parent"
                                             android:layout_height="wrap_content"
                                             android:maxLines="2"
@@ -3393,6 +3394,7 @@
 
                                         <TextView
                                             android:id="@+id/ecdStudentMeta"
+                                            android:layout_marginEnd="38dp"
                                             android:layout_width="match_parent"
                                             android:layout_height="wrap_content"
                                             android:layout_marginTop="2dp"
@@ -3416,7 +3418,35 @@
                                                 android:textStyle="bold" />
 
                                             <LinearLayout
-                                                android:id="@+id/ecdUploadButton"
+                                                android:layout_width="wrap_content"
+                                                android:layout_height="wrap_content"
+                                                android:orientation="vertical"
+                                                android:gravity="end">
+
+                                                <LinearLayout
+                                                    android:visibility="gone"
+                                                    android:id="@+id/ecdSummaryButtonOld"
+                                                    android:layout_width="wrap_content"
+                                                    android:layout_height="30dp"
+                                                    android:layout_marginBottom="6dp"
+                                                    android:orientation="horizontal"
+                                                    android:gravity="center"
+                                                    android:paddingStart="11dp"
+                                                    android:paddingEnd="11dp"
+                                                    android:background="@drawable/bg_icon_box_white"
+                                                    android:clickable="true"
+                                                    android:focusable="true"
+                                                    android:contentDescription="View summary"
+                                                    android:foreground="?attr/selectableItemBackgroundBorderless">
+                                                    <ImageView
+                                                        android:layout_width="16dp"
+                                                        android:layout_height="16dp"
+                                                        android:src="@drawable/ic_eye_outline"
+                                                        app:tint="#FFFFFF" />
+                                                </LinearLayout>
+
+                                                <LinearLayout
+                                                    android:id="@+id/ecdUploadButton"
                                                 android:layout_width="wrap_content"
                                                 android:layout_height="30dp"
                                                 android:orientation="horizontal"
@@ -3441,8 +3471,28 @@
                                                     android:textSize="10sp"
                                                     android:textStyle="bold"
                                                     android:includeFontPadding="false" />
+                                                </LinearLayout>
                                             </LinearLayout>
                                         </LinearLayout>
+                                    </LinearLayout>
+                                    <LinearLayout
+                                        android:id="@+id/ecdSummaryButton"
+                                        android:layout_width="30dp"
+                                        android:layout_height="30dp"
+                                        android:layout_gravity="top|end"
+                                        android:layout_marginTop="10dp"
+                                        android:layout_marginEnd="10dp"
+                                        android:gravity="center"
+                                        android:background="@drawable/bg_icon_box_white"
+                                        android:clickable="true"
+                                        android:focusable="true"
+                                        android:contentDescription="View summary"
+                                        android:foreground="?attr/selectableItemBackgroundBorderless">
+                                        <ImageView
+                                            android:layout_width="16dp"
+                                            android:layout_height="16dp"
+                                            android:src="@drawable/ic_eye_outline"
+                                            app:tint="#FFFFFF" />
                                     </LinearLayout>
                                 </FrameLayout>
                             </com.google.android.material.card.MaterialCardView>
