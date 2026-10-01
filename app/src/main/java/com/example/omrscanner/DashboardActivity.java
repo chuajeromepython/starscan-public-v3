@@ -412,6 +412,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private static final String ASSESSMENTS_SYNC_PATH = "/api/assessment/sync"; // pulls a teacher's assessments + answer keys (user_id)
     private static final String ECDC_DOMAINS_SYNC_PATH = "/api/ecdc/domains"; // pulls the ECDC domain + competency reference list (GET, not classroom-scoped)
     private static final String UPLOAD_ASSESSMENT_PATH = "/api/upload/assessment"; // multipart CSV upload
+    private static final String ECDC_UPLOAD_PATH = "/api/ecdc/upload"; // POST: individual + mass ECDC results (same JSON shape)
     /** Matches Toast.LENGTH_SHORT's on-screen duration — used to delay a UI refresh until the sync toast has finished showing. */
     private static final long TOAST_SHORT_DELAY_MS = 2000;
     private static final String SYNC_PREFS = "omr_sync_prefs";
@@ -1461,8 +1462,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                             org.json.JSONObject payload = com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder
                                     .build(classroomId, userId, period, responses, domains, competencies);
                             com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder.logPayload(payload.toString());
-                            runOnUiThread(() -> ui.showToast("ECDC JSON for " + selectedEcdStudentName
-                                    + " written to logcat"));
+                            uploadEcdcPayload(user.serverIp, payload, "ECDC results for " + selectedEcdStudentName);
                         } catch (org.json.JSONException e) {
                             android.util.Log.e("OMR_ECDC_UPLOAD", "Could not build upload JSON: " + e.getMessage(), e);
                             runOnUiThread(() -> ui.showErrorDialog("Upload failed",
@@ -1582,9 +1582,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                             .build(classroomId, userId, period, responses, domains, competencies);
                                     com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder.logPayload(payload.toString());
                                     final int studentCount = payload.getJSONArray("students").length();
-                                    runOnUiThread(() -> ui.showToast("ECDC JSON for " + studentCount
-                                            + " student" + (studentCount == 1 ? "" : "s")
-                                            + " written to logcat"));
+                                    uploadEcdcPayload(user.serverIp, payload, "ECDC results for " + studentCount
+                                            + " student" + (studentCount == 1 ? "" : "s"));
                                 } catch (org.json.JSONException e) {
                                     android.util.Log.e("OMR_ECDC_UPLOAD", "Could not build mass upload JSON: " + e.getMessage(), e);
                                     runOnUiThread(() -> ui.showErrorDialog("Upload failed",
@@ -1642,6 +1641,113 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         }
         Collections.sort(result, (a, b) -> a.name.compareToIgnoreCase(b.name));
         return result;
+    }
+
+    /**
+     * Sends an ECDC upload payload to the STARS system (POST /api/ecdc/upload).
+     * Used by BOTH the per-student Upload and the Mass Upload: the server takes the
+     * same JSON shape for either (one student or many in "students").
+     * Re-uploading the same period replaces that student's answers, so a retry after a
+     * failed or interrupted upload is safe.
+     */
+    private void uploadEcdcPayload(String serverIp, org.json.JSONObject payload, String uploadLabel) {
+        if (serverIp == null || serverIp.trim().isEmpty()) {
+            runOnUiThread(() -> ui.showErrorDialog("Scan required",
+                    "Please scan your QR code from the website system before uploading."));
+            return;
+        }
+        final String baseUrl = serverIp.trim();
+        final String json = payload.toString();
+        runOnUiThread(() -> ui.showToast("Uploading " + uploadLabel + "…"));
+
+        new Thread(() -> {
+            java.net.HttpURLConnection conn = null;
+            try {
+                java.net.URL url = new java.net.URL(baseUrl + ECDC_UPLOAD_PATH);
+                conn = (java.net.HttpURLConnection) url.openConnection();
+                conn.setConnectTimeout(8000);
+                conn.setReadTimeout(60000); // a whole class is a large payload and the server rescoring takes a moment
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                conn.setRequestProperty("Accept", "application/json");
+                conn.setDoOutput(true);
+
+                byte[] bodyBytes = json.getBytes("UTF-8");
+                conn.setFixedLengthStreamingMode(bodyBytes.length);
+                try (java.io.OutputStream os = conn.getOutputStream()) {
+                    os.write(bodyBytes);
+                }
+
+                final int code = conn.getResponseCode();
+                java.io.InputStream is = (code >= 200 && code < 300)
+                        ? conn.getInputStream() : conn.getErrorStream();
+
+                StringBuilder sb = new StringBuilder();
+                if (is != null) {
+                    try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                            new java.io.InputStreamReader(is, "UTF-8"))) {
+                        String line;
+                        while ((line = reader.readLine()) != null) sb.append(line);
+                    }
+                }
+                final String responseBody = sb.toString();
+                android.util.Log.d("OMR_ECDC_UPLOAD", "HTTP " + code + " — raw response: " + responseBody);
+
+                org.json.JSONObject root;
+                try {
+                    root = new org.json.JSONObject(responseBody);
+                } catch (org.json.JSONException notJson) {
+                    // e.g. an HTML error page from the server
+                    runOnUiThread(() -> ui.showErrorDialog("Upload failed",
+                            "The server answered with HTTP " + code + " and an unreadable response."));
+                    return;
+                }
+
+                final String message = root.optString("message", "");
+
+                if (root.optBoolean("success", false)) {
+                    org.json.JSONObject data = root.optJSONObject("data");
+                    final int students = data != null ? data.optInt("students_uploaded", 0) : 0;
+                    final int saved = data != null ? data.optInt("responses_saved", 0) : 0;
+                    final int skipped = data != null ? data.optInt("responses_skipped", 0) : 0;
+                    runOnUiThread(() -> ui.showToast("Upload complete: " + students
+                            + (students == 1 ? " student" : " students") + ", " + saved + " answers saved"
+                            + (skipped > 0 ? " (" + skipped + " not tested)" : "")));
+                    return;
+                }
+
+                // Failure: show the server's message plus up to 5 of its specific reasons
+                // (e.g. "LRN 1084... does not exist on this classroom.").
+                StringBuilder detail = new StringBuilder(
+                        message.isEmpty() ? "The server rejected the upload (HTTP " + code + ")." : message);
+                org.json.JSONObject errs = root.optJSONObject("errors");
+                if (errs != null) {
+                    java.util.Iterator<String> keys = errs.keys();
+                    int total = 0, shown = 0;
+                    while (keys.hasNext()) {
+                        String key = keys.next();
+                        org.json.JSONArray arr = errs.optJSONArray(key);
+                        String first = (arr != null && arr.length() > 0) ? arr.optString(0) : errs.optString(key);
+                        total++;
+                        if (shown < 5 && !first.isEmpty() && !first.equals(message)) {
+                            detail.append("\n\n• ").append(first);
+                            shown++;
+                        }
+                    }
+                    if (total > shown && shown > 0) detail.append("\n\n…and ").append(total - shown).append(" more.");
+                }
+                final String errorText = detail.toString();
+                runOnUiThread(() -> ui.showErrorDialog("Upload failed", errorText));
+
+            } catch (Exception e) {
+                android.util.Log.e("OMR_ECDC_UPLOAD", "Upload failed: " + e.getClass().getSimpleName() + ": " + e.getMessage(), e);
+                final String reason = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                runOnUiThread(() -> ui.showErrorDialog("Upload failed",
+                        "Could not reach the STARS system: " + reason));
+            } finally {
+                if (conn != null) conn.disconnect();
+            }
+        }).start();
     }
 
     private void onClassAssessmentsSyncClicked() {
