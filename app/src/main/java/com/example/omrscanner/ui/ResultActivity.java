@@ -1112,12 +1112,14 @@ public class ResultActivity extends AppCompatActivity {
     private void proceedToDuplicateCheckAndExport() {
         if (classId != null && activityId != null && scanResult.lnr != null) {
             new Thread(() -> {
-                boolean exists = DashboardActivity.isLrnExists(this, classId, activityId, scanResult.lnr);
+                boolean exists = isQuiz
+                        ? DashboardActivity.isQuizLrnExists(this, activityId, scanResult.lnr)
+                        : DashboardActivity.isLrnExists(this, classId, activityId, scanResult.lnr);
                 runOnUiThread(() -> {
                     if (exists) {
                         new com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_OMRScanner_Dialog)
                                 .setTitle("Duplicate LRN detected")
-                                .setMessage("A scan with LRN " + scanResult.lnr + " already exists in this assessment. Do you want to replace it?")
+                                .setMessage("A scan with LRN " + scanResult.lnr + " already exists in this " + (isQuiz ? "quiz" : "assessment") + ". Do you want to replace it?")
                                 .setPositiveButton("Replace", (dialog, which) -> proceedWithExport(true))
                                 .setNegativeButton("Cancel", null)
                                 .show();

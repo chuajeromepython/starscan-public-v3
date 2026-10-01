@@ -1012,6 +1012,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         //teacherNameRow.setOnClickListener(v -> dialogs.showEditTeacherNameDialog());
 
         breadcrumbRoot.setOnClickListener(v -> runAfterEcdChecklistExitCheck(() -> {
+            if (SCREEN_ACTIVITY.equals(currentScreen) && activityOpenedFromQuizzesTab) {
+                // Quiz trail root = the Quizzes tab list
+                selectedActivity = null;
+                showScreen(SCREEN_QUIZZES);
+                return;
+            }
             selectedClass = null;
             selectedActivity = null;
             showScreen(isEcdFamily(currentScreen) ? SCREEN_ECD : SCREEN_HOME);
@@ -3048,14 +3054,21 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 topBarBadge.setText(selectedActivity.getSheetType());
                 breadcrumbBar.setVisibility(View.VISIBLE);
                 breadcrumbDivider.setVisibility(View.VISIBLE);
-                breadcrumbRoot.setText("Classes");
                 breadcrumbSep1.setVisibility(View.VISIBLE);
-                breadcrumbClass.setVisibility(View.VISIBLE);
-                breadcrumbClass.setText(selectedClass.getDisplayName());
-                breadcrumbClass.setTextColor(Color.parseColor("#0038A8"));
-                breadcrumbSep2.setVisibility(View.VISIBLE);
                 breadcrumbActivity.setVisibility(View.VISIBLE);
                 breadcrumbActivity.setText(selectedActivity.getName());
+                if (activityOpenedFromQuizzesTab) {
+                    // Quiz trail has only two levels: Quizzes > quiz name
+                    breadcrumbRoot.setText("Quizzes");
+                    breadcrumbClass.setVisibility(View.GONE);
+                    breadcrumbSep2.setVisibility(View.GONE);
+                } else {
+                    breadcrumbRoot.setText("Classes");
+                    breadcrumbClass.setVisibility(View.VISIBLE);
+                    breadcrumbClass.setText(selectedClass.getDisplayName());
+                    breadcrumbClass.setTextColor(Color.parseColor("#0038A8"));
+                    breadcrumbSep2.setVisibility(View.VISIBLE);
+                }
                 renderActivityScreen();
                 break;
 
@@ -3191,6 +3204,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
     /** True for the "chrome" tabs that sit alongside Home in the bottom nav. */
     private boolean isChromeTab(String screen) {
+        // A quiz's scan list (opened from the Quizzes tab) lives in the Quizzes tab's stack,
+        // not Home's — so it must never be remembered as Home's "screen before".
+        if (SCREEN_ACTIVITY.equals(screen) && activityOpenedFromQuizzesTab) return true;
         // isEcdFamily covers both SCREEN_ECD and SCREEN_ECD_CLASS, so leaving
         // either one (not just the ECD root) is treated as leaving to another
         // tab — otherwise Home's own remembered screen gets skipped or
@@ -3208,6 +3224,14 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
     /** Switches to the Home tab's remembered screen (called by the tab tap or back button). */
     private void selectHomeTab() {
+        if (SCREEN_ACTIVITY.equals(currentScreen) && activityOpenedFromQuizzesTab) {
+            // Leaving the Quizzes stack for Home: drop the quiz and land on Home's own screen.
+            selectedActivity = null;
+            activityOpenedFromQuizzesTab = false;
+            showScreen(screenBeforeChromeTab != null && !SCREEN_ACTIVITY.equals(screenBeforeChromeTab)
+                    ? screenBeforeChromeTab : SCREEN_HOME);
+            return;
+        }
         if (isChromeTab(currentScreen)) {
             showScreen(screenBeforeChromeTab != null ? screenBeforeChromeTab : SCREEN_HOME);
         } else if (!SCREEN_HOME.equals(currentScreen)) {
@@ -3258,6 +3282,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     }
 
     private void selectQuizzesTab() {
+        if (SCREEN_ACTIVITY.equals(currentScreen) && activityOpenedFromQuizzesTab) {
+            // Already inside the Quizzes stack — a second tap jumps back to its root list.
+            selectedActivity = null;
+            showScreen(SCREEN_QUIZZES);
+            return;
+        }
         if (!SCREEN_QUIZZES.equals(currentScreen)) {
             if (!isChromeTab(currentScreen)) {
                 screenBeforeChromeTab = currentScreen;
@@ -3293,7 +3323,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         boolean assessmentsActive = SCREEN_ASSESSMENTS.equals(screen);
         boolean answerKeysActive = SCREEN_ANSWERKEYS.equals(screen);
         boolean scansActive = SCREEN_SCANS.equals(screen);
-        boolean quizzesActive = SCREEN_QUIZZES.equals(screen);
+        boolean quizzesActive = SCREEN_QUIZZES.equals(screen)
+                || (SCREEN_ACTIVITY.equals(screen) && activityOpenedFromQuizzesTab);
         boolean ecdActive = isEcdFamily(screen);
         boolean homeActive = !userActive && !assessmentsActive && !answerKeysActive && !scansActive && !quizzesActive && !ecdActive;
 
@@ -5125,26 +5156,39 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     /** Quiz equivalent of the assessment scan-load block above — reads quiz_scans/quiz_scan_answers only. */
     private void loadQuizScansThenRender() {
         final String quizId = selectedActivity.getId();
-        repo.getScansByQuiz(quizId, quizScans -> {
-            List<ScanEntry> scanEntries = new ArrayList<>();
-            if (quizScans == null || quizScans.isEmpty()) {
-                runOnUiThread(() -> finishQuizScanRender(quizId, scanEntries));
-                return;
+        final String rosterClassId = selectedClass.getId();
+        // Same roster lookup the assessment loader uses: LRN -> "Lastname, Firstname Middlename"
+        repo.getStudentsByClass(rosterClassId, rosterEntities -> {
+            Map<String, String> lrnToName = new java.util.HashMap<>();
+            if (rosterEntities != null) {
+                for (com.example.omrscanner.database.entities.StudentLrnEntity s : rosterEntities) {
+                    if (s.lrn == null) continue;
+                    String fullName = DataMapper.formatStudentFullName(s).trim();
+                    if (!fullName.isEmpty()) lrnToName.put(s.lrn, fullName);
+                }
             }
-            Map<Integer, Integer> scanNumbers = DataMapper.computeQuizScanNumbers(quizScans);
-            AtomicInteger countdown = new AtomicInteger(quizScans.size());
-            for (com.example.omrscanner.database.entities.QuizScanEntity qse : quizScans) {
-                repo.getQuizScanAnswers(qse.id, answerEntities -> {
-                    Map<Integer, String> answers = DataMapper.toQuizAnswerMap(answerEntities);
-                    ScanEntry entry = DataMapper.toScanEntry(qse, answers);
-                    Integer num = scanNumbers.get(qse.id);
-                    entry.setScanNumber(num != null ? num : 0);
-                    scanEntries.add(entry);
-                    if (countdown.decrementAndGet() == 0) {
-                        runOnUiThread(() -> finishQuizScanRender(quizId, scanEntries));
-                    }
-                });
-            }
+            repo.getScansByQuiz(quizId, quizScans -> {
+                List<ScanEntry> scanEntries = new ArrayList<>();
+                if (quizScans == null || quizScans.isEmpty()) {
+                    runOnUiThread(() -> finishQuizScanRender(quizId, scanEntries));
+                    return;
+                }
+                Map<Integer, Integer> scanNumbers = DataMapper.computeQuizScanNumbers(quizScans);
+                AtomicInteger countdown = new AtomicInteger(quizScans.size());
+                for (com.example.omrscanner.database.entities.QuizScanEntity qse : quizScans) {
+                    repo.getQuizScanAnswers(qse.id, answerEntities -> {
+                        Map<Integer, String> answers = DataMapper.toQuizAnswerMap(answerEntities);
+                        ScanEntry entry = DataMapper.toScanEntry(qse, answers);
+                        entry.setStudentName(lrnToName.get(qse.studentLrn));
+                        Integer num = scanNumbers.get(qse.id);
+                        entry.setScanNumber(num != null ? num : 0);
+                        scanEntries.add(entry);
+                        if (countdown.decrementAndGet() == 0) {
+                            runOnUiThread(() -> finishQuizScanRender(quizId, scanEntries));
+                        }
+                    });
+                }
+            });
         });
     }
 
@@ -5512,6 +5556,14 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         if (activityId == null || lrn == null) return false;
         OMRRepository r = new OMRRepository(context);
         return r.isLrnExistsSync(activityId, lrn);
+    }
+
+    /** Quiz counterpart of {@link #isLrnExists}: checks quiz_scans instead of the assessment scans table. */
+    public static boolean isQuizLrnExists(android.content.Context context,
+                                          String quizId, String lrn) {
+        if (quizId == null || lrn == null) return false;
+        OMRRepository r = new OMRRepository(context);
+        return r.getQuizScanByQuizAndLrnSync(quizId, lrn) != null;
     }
 
     public static void saveQuizScanResult(android.content.Context context,
