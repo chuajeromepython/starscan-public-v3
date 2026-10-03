@@ -11,6 +11,10 @@ import android.widget.LinearLayout;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.TextView;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.Spinner;
+import java.util.function.BiConsumer;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -139,15 +143,21 @@ public class EcdcScreenRenderer {
     }
 
     /**
-     * One competency: its number + text on top, three radio buttons below.
+     * One competency: its number + text on top, three radio buttons below
+     * (Present / Not present / Not tested). Choosing Present adds a "Type" row inside the
+     * card that behaves like a Help & FAQ item: tap it to expand or collapse the P / O / R
+     * choices, and the chevron rotates.
      *
-     * @param domainName      the server's domain name; picks the card's accent color
-     * @param status          one of EcdcResponseEntity.STATUS_*, or null if not marked yet
-     * @param onStatusChanged called with the newly chosen STATUS_* (never fires for the
-     *                        initial preselection)
+     * @param domainName  the server's domain name; picks the card's accent color
+     * @param status      one of EcdcResponseEntity.STATUS_*, or null if not marked yet
+     * @param presentType "P", "O", "R" or null (only meaningful when status is PRESENT)
+     * @param onChanged   called with the new (status, presentType) after every user edit.
+     *                    presentType is always null unless status is PRESENT. Never fires
+     *                    for the initial preselection.
      */
     public View createCompetencyRow(int number, String competency, String domainName,
-                                    String status, Consumer<String> onStatusChanged) {
+                                    String status, String presentType,
+                                    BiConsumer<String, String> onChanged) {
 
         String[] domainColor = domainColors(domainName);
         int accent = Color.parseColor(domainColor[0]);
@@ -194,7 +204,7 @@ public class EcdcScreenRenderer {
         header.addView(textView);
         card.addView(header);
 
-        // Radio buttons
+        // Radio buttons (original layout)
         RadioGroup group = new RadioGroup(activity);
         group.setOrientation(RadioGroup.HORIZONTAL);
         LinearLayout.LayoutParams groupLp = new LinearLayout.LayoutParams(
@@ -210,6 +220,10 @@ public class EcdcScreenRenderer {
         };
         final String[] labels = {"Present", "Not present", "Not tested"};
         final int[] ids = new int[statuses.length];
+
+        final boolean isPresent = EcdcResponseEntity.STATUS_PRESENT.equals(status);
+        // The type currently held for this mark; always null unless the mark is Present.
+        final String[] currentType = {isPresent ? presentType : null};
 
         for (int i = 0; i < statuses.length; i++) {
             // A RadioGroup normally can't be un-checked by the user; tapping the
@@ -240,7 +254,111 @@ public class EcdcScreenRenderer {
             group.addView(rb);
         }
 
-        // Preselect BEFORE attaching the listener so restoring saved state isn't
+        // ── "Type" accordion: header row (title + chevron) and the P / O / R choices ──
+        final String[] typeValues = {
+                EcdcResponseEntity.PRESENT_TYPE_P,
+                EcdcResponseEntity.PRESENT_TYPE_O,
+                EcdcResponseEntity.PRESENT_TYPE_R
+        };
+        final int[] typeIds = new int[typeValues.length];
+        // Open when there's still a letter to choose; collapsed once one is saved.
+        final boolean[] expanded = {isPresent && currentType[0] == null};
+
+        final LinearLayout typeSection = new LinearLayout(activity);
+        typeSection.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams typeSectionLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        typeSectionLp.topMargin = ui.dp(4);
+        typeSection.setLayoutParams(typeSectionLp);
+
+        // thin divider between the radio buttons and the accordion
+        View divider = new View(activity);
+        divider.setBackgroundColor(mixWithWhite(accent, 0.25f));
+        LinearLayout.LayoutParams dividerLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ui.dp(1));
+        dividerLp.rightMargin = ui.dp(4);
+        divider.setLayoutParams(dividerLp);
+        typeSection.addView(divider);
+
+        // Header row: "Type  •  P" on the left, chevron on the right (same as the FAQ cards).
+        final LinearLayout typeHeader = new LinearLayout(activity);
+        typeHeader.setOrientation(LinearLayout.HORIZONTAL);
+        typeHeader.setGravity(Gravity.CENTER_VERTICAL);
+        typeHeader.setPadding(0, ui.dp(6), ui.dp(4), ui.dp(4));
+        typeHeader.setClickable(true);
+        typeHeader.setFocusable(true);
+
+        final TextView typeTitle = new TextView(activity);
+        typeTitle.setTextSize(12);
+        typeTitle.setTypeface(null, Typeface.BOLD);
+        typeTitle.setTextColor(Color.parseColor("#1E293B"));
+        typeTitle.setLayoutParams(new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        typeHeader.addView(typeTitle);
+
+        final android.widget.ImageView chevron = new android.widget.ImageView(activity);
+        chevron.setImageResource(com.example.omrscanner.R.drawable.ic_chevron_right);
+        chevron.setColorFilter(Color.parseColor("#94A3B8"));
+        chevron.setLayoutParams(new LinearLayout.LayoutParams(ui.dp(18), ui.dp(18)));
+        typeHeader.addView(chevron);
+        typeSection.addView(typeHeader);
+
+        // The P / O / R choices. A separate RadioGroup (not nested in the main one) so the
+        // two selections stay independent. Plain RadioButtons: tapping the chosen letter
+        // keeps it selected.
+        final RadioGroup typeGroup = new RadioGroup(activity);
+        typeGroup.setOrientation(RadioGroup.HORIZONTAL);
+        typeGroup.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        for (int j = 0; j < typeValues.length; j++) {
+            // Tapping the chosen letter again un-selects it, like the main buttons.
+            RadioButton tb = new RadioButton(activity) {
+                @Override
+                public void toggle() {
+                    if (isChecked()) {
+                        if (getParent() instanceof RadioGroup) {
+                            ((RadioGroup) getParent()).clearCheck();
+                        }
+                    } else {
+                        super.toggle();
+                    }
+                }
+            };
+            typeIds[j] = View.generateViewId();
+            tb.setId(typeIds[j]);
+            tb.setText(typeValues[j]);
+            tb.setTextSize(12);
+            tb.setMinHeight(ui.dp(36));      // between "as tall as the default" and "squeezed"
+            tb.setMinimumHeight(ui.dp(36));
+            tb.setPadding(ui.dp(4), 0, 0, 0);
+            tb.setTypeface(null, Typeface.BOLD);
+            tb.setTextColor(Color.parseColor("#334155"));
+            tb.setGravity(Gravity.CENTER_VERTICAL);
+            tb.setButtonTintList(new ColorStateList(
+                    new int[][]{{android.R.attr.state_checked}, {}},
+                    new int[]{Color.parseColor(COLOR_CHECKED), Color.parseColor(COLOR_UNCHECKED)}));
+            tb.setLayoutParams(new RadioGroup.LayoutParams(
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            typeGroup.addView(tb);
+        }
+        typeSection.addView(typeGroup);
+
+        // Applies the open/closed state: choices shown or hidden, chevron rotated, title updated.
+        final Runnable refreshType = () -> {
+            typeGroup.setVisibility(expanded[0] ? View.VISIBLE : View.GONE);
+            chevron.setRotation(expanded[0] ? 90f : 0f);
+            typeTitle.setText(currentType[0] != null
+                    ? "Type  \u2022  " + currentType[0] : "Type");
+        };
+
+        // Tap the header to expand / collapse, like a FAQ item.
+        typeHeader.setOnClickListener(v -> {
+            expanded[0] = !expanded[0];
+            refreshType.run();
+        });
+
+        // Preselect BEFORE attaching the listeners so restoring saved state isn't
         // reported as a user edit.
         for (int i = 0; i < statuses.length; i++) {
             if (statuses[i].equals(status)) {
@@ -248,21 +366,70 @@ public class EcdcScreenRenderer {
                 break;
             }
         }
+        int savedTypeIndex = typeIndex(typeValues, currentType[0]);
+        if (savedTypeIndex >= 0) typeGroup.check(typeIds[savedTypeIndex]);
+        typeSection.setVisibility(isPresent ? View.VISIBLE : View.GONE);
+        refreshType.run();
+
         group.setOnCheckedChangeListener((g, checkedId) -> {
-            if (checkedId == View.NO_ID) {
-                onStatusChanged.accept(null); // un-selected
-                return;
-            }
+            String newStatus = null; // stays null when the mark was un-selected
             for (int i = 0; i < ids.length; i++) {
                 if (ids[i] == checkedId) {
-                    onStatusChanged.accept(statuses[i]);
+                    newStatus = statuses[i];
+                    break;
+                }
+            }
+
+            if (EcdcResponseEntity.STATUS_PRESENT.equals(newStatus)) {
+                // No default: the teacher picks P / O / R. A type chosen earlier is kept.
+                int idx = typeIndex(typeValues, currentType[0]);
+                if (idx >= 0) typeGroup.check(typeIds[idx]);
+                typeSection.setVisibility(View.VISIBLE);
+                expanded[0] = true; // choosing Present opens it, like tapping a FAQ item
+            } else {
+                currentType[0] = null; // never keep a stale type on a non-Present mark
+                typeGroup.clearCheck();
+                typeSection.setVisibility(View.GONE);
+                expanded[0] = false;
+            }
+            refreshType.run();
+            onChanged.accept(newStatus, currentType[0]);
+        });
+
+        typeGroup.setOnCheckedChangeListener((g, checkedId) -> {
+            if (checkedId == View.NO_ID) {
+                // Cleared in code (the type is already null): nothing to do.
+                if (currentType[0] == null) return;
+                // The teacher tapped the selected letter again: un-select it.
+                currentType[0] = null;
+                refreshType.run(); // title goes back to just "Type"
+                onChanged.accept(EcdcResponseEntity.STATUS_PRESENT, null);
+                return;
+            }
+            for (int j = 0; j < typeIds.length; j++) {
+                if (typeIds[j] == checkedId) {
+                    // The listener above sets currentType first, so its own check() is a no-op here.
+                    if (typeValues[j].equals(currentType[0])) return;
+                    currentType[0] = typeValues[j];
+                    refreshType.run(); // updates the "Type  •  O" title
+                    onChanged.accept(EcdcResponseEntity.STATUS_PRESENT, currentType[0]);
                     return;
                 }
             }
         });
 
         card.addView(group);
+        card.addView(typeSection);
         return card;
+    }
+
+    /** Index of {@code value} in {@code values}, or -1 if it's null or not found. */
+    private static int typeIndex(String[] values, String value) {
+        if (value == null) return -1;
+        for (int i = 0; i < values.length; i++) {
+            if (values[i].equals(value)) return i;
+        }
+        return -1;
     }
 
 

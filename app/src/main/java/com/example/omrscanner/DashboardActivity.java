@@ -190,6 +190,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private List<com.example.omrscanner.database.entities.EcdcCompetencyEntity> ecdCompetencies = new ArrayList<>();
     private Map<Integer, String> ecdSavedStatuses = new java.util.HashMap<>();
     private Map<Integer, String> ecdDraftStatuses = new java.util.HashMap<>();
+    // competency id -> "P"/"O"/"R". Only holds entries for Present marks that have a type.
+    private Map<Integer, String> ecdSavedPresentTypes = new java.util.HashMap<>();
+    private Map<Integer, String> ecdDraftPresentTypes = new java.util.HashMap<>();
     private int ecdChecklistLoadGeneration = 0;
 
     private String assessmentSearchQuery = "";
@@ -1465,6 +1468,14 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                             + " for this student yet."));
                             return;
                         }
+                        final int missingTypes = countPresentMarksMissingType(responses)[0];
+                        if (missingTypes > 0) {
+                            runOnUiThread(() -> ui.showErrorDialog("Choose a type first",
+                                    missingTypes + (missingTypes == 1 ? " Present mark has" : " Present marks have")
+                                            + " no type (P, O or R) selected. Choose one for each, "
+                                            + "save, then upload again."));
+                            return;
+                        }
                         try {
                             org.json.JSONObject payload = com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder
                                     .build(classroomId, userId, period, responses, domains, competencies);
@@ -1539,6 +1550,23 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).setEnabled(false);
     }
 
+    /** {saved Present marks with no P/O/R chosen, distinct students that have such marks}. */
+    private int[] countPresentMarksMissingType(
+            List<com.example.omrscanner.database.entities.EcdcResponseEntity> responses) {
+        int marks = 0;
+        java.util.Set<String> students = new java.util.HashSet<>();
+        if (responses != null) {
+            for (com.example.omrscanner.database.entities.EcdcResponseEntity r : responses) {
+                if (com.example.omrscanner.database.entities.EcdcResponseEntity.STATUS_PRESENT.equals(r.status)
+                        && r.presentType == null) {
+                    marks++;
+                    students.add(r.lrn);
+                }
+            }
+        }
+        return new int[]{marks, students.size()};
+    }
+
     private void runEcdcMassUpload(ClassFolder cls, String period) {
         if (cls == null) {
             ui.showErrorDialog("No class selected", "Choose a class before uploading its ECDC data.");
@@ -1582,6 +1610,16 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                                     + EcdcScreenRenderer.periodLabel(period)
                                                     + ". Finish these before uploading:",
                                             incompleteStudents));
+                                    return;
+                                }
+                                final int[] missingTypes = countPresentMarksMissingType(responses);
+                                if (missingTypes[0] > 0) {
+                                    runOnUiThread(() -> ui.showErrorDialog("Choose a type first",
+                                            missingTypes[0] + (missingTypes[0] == 1 ? " Present mark" : " Present marks")
+                                                    + " across " + missingTypes[1]
+                                                    + (missingTypes[1] == 1 ? " student has" : " students have")
+                                                    + " no type (P, O or R) selected. Open each student, "
+                                                    + "choose one, save, then upload again."));
                                     return;
                                 }
                                 try {
@@ -4283,6 +4321,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         selectedEcdDomainId = null;
         ecdSavedStatuses = new java.util.HashMap<>();
         ecdDraftStatuses = new java.util.HashMap<>();
+        ecdSavedPresentTypes = new java.util.HashMap<>();
+        ecdDraftPresentTypes = new java.util.HashMap<>();
         showScreen(SCREEN_ECD_STUDENT);
     }
 
@@ -4311,12 +4351,17 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     ecdCompetencies = competencies != null ? competencies : new ArrayList<>();
 
                     ecdSavedStatuses = new java.util.HashMap<>();
+                    ecdSavedPresentTypes = new java.util.HashMap<>();
                     if (responses != null) {
                         for (com.example.omrscanner.database.entities.EcdcResponseEntity r : responses) {
                             ecdSavedStatuses.put(r.competencyId, r.status);
+                            if (r.presentType != null) {
+                                ecdSavedPresentTypes.put(r.competencyId, r.presentType);
+                            }
                         }
                     }
                     ecdDraftStatuses = new java.util.HashMap<>(ecdSavedStatuses);
+                    ecdDraftPresentTypes = new java.util.HashMap<>(ecdSavedPresentTypes);
 
                     // A re-sync can remove a domain; don't keep a selection that no longer exists.
                     if (selectedEcdDomainId != null && findEcdDomain(selectedEcdDomainId) == null) {
@@ -4378,12 +4423,19 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             number++;
             final int competencyId = c.id;
             ecdCompetencyList.addView(ecdcRenderer.createCompetencyRow(number, c.competency, domainName,
-                    ecdDraftStatuses.get(competencyId), status -> {
-                        // null = the teacher un-selected the mark
+                    ecdDraftStatuses.get(competencyId), ecdDraftPresentTypes.get(competencyId),
+                    (status, presentType) -> {
+                        // null status = the teacher un-selected the mark
                         if (status == null) {
                             ecdDraftStatuses.remove(competencyId);
                         } else {
                             ecdDraftStatuses.put(competencyId, status);
+                        }
+                        // The type only exists for Present marks.
+                        if (presentType == null) {
+                            ecdDraftPresentTypes.remove(competencyId);
+                        } else {
+                            ecdDraftPresentTypes.put(competencyId, presentType);
                         }
                         updateEcdProgress();
                     }));
@@ -4445,7 +4497,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     }
 
     private boolean hasEcdUnsavedChanges() {
-        return !ecdDraftStatuses.equals(ecdSavedStatuses);
+        return !ecdDraftStatuses.equals(ecdSavedStatuses)
+                || !ecdDraftPresentTypes.equals(ecdSavedPresentTypes);
     }
 
     /**
@@ -4459,7 +4512,11 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         final long now = System.currentTimeMillis();
         List<com.example.omrscanner.database.entities.EcdcResponseEntity> changed = new ArrayList<>();
         for (Map.Entry<Integer, String> e : ecdDraftStatuses.entrySet()) {
-            if (e.getValue().equals(ecdSavedStatuses.get(e.getKey()))) continue;
+            final String draftType = ecdDraftPresentTypes.get(e.getKey());
+            final boolean sameStatus = e.getValue().equals(ecdSavedStatuses.get(e.getKey()));
+            final boolean sameType = java.util.Objects.equals(
+                    draftType, ecdSavedPresentTypes.get(e.getKey()));
+            if (sameStatus && sameType) continue;
             com.example.omrscanner.database.entities.EcdcResponseEntity r =
                     new com.example.omrscanner.database.entities.EcdcResponseEntity();
             r.classId = ecdStudentClassId;
@@ -4467,6 +4524,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             r.period = selectedEcdPeriod;
             r.competencyId = e.getKey();
             r.status = e.getValue();
+            r.presentType = com.example.omrscanner.database.entities.EcdcResponseEntity
+                    .STATUS_PRESENT.equals(e.getValue()) ? draftType : null;
             r.updatedAt = now;
             changed.add(r);
         }
@@ -4483,6 +4542,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         // Snapshot what is being written: anything the user taps while the write is in
         // flight stays "unsaved" instead of being silently marked as saved.
         final Map<Integer, String> snapshot = new java.util.HashMap<>(ecdDraftStatuses);
+        final Map<Integer, String> typeSnapshot = new java.util.HashMap<>(ecdDraftPresentTypes);
         final int requestId = ecdChecklistLoadGeneration;
         final String saveClassId = ecdStudentClassId;
         final String saveLrn = selectedEcdStudentLrn;
@@ -4497,6 +4557,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             // in flight, the fresh load already reflects what's in the DB — leave it alone.
             if (requestId == ecdChecklistLoadGeneration) {
                 ecdSavedStatuses = snapshot;
+                ecdSavedPresentTypes = typeSnapshot;
                 if (SCREEN_ECD_STUDENT.equals(currentScreen)) updateEcdProgress();
             }
             ui.showToast("Saved \u2713");
@@ -4535,6 +4596,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         buttonRow.addView(createEcdDialogButton(builder.getContext(), "Discard", () -> {
             dialog.dismiss();
             ecdDraftStatuses = new java.util.HashMap<>(ecdSavedStatuses);
+            ecdDraftPresentTypes = new java.util.HashMap<>(ecdSavedPresentTypes);
             proceed.run();
         }));
         buttonRow.addView(createEcdDialogButton(builder.getContext(), "Save", () -> {

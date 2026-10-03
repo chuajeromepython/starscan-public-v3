@@ -1,6 +1,7 @@
 package com.example.omrscanner.database.entities;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.room.ColumnInfo;
 import androidx.room.Entity;
 import androidx.room.Index;
@@ -30,6 +31,11 @@ public class EcdcResponseEntity {
     public static final String STATUS_NOT_PRESENT = "NOT_PRESENT";
     public static final String STATUS_NOT_TESTED = "NOT_TESTED";
 
+    /** Allowed values for {@link #presentType}. */
+    public static final String PRESENT_TYPE_P = "P";
+    public static final String PRESENT_TYPE_O = "O";
+    public static final String PRESENT_TYPE_R = "R";
+
     @PrimaryKey(autoGenerate = true)
     public int id;
 
@@ -54,6 +60,14 @@ public class EcdcResponseEntity {
     @NonNull
     @ColumnInfo(name = "status")
     public String status = STATUS_NOT_TESTED;
+
+    /**
+     * "P", "O" or "R" — only set when {@link #status} is STATUS_PRESENT, otherwise null.
+     * Also null for marks saved before this column existed.
+     */
+    @Nullable
+    @ColumnInfo(name = "present_type")
+    public String presentType;
 
     @ColumnInfo(name = "updated_at")
     public long updatedAt;
