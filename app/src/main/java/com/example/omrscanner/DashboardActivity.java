@@ -1478,10 +1478,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                         }
                         final int missingTypes = countPresentMarksMissingType(responses)[0];
                         if (missingTypes > 0) {
-                            runOnUiThread(() -> ui.showErrorDialog("Choose a type first",
+                            final List<DashboardUiHelper.IncompleteDomain> noTypeDomains =
+                                    findDomainsMissingPresentType(domains, competencies, responses);
+                            runOnUiThread(() -> ui.showIncompleteDomainsDialog("Choose a type first",
                                     missingTypes + (missingTypes == 1 ? " Present mark has" : " Present marks have")
-                                            + " no type (P, O or R) selected. Choose one for each, "
-                                            + "save, then upload again."));
+                                            + " no type (P, O or R) selected. Choose one for each in these "
+                                            + "domains, save, then upload again:",
+                                    noTypeDomains));
                             return;
                         }
                         try {
@@ -1559,6 +1562,90 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     }
 
     /** {saved Present marks with no P/O/R chosen, distinct students that have such marks}. */
+    /**
+     * Mass Upload guard helper: which students have Present marks with no P/O/R type,
+     * and how many each, so the dialog can name them instead of just counting them.
+     */
+    private List<DashboardUiHelper.IncompleteStudent> findStudentsMissingPresentType(
+            List<com.example.omrscanner.database.entities.StudentLrnEntity> roster,
+            List<com.example.omrscanner.database.entities.EcdcResponseEntity> responses) {
+        List<DashboardUiHelper.IncompleteStudent> result = new ArrayList<>();
+        if (responses == null) return result;
+
+        Map<String, Integer> missingByLrn = new java.util.HashMap<>();
+        for (com.example.omrscanner.database.entities.EcdcResponseEntity r : responses) {
+            if (com.example.omrscanner.database.entities.EcdcResponseEntity.STATUS_PRESENT.equals(r.status)
+                    && r.presentType == null) {
+                Integer n = missingByLrn.get(r.lrn);
+                missingByLrn.put(r.lrn, n == null ? 1 : n + 1);
+            }
+        }
+        if (missingByLrn.isEmpty()) return result;
+
+        final int color = Color.parseColor("#D97706");
+        java.util.Set<String> listed = new java.util.HashSet<>();
+        if (roster != null) {
+            for (com.example.omrscanner.database.entities.StudentLrnEntity s : roster) {
+                Integer n = missingByLrn.get(s.lrn);
+                if (n == null) continue;
+                listed.add(s.lrn);
+                String fullName = ((s.lastName != null ? s.lastName : "") + ", "
+                        + (s.firstName != null ? s.firstName : "")
+                        + (s.middleName != null && !s.middleName.isEmpty() ? " " + s.middleName : "")).trim();
+                result.add(new DashboardUiHelper.IncompleteStudent(fullName,
+                        Collections.singletonList(new DashboardUiHelper.IncompleteDomain(
+                                "Present marks with no type", color, n))));
+            }
+        }
+        // Marks for an LRN that is no longer on the roster still block the upload, so list them too.
+        for (Map.Entry<String, Integer> e : missingByLrn.entrySet()) {
+            if (listed.contains(e.getKey())) continue;
+            result.add(new DashboardUiHelper.IncompleteStudent("LRN " + e.getKey(),
+                    Collections.singletonList(new DashboardUiHelper.IncompleteDomain(
+                            "Present marks with no type", color, e.getValue()))));
+        }
+        Collections.sort(result, (a, b) -> a.name.compareToIgnoreCase(b.name));
+        return result;
+    }
+
+    /**
+     * Single-student Upload guard helper: which domains contain Present marks with no
+     * P/O/R type, and how many in each, so the dialog can point at the exact domain.
+     */
+    private List<DashboardUiHelper.IncompleteDomain> findDomainsMissingPresentType(
+            List<com.example.omrscanner.database.entities.EcdcDomainEntity> domains,
+            List<com.example.omrscanner.database.entities.EcdcCompetencyEntity> competencies,
+            List<com.example.omrscanner.database.entities.EcdcResponseEntity> responses) {
+        List<DashboardUiHelper.IncompleteDomain> result = new ArrayList<>();
+        if (domains == null || competencies == null || responses == null) return result;
+
+        Map<Integer, Integer> domainIdByCompetencyId = new java.util.HashMap<>();
+        for (com.example.omrscanner.database.entities.EcdcCompetencyEntity c : competencies) {
+            domainIdByCompetencyId.put(c.id, c.domainId);
+        }
+
+        Map<Integer, Integer> missingByDomainId = new java.util.HashMap<>();
+        for (com.example.omrscanner.database.entities.EcdcResponseEntity r : responses) {
+            if (!com.example.omrscanner.database.entities.EcdcResponseEntity.STATUS_PRESENT.equals(r.status)
+                    || r.presentType != null) continue;
+            Integer domainId = domainIdByCompetencyId.get(r.competencyId);
+            if (domainId == null) continue;
+            Integer n = missingByDomainId.get(domainId);
+            missingByDomainId.put(domainId, n == null ? 1 : n + 1);
+        }
+
+        // Keep the domains in their normal checklist order.
+        for (com.example.omrscanner.database.entities.EcdcDomainEntity d : domains) {
+            Integer n = missingByDomainId.get(d.id);
+            if (n == null) continue;
+            result.add(new DashboardUiHelper.IncompleteDomain(
+                    EcdcScreenRenderer.shortDomainName(d.domain),
+                    EcdcScreenRenderer.domainThemeColor(d.domain),
+                    n));
+        }
+        return result;
+    }
+
     private int[] countPresentMarksMissingType(
             List<com.example.omrscanner.database.entities.EcdcResponseEntity> responses) {
         int marks = 0;
@@ -1622,12 +1709,15 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                 }
                                 final int[] missingTypes = countPresentMarksMissingType(responses);
                                 if (missingTypes[0] > 0) {
-                                    runOnUiThread(() -> ui.showErrorDialog("Choose a type first",
+                                    final List<DashboardUiHelper.IncompleteStudent> noType =
+                                            findStudentsMissingPresentType(roster, responses);
+                                    runOnUiThread(() -> ui.showIncompleteStudentsDialog("Choose a type first",
                                             missingTypes[0] + (missingTypes[0] == 1 ? " Present mark" : " Present marks")
                                                     + " across " + missingTypes[1]
                                                     + (missingTypes[1] == 1 ? " student has" : " students have")
                                                     + " no type (P, O or R) selected. Open each student, "
-                                                    + "choose one, save, then upload again."));
+                                                    + "choose one, save, then upload again:",
+                                            noType));
                                     return;
                                 }
                                 try {
