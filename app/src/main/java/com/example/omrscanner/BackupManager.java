@@ -249,7 +249,7 @@ public class BackupManager {
                 }
                 manifest.put("answerKeys", keysJson);
 
-                writeZip(destination, manifest);
+                writeZip(destination, manifest, activeUser != null ? activeUser.userId : null);
 
                 callback.onSuccess(assessmentsJson.length(), scansJson.length(), keysJson.length(),
                         quizzesJson.length(), quizScansJson.length(), ecdcJson.length());
@@ -260,7 +260,17 @@ public class BackupManager {
         });
     }
 
-    private void writeZip(Uri destination, JSONObject manifest) throws IOException {
+    /**
+     * Profile photos are saved as images/profile_<userId>.jpg. Only the signed-in
+     * teacher's own photo belongs in their backup, so another account's photo on a
+     * shared device is never written to (or restored from) the file.
+     */
+    private static boolean isOtherUsersProfilePhoto(String fileName, Integer activeUserId) {
+        if (!fileName.startsWith("profile_")) return false;
+        return activeUserId == null || !fileName.equals("profile_" + activeUserId + ".jpg");
+    }
+
+    private void writeZip(Uri destination, JSONObject manifest, Integer activeUserId) throws IOException {
         try (OutputStream rawOut = appContext.getContentResolver().openOutputStream(destination)) {
             if (rawOut == null) throw new IOException("Could not open destination for writing");
             try (ZipOutputStream zos = new ZipOutputStream(new BufferedOutputStream(rawOut))) {
@@ -274,6 +284,7 @@ public class BackupManager {
                     byte[] buf = new byte[8192];
                     for (File img : images) {
                         if (!img.isFile()) continue;
+                        if (isOtherUsersProfilePhoto(img.getName(), activeUserId)) continue;
                         zos.putNextEntry(new ZipEntry(ENTRY_IMAGES_PREFIX + img.getName()));
                         try (InputStream fis = new FileInputStream(img)) {
                             int read;
@@ -334,7 +345,7 @@ public class BackupManager {
                     }
                 }
 
-                JSONObject manifest = readZip(source);
+                JSONObject manifest = readZip(source, activeUser.userId);
 
                 int restoredAssessments = 0;
                 int skippedAssessments = 0;
@@ -518,7 +529,7 @@ public class BackupManager {
         });
     }
 
-    private JSONObject readZip(Uri source) throws IOException, JSONException {
+    private JSONObject readZip(Uri source, Integer activeUserId) throws IOException, JSONException {
         File imagesDir = new File(appContext.getFilesDir(), "images");
         //noinspection ResultOfMethodCallIgnored
         imagesDir.mkdirs();
@@ -539,6 +550,7 @@ public class BackupManager {
                     } else if (!entry.isDirectory() && name.startsWith(ENTRY_IMAGES_PREFIX)) {
                         String fileName = name.substring(ENTRY_IMAGES_PREFIX.length());
                         if (fileName.isEmpty() || fileName.contains("..")) continue; // zip-slip guard
+                        if (isOtherUsersProfilePhoto(fileName, activeUserId)) continue;
                         File outFile = new File(imagesDir, fileName);
                         try (OutputStream fos = new FileOutputStream(outFile)) {
                             int read;

@@ -966,7 +966,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
         btnBack.setOnClickListener(v -> navigateBack());
         btnUpload.setOnClickListener(v -> dialogs.showGlobalUploadClassDialog());
+        btnUpload.setElevation(0f);
+        btnUpload.setStateListAnimator(null);
         btnGoToUsers.setOnClickListener(v -> selectUserTab());
+        // The 2dp elevation casts a shadow that shows through the translucent circle
+        // and renders as a darker octagon inside the border, so this button casts none.
+        btnGoToUsers.setElevation(0f);
+        btnGoToUsers.setStateListAnimator(null);
         btnGoToUsers.setOutlineProvider(new android.view.ViewOutlineProvider() {
             @Override
             public void getOutline(View view, android.graphics.Outline outline) {
@@ -3548,7 +3554,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         navScansIcon.setImageAlpha(scansActive ? activeAlpha : inactiveAlpha);
         navScansLabel.setTextColor(scansActive ? activeColor : inactiveColor);
 
-        navUserIcon.setColorFilter(activeColor);
+        // A white color filter would turn the photo into a white blob, so only filter the icon.
+        if (navUserShowsPhoto) navUserIcon.clearColorFilter();
+        else navUserIcon.setColorFilter(activeColor);
         navUserIcon.setImageAlpha(userActive ? activeAlpha : inactiveAlpha);
         navUserLabel.setTextColor(userActive ? activeColor : inactiveColor);
 
@@ -3568,6 +3576,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     // install + restored backup), the file is found again by its userId-based name.
 
     private static final int PROFILE_PHOTO_MAX_PX = 512;
+
+    /** True while the bottom-nav Profile icon is showing the user's photo instead of the person icon. */
+    private boolean navUserShowsPhoto = false;
 
     private java.io.File profilePhotoFile(int userId) {
         java.io.File dir = new java.io.File(getFilesDir(), "images");
@@ -3679,6 +3690,21 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             userAvatarImage.setVisibility(View.GONE);
             userAvatarPlaceholder.setVisibility(View.VISIBLE);
         }
+
+        // Bottom-nav Profile tab: the photo (round) in place of the person icon.
+        if (bmp != null) {
+            androidx.core.graphics.drawable.RoundedBitmapDrawable navCircle =
+                    androidx.core.graphics.drawable.RoundedBitmapDrawableFactory.create(getResources(), bmp);
+            navCircle.setCircular(true);
+            navUserShowsPhoto = true;
+            navUserIcon.setImageTintList(null);
+            navUserIcon.setImageDrawable(navCircle);
+        } else {
+            navUserShowsPhoto = false;
+            navUserIcon.setImageResource(R.drawable.ic_person);
+            navUserIcon.setImageTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#CCFFFFFF")));
+        }
+        updateBottomNavSelection(currentScreen); // re-apply tint/dimming to whichever icon is showing
 
         // Home header button: the photo fills the circle; with no photo, fall back to the
         // white person icon (padded and tinted, as in the layout).
