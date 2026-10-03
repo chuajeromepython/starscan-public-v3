@@ -27,6 +27,11 @@ public interface EcdcResponseDao {
             + "WHERE class_id = :classId AND lrn = :lrn AND period = :period")
     List<EcdcResponseEntity> getForStudentPeriod(String classId, String lrn, String period);
 
+    // Every saved mark, any class/period -- used by BackupManager (it filters to the
+    // active teacher's classes itself, same as the other getAllSync() queries).
+    @Query("SELECT * FROM ecdc_responses")
+    List<EcdcResponseEntity> getAllSync();
+
     // Every saved mark for one class + period (all students) -- used to build the upload JSON.
     @Query("SELECT * FROM ecdc_responses "
             + "WHERE class_id = :classId AND period = :period "

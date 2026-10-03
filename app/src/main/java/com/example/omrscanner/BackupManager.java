@@ -10,6 +10,7 @@ import com.example.omrscanner.database.entities.AnswerEntity;
 import com.example.omrscanner.database.entities.AnswerKeyEntity;
 import com.example.omrscanner.database.entities.AssessmentEntity;
 import com.example.omrscanner.database.entities.ClassEntity;
+import com.example.omrscanner.database.entities.EcdcResponseEntity;
 import com.example.omrscanner.database.entities.QuizEntity;
 import com.example.omrscanner.database.entities.QuizScanAnswerEntity;
 import com.example.omrscanner.database.entities.QuizScanEntity;
@@ -93,7 +94,7 @@ public class BackupManager {
 
     public interface ExportCallback {
         void onSuccess(int assessmentCount, int scanCount, int answerKeyCount,
-                       int quizCount, int quizScanCount);
+                       int quizCount, int quizScanCount, int ecdcMarkCount);
         void onError(Exception e);
     }
 
@@ -111,7 +112,8 @@ public class BackupManager {
          */
         void onSuccess(int restoredAssessments, int restoredScans, int restoredAnswerKeys,
                        int restoredQuizzes, int restoredQuizScans,
-                       int skippedAssessments, int skippedQuizzes, int failedExports);
+                       int skippedAssessments, int skippedQuizzes, int failedExports,
+                       int restoredEcdcMarks, int skippedEcdcMarks);
         void onError(Exception e);
     }
 
@@ -223,6 +225,19 @@ public class BackupManager {
                 }
                 manifest.put("quizScanAnswers", quizScanAnswersJson);
 
+                // ── ECDC marks (Present / Not present / Not tested + P/O/R type).
+                // Keyed by classroomId exactly like assessments and quizzes, because
+                // local class ids aren't stable across uninstall/reinstall. Only the
+                // active teacher's classes are in classIdToClassroomId, so marks from
+                // another teacher on a shared device can never end up in this file.
+                JSONArray ecdcJson = new JSONArray();
+                for (EcdcResponseEntity r : db.ecdcResponseDao().getAllSync()) {
+                    Integer classroomId = classIdToClassroomId.get(r.classId);
+                    if (classroomId == null) continue;
+                    ecdcJson.put(ecdcResponseToJson(r, classroomId));
+                }
+                manifest.put("ecdcResponses", ecdcJson);
+
                 JSONArray keysJson = new JSONArray();
                 for (AnswerKeyEntity k : db.answerKeyDao().getAll(teacherId)) {
                     // answer_keys is now teacher-scoped at the DB level, but keep
@@ -237,7 +252,7 @@ public class BackupManager {
                 writeZip(destination, manifest);
 
                 callback.onSuccess(assessmentsJson.length(), scansJson.length(), keysJson.length(),
-                        quizzesJson.length(), quizScansJson.length());
+                        quizzesJson.length(), quizScansJson.length(), ecdcJson.length());
             } catch (Exception e) {
                 Log.e(TAG, "Export failed", e);
                 callback.onError(e);
@@ -466,8 +481,36 @@ public class BackupManager {
                     }
                 }
 
+                // ── ECDC marks ──
+                // Same remap as assessments/quizzes: classroomId -> the CURRENT local
+                // class id of the signed-in teacher. Marks for a class that isn't synced
+                // yet are skipped (sync the class, then restore again). No parent rows are
+                // needed (ecdc_responses has no foreign keys), and the unique
+                // (class_id, lrn, period, competency_id) index makes REPLACE overwrite
+                // the matching mark instead of duplicating it.
+                int restoredEcdcMarks = 0;
+                int skippedEcdcMarks = 0;
+                JSONArray ecdcJson = manifest.optJSONArray("ecdcResponses");
+                if (ecdcJson != null) {
+                    List<EcdcResponseEntity> ecdcBatch = new ArrayList<>();
+                    for (int i = 0; i < ecdcJson.length(); i++) {
+                        JSONObject o = ecdcJson.getJSONObject(i);
+                        String localClassId = classroomIdToLocalClassId.get(o.optInt("classroomId", -1));
+                        if (localClassId == null) {
+                            skippedEcdcMarks++;
+                            continue;
+                        }
+                        ecdcBatch.add(ecdcResponseFromJson(o, localClassId));
+                    }
+                    if (!ecdcBatch.isEmpty()) {
+                        db.ecdcResponseDao().insertAll(ecdcBatch);
+                        restoredEcdcMarks = ecdcBatch.size();
+                    }
+                }
+
                 callback.onSuccess(restoredAssessments, restoredScans, restoredAnswerKeys,
-                        restoredQuizzes, restoredQuizScans, skippedAssessments, skippedQuizzes, failedExports);
+                        restoredQuizzes, restoredQuizScans, skippedAssessments, skippedQuizzes, failedExports,
+                        restoredEcdcMarks, skippedEcdcMarks);
             } catch (Exception e) {
                 Log.e(TAG, "Restore failed", e);
                 callback.onError(e);
@@ -678,6 +721,31 @@ public class BackupManager {
         a.itemNumber = o.getInt("itemNumber");
         a.answer = o.optString("answer", "");
         return a;
+    }
+
+    private JSONObject ecdcResponseToJson(EcdcResponseEntity r, int classroomId) throws JSONException {
+        JSONObject o = new JSONObject();
+        o.put("classroomId", classroomId);
+        o.put("lrn", r.lrn);
+        o.put("period", r.period);
+        o.put("competencyId", r.competencyId);
+        o.put("status", r.status);
+        o.put("presentType", r.presentType == null ? JSONObject.NULL : r.presentType);
+        o.put("updatedAt", r.updatedAt);
+        return o;
+    }
+
+    private EcdcResponseEntity ecdcResponseFromJson(JSONObject o, String localClassId) throws JSONException {
+        EcdcResponseEntity r = new EcdcResponseEntity();
+        // id stays 0 -> autogenerated. The unique index decides what gets replaced.
+        r.classId = localClassId;
+        r.lrn = o.getString("lrn");
+        r.period = o.getString("period");
+        r.competencyId = o.getInt("competencyId");
+        r.status = o.optString("status", EcdcResponseEntity.STATUS_NOT_TESTED);
+        r.presentType = o.isNull("presentType") ? null : o.optString("presentType", null);
+        r.updatedAt = o.optLong("updatedAt", System.currentTimeMillis());
+        return r;
     }
 
     private JSONObject answerKeyToJson(AnswerKeyEntity k) throws JSONException {

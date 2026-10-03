@@ -451,11 +451,11 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     backupManager.exportBackup(uri, new BackupManager.ExportCallback() {
                         @Override
                         public void onSuccess(int assessmentCount, int scanCount, int answerKeyCount,
-                                              int quizCount, int quizScanCount) {
+                                              int quizCount, int quizScanCount, int ecdcMarkCount) {
                             runOnUiThread(() -> ui.showToast("Backup saved ✓  (" + assessmentCount
                                     + " assessment(s), " + scanCount + " scan(s), " + quizCount
                                     + " quiz(zes), " + quizScanCount + " quiz scan(s), " + answerKeyCount
-                                    + " answer key(s)) — keep this file safe, you'll need it to restore."));
+                                    + " answer key(s), " + ecdcMarkCount + " ECDC mark(s)) — keep this file safe, you'll need it to restore."));
                         }
 
                         @Override
@@ -521,12 +521,14 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                             public void onSuccess(int restoredAssessments, int restoredScans,
                                                   int restoredAnswerKeys, int restoredQuizzes,
                                                   int restoredQuizScans, int skippedAssessments,
-                                                  int skippedQuizzes, int failedExports) {
+                                                  int skippedQuizzes, int failedExports,
+                                                  int restoredEcdcMarks, int skippedEcdcMarks) {
                                 runOnUiThread(() -> {
                                     ui.showToast("Restore complete ✓  (" + restoredAssessments
                                             + " assessment(s), " + restoredScans + " scan(s), "
                                             + restoredQuizzes + " quiz(zes), " + restoredQuizScans
-                                            + " quiz scan(s), " + restoredAnswerKeys + " answer key(s))");
+                                            + " quiz scan(s), " + restoredAnswerKeys + " answer key(s), "
+                                            + restoredEcdcMarks + " ECDC mark(s))");
                                     if (skippedAssessments > 0) {
                                         ui.showErrorDialog("Some data was skipped",
                                                 skippedAssessments + " assessment(s) were skipped because their "
@@ -539,6 +541,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                                         + "have no server copy, so re-syncing the class won't "
                                                         + "bring them back — sync the class first, then restore "
                                                         + "this backup again.");
+                                    }
+                                    if (skippedEcdcMarks > 0) {
+                                        ui.showErrorDialog("Some ECDC marks were skipped",
+                                                skippedEcdcMarks + " ECDC mark(s) were skipped because their "
+                                                        + "class isn't synced to your account yet. Sync the "
+                                                        + "class first, then restore this backup again.");
                                     }
                                     if (failedExports > 0) {
                                         ui.showErrorDialog("Some assessments couldn't be prepared for upload",
@@ -2850,15 +2858,22 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         addFaqCategory(body, "GETTING STARTED");
         addFaqItem(body,
                 "How do I connect the app to my account?",
-                "Scan your QR code from the STARS website (your teacher account's QR page). This saves your name, school, and the server address on your device so the app knows where to sync.");
+                "Open the Profile tab and tap Scan QR code, then scan the QR code from the STARS website (your teacher account's QR page). This saves your name, school, and the server address on your device so the app knows where to sync.");
         addFaqItem(body,
                 "What does \"Sync\" on the home screen do?",
                 "It pulls your assigned classes and sections from the STARS system into the app.");
         addFaqItem(body,
                 "Do I need internet access to use the app?",
-                "No, not for scanning. Classes, assessments, answer keys, and scans are all stored locally on your device. You only need a connection to the server when syncing classes/students or uploading assessment results.");
+                "No, not for scanning or marking ECDC checklists. Classes, assessments, answer keys, quizzes, scans, and ECDC marks are all stored locally on your device. You only need a connection to the server when syncing classes/students or uploading assessment results or ECDC data.");
 
         // ── Classes & syncing ────────────────────────────────────────
+        addFaqItem(body,
+                "Where did the Help button go?",
+                "Help & FAQ now lives in the Profile tab, under SUPPORT. The Profile tab is also where you scan your QR code, back up or restore your data, change your photo, and calibrate Pro Mode.");
+        addFaqItem(body,
+                "What do the tabs at the bottom do?",
+                "Home, Assessments, Scans, Quizzes, ECDCs, Answer Keys, and Profile. The bar scrolls sideways, so swipe it if a tab is off-screen.");
+
         addFaqCategory(body, "CLASSES & SYNCING");
         addFaqItem(body,
                 "What does syncing students inside a class do?",
@@ -2901,6 +2916,67 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 "The Scans tab shows a flat, read-only list of every scan across all your classes. To edit a scan, open it from its own class → assessment screen instead.");
 
         // ── Troubleshooting ──────────────────────────────────────────
+        addFaqItem(body,
+                "Why does the app ask if I want to replace a scan?",
+                "Scanning a student whose LRN is already saved in that quiz or assessment would create a duplicate, so the app asks first. Choose replace to overwrite the earlier scan with the new one.");
+        addFaqItem(body,
+                "What is Pro Mode calibration?",
+                "It's a one-time setup per sheet type for sheets that don't line up with the default template, such as crumpled sheets, printer margin drift, photocopies, or a sheet that differs from the master. Find it in the Profile tab. You can clear saved calibrations with Reset calibration.");
+
+        // ── Quizzes ──────────────────────────────────────────────────
+        addFaqCategory(body, "QUIZZES");
+        addFaqItem(body,
+                "How are Quizzes different from Assessments?",
+                "Quizzes have their own tab and are scanned and graded in a similar way, but they are stored only on your device. There is no server copy, so backing up is the only way to recover them if you uninstall the app or change phones.");
+        addFaqItem(body,
+                "How do I know if an answer key is used by a quiz?",
+                "Answer key cards show a badge when the key is linked to a quiz or an assessment.");
+
+        // ── ECDC ─────────────────────────────────────────────────────
+        addFaqCategory(body, "ECDC CHECKLIST");
+        addFaqItem(body,
+                "What is the ECDCs tab?",
+                "ECDC stands for Early Childhood Development Checklist. Open a class, choose a student, then mark each competency, grouped by domain. Pick a period first: Beginning, Middle, or End of School Year.");
+        addFaqItem(body,
+                "What do Present, Not present, and Not tested mean?",
+                "Each competency needs one of the three choices. Not tested items are skipped on the server instead of being saved as answers. Tap the Save button to keep your marks. If you leave with unsaved changes, the app asks first.");
+        addFaqItem(body,
+                "What is the Type row (P, O, R)?",
+                "When you mark a competency Present, a Type row appears inside the card. Tap it to expand it and choose P, O, or R. Every Present mark needs a type before it can be uploaded.");
+        addFaqItem(body,
+                "What does the eye button show?",
+                "A summary card for the student: how many competencies are Present, Not present, Not tested, or still unmarked, overall and per domain.");
+        addFaqItem(body,
+                "What are Recent searches?",
+                "When you search for a student in a class, the students you opened recently are listed so you can jump back to them quickly.");
+        addFaqItem(body,
+                "How do I upload a student's ECDC results?",
+                "Open the student, choose the period, and tap Upload. Every domain must be fully marked first, and you must have scanned your QR code. Uploading the same period again replaces that student's earlier answers, so retrying after a failed upload is safe.");
+        addFaqItem(body,
+                "What is Mass Upload?",
+                "In the ECDC class screen, use the three-dot menu on the class card and choose Mass Upload, then pick a period. It uploads every student who has saved marks for that period in one go. Students with no saved marks for that period are skipped.");
+        addFaqItem(body,
+                "Why does the app say \"Complete all students first\" or \"Choose a type first\"?",
+                "Mass Upload is blocked until every student being uploaded has all domains marked, and every Present mark has a type (P, O, or R). The message lists who or what is still missing. Fix those, save, and upload again.");
+
+        // ── Profile & backup ─────────────────────────────────────────
+        addFaqCategory(body, "PROFILE & BACKUP");
+        addFaqItem(body,
+                "How do I change my profile photo?",
+                "Tap the circle with the camera icon at the top of the Profile tab. The photo is saved on your device and is included in your backups.");
+        addFaqItem(body,
+                "What does Back up my data save?",
+                "Your assessments, scans, answers, answer keys, scan images, quizzes, quiz scans, ECDC checklist marks, and your profile photo. Classes, student lists, and account info are not included, because they come back when you scan your QR code and sync.");
+        addFaqItem(body,
+                "How do I back up my data?",
+                "Profile tab, then Back up my data. You choose where to save it. The file is a .zip named with your name and the date and time, for example Juan_Dela_Cruz_backup_2026-10-03_1430.zip. Keep it somewhere safe, because quizzes have no other copy.");
+        addFaqItem(body,
+                "How do I restore from a backup?",
+                "Profile tab, then Restore from backup, and pick your backup .zip. Scan your QR code and sync your classes first. Anything that belongs to a class that isn't synced to your account is skipped, and you'll need to sync that class and restore again.");
+        addFaqItem(body,
+                "What happens if another teacher signs in on my phone?",
+                "Signing in with a different teacher's QR code no longer erases the data on the device. Each teacher's classes, assessments, answer keys, and quizzes stay separate, so you only see your own.");
+
         addFaqCategory(body, "TROUBLESHOOTING");
         addFaqItem(body,
                 "Why does the app say \"Can't Reach Server\"?",
