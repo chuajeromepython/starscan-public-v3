@@ -1493,16 +1493,23 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                     noTypeDomains));
                             return;
                         }
-                        try {
-                            org.json.JSONObject payload = com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder
-                                    .build(classroomId, userId, period, responses, domains, competencies);
-                            com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder.logPayload(payload.toString());
-                            uploadEcdcPayload(user.serverIp, payload, "ECDC results for " + selectedEcdStudentName);
-                        } catch (org.json.JSONException e) {
-                            android.util.Log.e("OMR_ECDC_UPLOAD", "Could not build upload JSON: " + e.getMessage(), e);
-                            runOnUiThread(() -> ui.showErrorDialog("Upload failed",
-                                    "Could not build the upload data: " + e.getMessage()));
-                        }
+                        // All checks passed: ask the teacher which date to stamp on the results.
+                        runOnUiThread(() -> ui.showEcdcUploadDateCard(
+                                "Choose the date of this assessment for "
+                                        + EcdcScreenRenderer.periodLabel(period)
+                                        + ". It will be sent with the upload.",
+                                pickedMillis -> {
+                                    try {
+                                        org.json.JSONObject payload = com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder
+                                                .build(classroomId, userId, period, responses, domains, competencies, pickedMillis);
+                                        com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder.logPayload(payload.toString());
+                                        uploadEcdcPayload(user.serverIp, payload, "ECDC results for " + selectedEcdStudentName);
+                                    } catch (org.json.JSONException e) {
+                                        android.util.Log.e("OMR_ECDC_UPLOAD", "Could not build upload JSON: " + e.getMessage(), e);
+                                        ui.showErrorDialog("Upload failed",
+                                                "Could not build the upload data: " + e.getMessage());
+                                    }
+                                }));
                     })));
         });
     }
@@ -1726,18 +1733,25 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                             noType));
                                     return;
                                 }
-                                try {
-                                    org.json.JSONObject payload = com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder
-                                            .build(classroomId, userId, period, responses, domains, competencies);
-                                    com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder.logPayload(payload.toString());
-                                    final int studentCount = payload.getJSONArray("students").length();
-                                    uploadEcdcPayload(user.serverIp, payload, "ECDC results for " + studentCount
-                                            + " student" + (studentCount == 1 ? "" : "s"));
-                                } catch (org.json.JSONException e) {
-                                    android.util.Log.e("OMR_ECDC_UPLOAD", "Could not build mass upload JSON: " + e.getMessage(), e);
-                                    runOnUiThread(() -> ui.showErrorDialog("Upload failed",
-                                            "Could not build the upload data: " + e.getMessage()));
-                                }
+                                // All checks passed: ask the teacher which date to stamp on the results.
+                                runOnUiThread(() -> ui.showEcdcUploadDateCard(
+                                        "Choose the date of this assessment for "
+                                                + EcdcScreenRenderer.periodLabel(period)
+                                                + ". It will be applied to every student in this upload.",
+                                        pickedMillis -> {
+                                            try {
+                                                org.json.JSONObject payload = com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder
+                                                        .build(classroomId, userId, period, responses, domains, competencies, pickedMillis);
+                                                com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder.logPayload(payload.toString());
+                                                final int studentCount = payload.getJSONArray("students").length();
+                                                uploadEcdcPayload(user.serverIp, payload, "ECDC results for " + studentCount
+                                                        + " student" + (studentCount == 1 ? "" : "s"));
+                                            } catch (org.json.JSONException e) {
+                                                android.util.Log.e("OMR_ECDC_UPLOAD", "Could not build mass upload JSON: " + e.getMessage(), e);
+                                                ui.showErrorDialog("Upload failed",
+                                                        "Could not build the upload data: " + e.getMessage());
+                                            }
+                                        }));
                             }))));
         });
     }

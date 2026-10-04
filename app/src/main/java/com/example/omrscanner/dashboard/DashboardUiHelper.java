@@ -626,6 +626,134 @@ public class DashboardUiHelper {
         dialog.show();
     }
 
+    public interface DatePickedListener {
+        void onPicked(long epochMillis);
+    }
+
+    /**
+     * Card shown when the teacher presses Upload / Mass Upload for ECDC. Works like the
+     * Exam Date field when creating an assessment: tap the field, pick a date, confirm.
+     * The chosen date comes back as epoch millis (noon, device time zone).
+     */
+    public void showEcdcUploadDateCard(String subtitle, DatePickedListener listener) {
+        Dialog dialog = new Dialog(activity);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setCancelable(true);
+
+        LinearLayout root = new LinearLayout(activity);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(24), dp(24), dp(24), dp(24));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.WHITE);
+        bg.setCornerRadius(dp(24));
+        root.setBackground(bg);
+
+        TextView titleView = new TextView(activity);
+        titleView.setText("Select Assessment Date");
+        titleView.setTextSize(17);
+        titleView.setTypeface(null, Typeface.BOLD);
+        titleView.setTextColor(Color.parseColor("#0F172A"));
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        tlp.bottomMargin = dp(6);
+        titleView.setLayoutParams(tlp);
+        root.addView(titleView);
+
+        TextView subView = new TextView(activity);
+        subView.setText(subtitle);
+        subView.setTextSize(13);
+        subView.setTextColor(Color.parseColor("#64748B"));
+        subView.setLineSpacing(dp(3), 1f);
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        slp.bottomMargin = dp(16);
+        subView.setLayoutParams(slp);
+        root.addView(subView);
+
+        root.addView(createFieldLabel("ASSESSMENT DATE"));
+        final java.text.SimpleDateFormat fmt =
+                new java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.getDefault());
+        final java.util.Calendar chosen = java.util.Calendar.getInstance();
+        chosen.set(java.util.Calendar.HOUR_OF_DAY, 12);
+        chosen.set(java.util.Calendar.MINUTE, 0);
+        chosen.set(java.util.Calendar.SECOND, 0);
+        chosen.set(java.util.Calendar.MILLISECOND, 0);
+
+        EditText dateInput = createLightInput("Select date");
+        dateInput.setFocusable(false);
+        dateInput.setClickable(true);
+        dateInput.setText(fmt.format(chosen.getTime()));
+        dateInput.setOnClickListener(v -> new android.app.DatePickerDialog(activity,
+                (view, year, month, day) -> {
+                    chosen.set(year, month, day, 12, 0, 0);
+                    dateInput.setText(fmt.format(chosen.getTime()));
+                },
+                chosen.get(java.util.Calendar.YEAR),
+                chosen.get(java.util.Calendar.MONTH),
+                chosen.get(java.util.Calendar.DAY_OF_MONTH)).show());
+        root.addView(dateInput);
+
+        LinearLayout buttons = new LinearLayout(activity);
+        buttons.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        blp.topMargin = dp(20);
+        buttons.setLayoutParams(blp);
+
+        TextView btnCancel = new TextView(activity);
+        btnCancel.setText("Cancel");
+        btnCancel.setTextSize(14);
+        btnCancel.setTypeface(null, Typeface.BOLD);
+        btnCancel.setGravity(Gravity.CENTER);
+        btnCancel.setTextColor(Color.parseColor("#64748B"));
+        GradientDrawable cancelBg = new GradientDrawable();
+        cancelBg.setColor(Color.parseColor("#F1F5F9"));
+        cancelBg.setCornerRadius(dp(12));
+        btnCancel.setBackground(cancelBg);
+        btnCancel.setPadding(dp(20), dp(12), dp(20), dp(12));
+        btnCancel.setClickable(true);
+        btnCancel.setFocusable(true);
+        LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        cLp.rightMargin = dp(8);
+        btnCancel.setLayoutParams(cLp);
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+        buttons.addView(btnCancel);
+
+        TextView btnUpload = new TextView(activity);
+        btnUpload.setText("Upload");
+        btnUpload.setTextSize(14);
+        btnUpload.setTypeface(null, Typeface.BOLD);
+        btnUpload.setGravity(Gravity.CENTER);
+        btnUpload.setTextColor(Color.WHITE);
+        GradientDrawable uploadBg = new GradientDrawable();
+        uploadBg.setColor(Color.parseColor("#CE1126"));
+        uploadBg.setCornerRadius(dp(12));
+        btnUpload.setBackground(uploadBg);
+        btnUpload.setPadding(dp(20), dp(12), dp(20), dp(12));
+        btnUpload.setClickable(true);
+        btnUpload.setFocusable(true);
+        btnUpload.setLayoutParams(new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        btnUpload.setOnClickListener(v -> {
+            dialog.dismiss();
+            listener.onPicked(chosen.getTimeInMillis());
+        });
+        buttons.addView(btnUpload);
+        root.addView(buttons);
+
+        dialog.setContentView(root);
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setLayout(
+                    (int) (activity.getResources().getDisplayMetrics().widthPixels * 0.86),
+                    WindowManager.LayoutParams.WRAP_CONTENT);
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            dialog.getWindow().setGravity(Gravity.CENTER);
+            dialog.getWindow().setWindowAnimations(android.R.style.Animation_Dialog);
+        }
+        dialog.show();
+    }
+
     public void showErrorDialog(String title, String message) {
         if (activeErrorDialog != null && activeErrorDialog.isShowing())
             activeErrorDialog.dismiss();
