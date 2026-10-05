@@ -120,10 +120,11 @@ public final class EcdcUploadPayloadBuilder {
                 mark.put("competency", competency != null && competency.competency != null
                         ? (Object) competency.competency : JSONObject.NULL);
                 mark.put("status", encodeStatus(r.status));
-                // Only Present marks carry a type; omitted otherwise.
-                if (EcdcResponseEntity.STATUS_PRESENT.equals(r.status) && r.presentType != null) {
-                    mark.put("present_type", r.presentType);
-                }
+                // Always include present_type. Only Present marks carry a value
+                // ("P", "O" or "R"); every other status sends an explicit null.
+                mark.put("present_type",
+                        EcdcResponseEntity.STATUS_PRESENT.equals(r.status) && r.presentType != null
+                                ? (Object) r.presentType : JSONObject.NULL);
                 marksJson.put(mark);
             }
 
