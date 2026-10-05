@@ -23,12 +23,14 @@ import com.example.omrscanner.database.dao.UserDao;
 import com.example.omrscanner.database.dao.EcdcDomainDao;
 import com.example.omrscanner.database.dao.EcdcCompetencyDao;
 import com.example.omrscanner.database.dao.EcdcResponseDao;
+import com.example.omrscanner.database.dao.EcdcStudentDateDao;
 import com.example.omrscanner.database.entities.AnswerEntity;
 import com.example.omrscanner.database.entities.AnswerKeyEntity;
 import com.example.omrscanner.database.entities.AssessmentEntity;
 import com.example.omrscanner.database.entities.EcdcDomainEntity;
 import com.example.omrscanner.database.entities.EcdcCompetencyEntity;
 import com.example.omrscanner.database.entities.EcdcResponseEntity;
+import com.example.omrscanner.database.entities.EcdcStudentDateEntity;
 import com.example.omrscanner.database.entities.QuizEntity;
 import com.example.omrscanner.database.entities.QuizScanEntity;
 import com.example.omrscanner.database.entities.QuizScanAnswerEntity;
@@ -99,8 +101,9 @@ import com.example.omrscanner.database.entities.UserEntity;
         QuizScanAnswerEntity.class,
         EcdcDomainEntity.class,
         EcdcCompetencyEntity.class,
-        EcdcResponseEntity.class
-}, version = 27, exportSchema = false)
+        EcdcResponseEntity.class,
+        EcdcStudentDateEntity.class
+}, version = 28, exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase {
 
   private static final String DATABASE_NAME = "omrscanner.db";
@@ -521,6 +524,22 @@ public abstract class AppDatabase extends RoomDatabase {
     }
   };
 
+  // Per-student, per-period ECDC assessment date (sent as last_ticked_at).
+  private static final Migration MIGRATION_27_28 = new Migration(27, 28) {
+    @Override
+    public void migrate(@NonNull SupportSQLiteDatabase db) {
+      db.execSQL("CREATE TABLE IF NOT EXISTS ecdc_student_dates ("
+              + "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, "
+              + "class_id TEXT NOT NULL, "
+              + "lrn TEXT NOT NULL, "
+              + "period TEXT NOT NULL, "
+              + "date_epoch INTEGER NOT NULL)");
+      db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS "
+              + "index_ecdc_student_dates_class_id_lrn_period "
+              + "ON ecdc_student_dates(class_id, lrn, period)");
+    }
+  };
+
   // ── Abstract DAO accessors (Room generates the implementations) ──────────
   public abstract TeacherDao teacherDao();
 
@@ -550,6 +569,8 @@ public abstract class AppDatabase extends RoomDatabase {
 
   public abstract EcdcResponseDao ecdcResponseDao();
 
+  public abstract EcdcStudentDateDao ecdcStudentDateDao();
+
   // ── Singleton────────────────────────────────────────────────────────────
   public static AppDatabase getInstance(Context context) {
     if (INSTANCE == null) {
@@ -559,7 +580,7 @@ public abstract class AppDatabase extends RoomDatabase {
               context.getApplicationContext(),
               AppDatabase.class,
               DATABASE_NAME)
-                  .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27)
+                  .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28)
               .build();
         }
       }

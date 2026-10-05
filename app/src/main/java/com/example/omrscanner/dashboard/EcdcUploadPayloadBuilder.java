@@ -77,20 +77,8 @@ public final class EcdcUploadPayloadBuilder {
     public static JSONObject build(int classroomId, int userId, String period,
                                    List<EcdcResponseEntity> responses,
                                    List<EcdcDomainEntity> domains,
-                                   List<EcdcCompetencyEntity> competencies) throws JSONException {
-        return build(classroomId, userId, period, responses, domains, competencies, null);
-    }
-
-    /**
-     * Same as above, but when {@code assessmentDateMillis} is not null that date (picked by
-     * the teacher on the upload card) is sent as {@code last_ticked_at} for every student,
-     * instead of the time the teacher last pressed Save.
-     */
-    public static JSONObject build(int classroomId, int userId, String period,
-                                   List<EcdcResponseEntity> responses,
-                                   List<EcdcDomainEntity> domains,
                                    List<EcdcCompetencyEntity> competencies,
-                                   Long assessmentDateMillis) throws JSONException {
+                                   Map<String, Long> dateByLrn) throws JSONException {
         // Lookups so each mark can carry its competency wording and its domain.
         Map<Integer, EcdcDomainEntity> domainById = new HashMap<>();
         if (domains != null) {
@@ -117,10 +105,8 @@ public final class EcdcUploadPayloadBuilder {
             List<EcdcResponseEntity> marks = entry.getValue();
             Collections.sort(marks, (a, b) -> Integer.compare(a.competencyId, b.competencyId));
 
-            long lastTickedAt = 0;
             JSONArray marksJson = new JSONArray();
             for (EcdcResponseEntity r : marks) {
-                if (r.updatedAt > lastTickedAt) lastTickedAt = r.updatedAt;
 
                 EcdcCompetencyEntity competency = competencyById.get(r.competencyId);
                 EcdcDomainEntity domain =
@@ -143,9 +129,10 @@ public final class EcdcUploadPayloadBuilder {
 
             JSONObject student = new JSONObject();
             student.put("lrn", entry.getKey());
-            long dateToSend = assessmentDateMillis != null ? assessmentDateMillis : lastTickedAt;
+            Long dateToSend = dateByLrn != null ? dateByLrn.get(entry.getKey()) : null;
             student.put("last_ticked_at",
-                    dateToSend > 0 ? formatTimestamp(dateToSend) : JSONObject.NULL);
+                    dateToSend != null && dateToSend > 0
+                            ? formatTimestamp(dateToSend) : JSONObject.NULL);
             student.put("responses", marksJson);
             students.put(student);
         }

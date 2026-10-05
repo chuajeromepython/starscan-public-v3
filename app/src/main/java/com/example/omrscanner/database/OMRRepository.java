@@ -16,6 +16,7 @@ import com.example.omrscanner.database.entities.TeacherEntity;
 import com.example.omrscanner.database.entities.EcdcDomainEntity;
 import com.example.omrscanner.database.entities.EcdcCompetencyEntity;
 import com.example.omrscanner.database.entities.EcdcResponseEntity;
+import com.example.omrscanner.database.entities.EcdcStudentDateEntity;
 import com.example.omrscanner.database.projections.AssessmentListRow;
 import com.example.omrscanner.database.projections.ClassListRow;
 import com.example.omrscanner.database.projections.ScanListRow;
@@ -961,6 +962,48 @@ public class OMRRepository {
       } catch (Exception e) {
         ok = false;
         Log.e("EcdcResponses", "Failed to save ECDC responses", e);
+      }
+      if (callback != null) callback.onResult(ok);
+    });
+  }
+
+  // The assessment date picked on a student's ECDC card (null if none set yet).
+  public void getEcdcStudentDate(String classId, String lrn, String period,
+                                 Callback<Long> callback) {
+    executor.execute(() -> {
+      EcdcStudentDateEntity row = db.ecdcStudentDateDao().get(classId, lrn, period);
+      Long result = null;
+      if (row != null) result = Long.valueOf(row.dateEpoch);
+      if (callback != null) callback.onResult(result);
+    });
+  }
+
+  // lrn -> picked date for every student in a class + period (used by Mass Upload).
+  public void getEcdcStudentDatesForClassPeriod(String classId, String period,
+                                                Callback<java.util.Map<String, Long>> callback) {
+    executor.execute(() -> {
+      java.util.Map<String, Long> out = new java.util.HashMap<>();
+      for (EcdcStudentDateEntity row : db.ecdcStudentDateDao().getForClassPeriod(classId, period)) {
+        out.put(row.lrn, Long.valueOf(row.dateEpoch));
+      }
+      if (callback != null) callback.onResult(out);
+    });
+  }
+
+  public void setEcdcStudentDate(String classId, String lrn, String period, long dateEpoch,
+                                 Callback<Boolean> callback) {
+    executor.execute(() -> {
+      boolean ok = true;
+      try {
+        EcdcStudentDateEntity row = new EcdcStudentDateEntity();
+        row.classId = classId;
+        row.lrn = lrn;
+        row.period = period;
+        row.dateEpoch = dateEpoch;
+        db.ecdcStudentDateDao().upsert(row); // REPLACE on the unique (class, lrn, period) index
+      } catch (Exception e) {
+        ok = false;
+        Log.e("EcdcStudentDate", "Failed to save ECDC student date", e);
       }
       if (callback != null) callback.onResult(ok);
     });

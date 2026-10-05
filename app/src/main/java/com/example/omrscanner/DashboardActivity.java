@@ -330,6 +330,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     // ECDC student checklist screen: domain pills -> competency cards -> Save.
     private LinearLayout ecdDomainSwitcher, ecdCompetencyList, ecdSaveBar;
     private TextView ecdStudentName, ecdStudentMeta, ecdStudentProgress;
+    // Date button on the student card. The picked date is what gets uploaded as last_ticked_at.
+    private View ecdStudentDateButton;
+    private TextView ecdStudentDateText;
+    private Long ecdStudentDateMillis = null;
     private TextView ecdDomainHint, ecdDomainTitle, ecdSaveButton;
     private TextView homeSummaryClassCount, homeSummaryAssessmentCount;
     private EditText homeClassSearchInput;
@@ -748,6 +752,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         ecdStudentName = findViewById(R.id.ecdStudentName);
         ecdStudentMeta = findViewById(R.id.ecdStudentMeta);
         ecdStudentProgress = findViewById(R.id.ecdStudentProgress);
+        ecdStudentDateButton = findViewById(R.id.ecdStudentDateButton);
+        ecdStudentDateText = findViewById(R.id.ecdStudentDateText);
+        ecdStudentDateButton.setOnClickListener(v -> pickEcdStudentDate());
         ecdDomainSwitcher = findViewById(R.id.ecdDomainSwitcher);
         ecdDomainHint = findViewById(R.id.ecdDomainHint);
         ecdDomainTitle = findViewById(R.id.ecdDomainTitle);
@@ -1493,23 +1500,29 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                     noTypeDomains));
                             return;
                         }
-                        // All checks passed: ask the teacher which date to stamp on the results.
-                        runOnUiThread(() -> ui.showEcdcUploadDateCard(
-                                "Choose the date of this assessment for "
-                                        + EcdcScreenRenderer.periodLabel(period)
-                                        + ". It will be sent with the upload.",
-                                pickedMillis -> {
-                                    try {
-                                        org.json.JSONObject payload = com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder
-                                                .build(classroomId, userId, period, responses, domains, competencies, pickedMillis);
-                                        com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder.logPayload(payload.toString());
-                                        uploadEcdcPayload(user.serverIp, payload, "ECDC results for " + selectedEcdStudentName);
-                                    } catch (org.json.JSONException e) {
-                                        android.util.Log.e("OMR_ECDC_UPLOAD", "Could not build upload JSON: " + e.getMessage(), e);
-                                        ui.showErrorDialog("Upload failed",
-                                                "Could not build the upload data: " + e.getMessage());
-                                    }
-                                }));
+                        // All checks passed: the date comes from the student card's date button.
+                        repo.getEcdcStudentDate(classId, lrn, period, dateMillis -> {
+                            if (dateMillis == null) {
+                                runOnUiThread(() -> ui.showErrorDialog("Set the date first",
+                                        "Tap the date button on the student card to set this student's "
+                                                + "assessment date, then upload again."));
+                                return;
+                            }
+                            runOnUiThread(() -> {
+                                try {
+                                    java.util.Map<String, Long> dateByLrn = new java.util.HashMap<>();
+                                    dateByLrn.put(lrn, dateMillis);
+                                    org.json.JSONObject payload = com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder
+                                            .build(classroomId, userId, period, responses, domains, competencies, dateByLrn);
+                                    com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder.logPayload(payload.toString());
+                                    uploadEcdcPayload(user.serverIp, payload, "ECDC results for " + selectedEcdStudentName);
+                                } catch (org.json.JSONException e) {
+                                    android.util.Log.e("OMR_ECDC_UPLOAD", "Could not build upload JSON: " + e.getMessage(), e);
+                                    ui.showErrorDialog("Upload failed",
+                                            "Could not build the upload data: " + e.getMessage());
+                                }
+                            });
+                        });
                     })));
         });
     }
@@ -1733,25 +1746,61 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                             noType));
                                     return;
                                 }
-                                // All checks passed: ask the teacher which date to stamp on the results.
-                                runOnUiThread(() -> ui.showEcdcUploadDateCard(
-                                        "Choose the date of this assessment for "
+                                // All checks passed: every student being uploaded needs the date
+                                // set on their own card.
+                                repo.getEcdcStudentDatesForClassPeriod(classId, period, dateByLrn -> {
+                                    java.util.Set<String> uploadingLrns = new java.util.LinkedHashSet<>();
+                                    for (com.example.omrscanner.database.entities.EcdcResponseEntity r : responses) {
+                                        uploadingLrns.add(r.lrn);
+                                    }
+                                    Map<String, String> nameByLrn = new java.util.HashMap<>();
+                                    if (roster != null) {
+                                        for (com.example.omrscanner.database.entities.StudentLrnEntity s : roster) {
+                                            nameByLrn.put(s.lrn, ((s.lastName != null ? s.lastName : "") + ", "
+                                                    + (s.firstName != null ? s.firstName : "")
+                                                    + (s.middleName != null && !s.middleName.isEmpty() ? " " + s.middleName : "")).trim());
+                                        }
+                                    }
+                                    List<String> noDate = new ArrayList<>();
+                                    for (String l : uploadingLrns) {
+                                        if (dateByLrn.get(l) == null) {
+                                            noDate.add(nameByLrn.containsKey(l) ? nameByLrn.get(l) : l);
+                                        }
+                                    }
+                                    if (!noDate.isEmpty()) {
+                                        Collections.sort(noDate, String.CASE_INSENSITIVE_ORDER);
+                                        StringBuilder sb = new StringBuilder();
+                                        int shown = Math.min(noDate.size(), 10);
+                                        for (int k = 0; k < shown; k++) {
+                                            sb.append("\u2022 ").append(noDate.get(k)).append("\n");
+                                        }
+                                        if (noDate.size() > shown) {
+                                            sb.append("\u2026and ").append(noDate.size() - shown).append(" more\n");
+                                        }
+                                        final String msg = noDate.size()
+                                                + (noDate.size() == 1 ? " student has" : " students have")
+                                                + " no assessment date for "
                                                 + EcdcScreenRenderer.periodLabel(period)
-                                                + ". It will be applied to every student in this upload.",
-                                        pickedMillis -> {
-                                            try {
-                                                org.json.JSONObject payload = com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder
-                                                        .build(classroomId, userId, period, responses, domains, competencies, pickedMillis);
-                                                com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder.logPayload(payload.toString());
-                                                final int studentCount = payload.getJSONArray("students").length();
-                                                uploadEcdcPayload(user.serverIp, payload, "ECDC results for " + studentCount
-                                                        + " student" + (studentCount == 1 ? "" : "s"));
-                                            } catch (org.json.JSONException e) {
-                                                android.util.Log.e("OMR_ECDC_UPLOAD", "Could not build mass upload JSON: " + e.getMessage(), e);
-                                                ui.showErrorDialog("Upload failed",
-                                                        "Could not build the upload data: " + e.getMessage());
-                                            }
-                                        }));
+                                                + ". Open each one, tap the date button on their card, "
+                                                + "then upload again:\n\n" + sb;
+                                        runOnUiThread(() -> ui.showErrorDialog("Set the dates first", msg));
+                                        return;
+                                    }
+                                    runOnUiThread(() -> {
+                                        try {
+                                            org.json.JSONObject payload = com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder
+                                                    .build(classroomId, userId, period, responses, domains, competencies, dateByLrn);
+                                            com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder.logPayload(payload.toString());
+                                            final int studentCount = payload.getJSONArray("students").length();
+                                            uploadEcdcPayload(user.serverIp, payload, "ECDC results for " + studentCount
+                                                    + " student" + (studentCount == 1 ? "" : "s"));
+                                        } catch (org.json.JSONException e) {
+                                            android.util.Log.e("OMR_ECDC_UPLOAD", "Could not build mass upload JSON: " + e.getMessage(), e);
+                                            ui.showErrorDialog("Upload failed",
+                                                    "Could not build the upload data: " + e.getMessage());
+                                        }
+                                    });
+                                });
                             }))));
         });
     }
@@ -4529,6 +4578,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         ecdDraftStatuses = new java.util.HashMap<>();
         ecdSavedPresentTypes = new java.util.HashMap<>();
         ecdDraftPresentTypes = new java.util.HashMap<>();
+        ecdStudentDateMillis = null;
         showScreen(SCREEN_ECD_STUDENT);
     }
 
@@ -4547,6 +4597,15 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         ecdStudentMeta.setText("LRN: " + lrn + "  \u2022  " + EcdcScreenRenderer.periodLabel(period));
         ecdStudentProgress.setText("Loading\u2026");
         ecdCompetencyList.removeAllViews();
+
+        ecdStudentDateMillis = null;
+        renderEcdStudentDate();
+        repo.getEcdcStudentDate(classId, lrn, period, millis -> runOnUiThread(() -> {
+            if (requestId != ecdChecklistLoadGeneration
+                    || !SCREEN_ECD_STUDENT.equals(currentScreen)) return;
+            ecdStudentDateMillis = millis;
+            renderEcdStudentDate();
+        }));
 
         repo.getEcdcDomains(domains -> repo.getAllEcdcCompetencies(competencies ->
                 repo.getEcdcResponses(classId, lrn, period, responses -> runOnUiThread(() -> {
@@ -4700,6 +4759,54 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 .setView(card)
                 .setPositiveButton("Close", null)
                 .show();
+    }
+
+    /** Shows the picked date on the student card's date button (or a prompt if none yet). */
+    private void renderEcdStudentDate() {
+        if (ecdStudentDateText == null) return;
+        if (ecdStudentDateMillis == null) {
+            ecdStudentDateText.setText("Set assessment date");
+        } else {
+            ecdStudentDateText.setText(new java.text.SimpleDateFormat("MMM dd, yyyy",
+                    java.util.Locale.getDefault()).format(new java.util.Date(ecdStudentDateMillis)));
+        }
+    }
+
+    /**
+     * Student card date button: pick the date, and it is stored straight away (it does not
+     * wait for the checklist's Save). This is the date uploaded as last_ticked_at.
+     */
+    private void pickEcdStudentDate() {
+        if (ecdStudentClassId == null || selectedEcdStudentLrn == null || selectedEcdPeriod == null) {
+            return;
+        }
+        final String classId = ecdStudentClassId;
+        final String lrn = selectedEcdStudentLrn;
+        final String period = selectedEcdPeriod;
+        final java.util.Calendar cal = java.util.Calendar.getInstance();
+        if (ecdStudentDateMillis != null) cal.setTimeInMillis(ecdStudentDateMillis);
+
+        new android.app.DatePickerDialog(this, (view, year, month, day) -> {
+            java.util.Calendar picked = java.util.Calendar.getInstance();
+            picked.set(year, month, day, 12, 0, 0);
+            picked.set(java.util.Calendar.MILLISECOND, 0);
+            final long millis = picked.getTimeInMillis();
+            repo.setEcdcStudentDate(classId, lrn, period, millis, ok -> runOnUiThread(() -> {
+                if (!Boolean.TRUE.equals(ok)) {
+                    ui.showErrorDialog("Couldn't save date",
+                            "The assessment date could not be saved. Please try again.");
+                    return;
+                }
+                // Only touch the card if the same student/period is still on screen.
+                if (lrn.equals(selectedEcdStudentLrn) && period.equals(selectedEcdPeriod)) {
+                    ecdStudentDateMillis = millis;
+                    renderEcdStudentDate();
+                }
+                ui.showToast("Date saved \u2713");
+            }));
+        }, cal.get(java.util.Calendar.YEAR),
+                cal.get(java.util.Calendar.MONTH),
+                cal.get(java.util.Calendar.DAY_OF_MONTH)).show();
     }
 
     private boolean hasEcdUnsavedChanges() {

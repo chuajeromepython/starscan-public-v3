@@ -3402,6 +3402,38 @@
                                             android:textSize="11sp" />
 
                                         <LinearLayout
+                                            android:id="@+id/ecdStudentDateButton"
+                                            android:layout_width="wrap_content"
+                                            android:layout_height="28dp"
+                                            android:layout_marginTop="8dp"
+                                            android:orientation="horizontal"
+                                            android:gravity="center_vertical"
+                                            android:paddingStart="10dp"
+                                            android:paddingEnd="12dp"
+                                            android:background="@drawable/bg_icon_box_white"
+                                            android:clickable="true"
+                                            android:focusable="true"
+                                            android:contentDescription="Set assessment date"
+                                            android:foreground="?attr/selectableItemBackgroundBorderless">
+                                            <TextView
+                                                android:layout_width="wrap_content"
+                                                android:layout_height="wrap_content"
+                                                android:text="📅"
+                                                android:textSize="11sp"
+                                                android:includeFontPadding="false" />
+                                            <TextView
+                                                android:id="@+id/ecdStudentDateText"
+                                                android:layout_width="wrap_content"
+                                                android:layout_height="wrap_content"
+                                                android:layout_marginStart="6dp"
+                                                android:text="Set assessment date"
+                                                android:textColor="#FFFFFF"
+                                                android:textSize="11sp"
+                                                android:textStyle="bold"
+                                                android:includeFontPadding="false" />
+                                        </LinearLayout>
+
+                                        <LinearLayout
                                             android:layout_width="match_parent"
                                             android:layout_height="wrap_content"
                                             android:layout_marginTop="6dp"

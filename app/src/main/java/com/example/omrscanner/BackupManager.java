@@ -11,6 +11,7 @@ import com.example.omrscanner.database.entities.AnswerKeyEntity;
 import com.example.omrscanner.database.entities.AssessmentEntity;
 import com.example.omrscanner.database.entities.ClassEntity;
 import com.example.omrscanner.database.entities.EcdcResponseEntity;
+import com.example.omrscanner.database.entities.EcdcStudentDateEntity;
 import com.example.omrscanner.database.entities.QuizEntity;
 import com.example.omrscanner.database.entities.QuizScanAnswerEntity;
 import com.example.omrscanner.database.entities.QuizScanEntity;
@@ -237,6 +238,20 @@ public class BackupManager {
                     ecdcJson.put(ecdcResponseToJson(r, classroomId));
                 }
                 manifest.put("ecdcResponses", ecdcJson);
+
+                // Assessment dates picked on each ECDC student card (same classroomId keying).
+                JSONArray ecdcDatesJson = new JSONArray();
+                for (EcdcStudentDateEntity dateRow : db.ecdcStudentDateDao().getAllSync()) {
+                    Integer classroomId = classIdToClassroomId.get(dateRow.classId);
+                    if (classroomId == null) continue;
+                    JSONObject dateJson = new JSONObject();
+                    dateJson.put("classroomId", classroomId);
+                    dateJson.put("lrn", dateRow.lrn);
+                    dateJson.put("period", dateRow.period);
+                    dateJson.put("dateEpoch", dateRow.dateEpoch);
+                    ecdcDatesJson.put(dateJson);
+                }
+                manifest.put("ecdcStudentDates", ecdcDatesJson);
 
                 JSONArray keysJson = new JSONArray();
                 for (AnswerKeyEntity k : db.answerKeyDao().getAll(teacherId)) {
@@ -516,6 +531,25 @@ public class BackupManager {
                     if (!ecdcBatch.isEmpty()) {
                         db.ecdcResponseDao().insertAll(ecdcBatch);
                         restoredEcdcMarks = ecdcBatch.size();
+                    }
+                }
+
+                JSONArray ecdcDatesJson = manifest.optJSONArray("ecdcStudentDates");
+                if (ecdcDatesJson != null) {
+                    List<EcdcStudentDateEntity> dateBatch = new ArrayList<>();
+                    for (int k = 0; k < ecdcDatesJson.length(); k++) {
+                        JSONObject dateJson = ecdcDatesJson.getJSONObject(k);
+                        String dateClassId = classroomIdToLocalClassId.get(dateJson.optInt("classroomId", -1));
+                        if (dateClassId == null) continue;
+                        EcdcStudentDateEntity row = new EcdcStudentDateEntity();
+                        row.classId = dateClassId;
+                        row.lrn = dateJson.getString("lrn");
+                        row.period = dateJson.getString("period");
+                        row.dateEpoch = dateJson.getLong("dateEpoch");
+                        dateBatch.add(row);
+                    }
+                    if (!dateBatch.isEmpty()) {
+                        db.ecdcStudentDateDao().insertAll(dateBatch);
                     }
                 }
 
