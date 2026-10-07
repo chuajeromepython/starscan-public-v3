@@ -121,7 +121,7 @@ Each teacher's data (classes, assessments, answer keys, quizzes, ECDC marks) is 
 
 ### Supported sheet types
 
-Templates for `ZPH30`, `ZPH40`, `ZPH50` and `ZPH60` ship in `app/src/main/assets/templates/` as JSON.
+Templates for `ZPH40` and `ZPH60` ship in `app/src/main/assets/templates/` as JSON.
 
 **In the UI you can currently create assessments with `ZPH40` (40 items) and `ZPH60` (60 items). Quizzes are restricted to `ZPH40`.** The `ZPH30` and `ZPH50` templates exist but are not offered when creating an assessment.
 
