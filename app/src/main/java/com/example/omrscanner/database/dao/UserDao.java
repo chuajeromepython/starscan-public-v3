@@ -31,6 +31,14 @@ public interface UserDao {
     @Query("SELECT * FROM users WHERE is_active = 1 LIMIT 1")
     UserEntity getActiveUser();
 
+    @Query("UPDATE users SET profile_photo_path = :path WHERE userId = :userId")
+    void updateProfilePhotoPath(int userId, String path);
+
+    /** Latest stored photo path for this server account, across all of its rows. */
+    @Query("SELECT profile_photo_path FROM users WHERE userId = :userId "
+            + "AND profile_photo_path IS NOT NULL ORDER BY id DESC LIMIT 1")
+    String getProfilePhotoPathForUserId(int userId);
+
     // This prevents two or more users getting 1s
     @Query("UPDATE users SET is_active = 0")
     void deactivateAll();

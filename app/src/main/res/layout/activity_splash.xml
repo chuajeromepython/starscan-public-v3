@@ -210,10 +210,10 @@
     <!-- STARS logo (replace @mipmap/stars_logo_foreground with your asset) -->
     <ImageView
         android:id="@+id/logoImage"
-        android:layout_width="300dp"
+        android:layout_width="220dp"
         android:layout_height="wrap_content"
         android:adjustViewBounds="true"
-        android:src="@mipmap/stars_16k_foreground"
+        android:src="@mipmap/splash_logo_full"
         android:contentDescription="STARS logo"
         android:layout_marginBottom="14dp"
         app:layout_constraintBottom_toTopOf="@id/accentBar"

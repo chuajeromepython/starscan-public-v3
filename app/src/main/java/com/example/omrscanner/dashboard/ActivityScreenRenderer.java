@@ -53,7 +53,8 @@ public class ActivityScreenRenderer {
             TextView scansTotalCount,
             ActivityFolder selectedActivity,
             String classId,
-            String activityId) {
+            String activityId,
+            boolean isQuiz) {
 
         activityScanList.removeAllViews();
 
@@ -67,7 +68,7 @@ public class ActivityScreenRenderer {
             activityScansEmpty.setVisibility(View.GONE);
             for (int i = 0; i < scans.size(); i++) {
                 activityScanList.addView(createScanCard(scans.get(i), i,
-                        selectedActivity, classId, activityId));
+                        selectedActivity, classId, activityId, isQuiz));
             }
         } else {
             scansHeader.setVisibility(View.GONE);
@@ -77,8 +78,8 @@ public class ActivityScreenRenderer {
     }
 
     private View createScanCard(ScanEntry scan, int index,
-            ActivityFolder selectedActivity,
-            final String classId, final String activityId) {
+                                ActivityFolder selectedActivity,
+                                final String classId, final String activityId, final boolean isQuiz) {
 
         LinearLayout card = new LinearLayout(activity);
         card.setOrientation(LinearLayout.HORIZONTAL);
@@ -213,6 +214,7 @@ public class ActivityScreenRenderer {
             intent.putExtra(ScanDetailActivity.EXTRA_ACTIVITY_ID, activityId);
             intent.putExtra(ScanDetailActivity.EXTRA_SCAN_INDEX, index);
             intent.putExtra(ScanDetailActivity.EXTRA_SCAN_NUMBER, stableNumber);
+            intent.putExtra(com.example.omrscanner.DashboardActivity.EXTRA_IS_QUIZ, isQuiz);
             activity.startActivity(intent);
         });
 

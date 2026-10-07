@@ -2,6 +2,7 @@ package com.example.omrscanner.database;
 
 import com.example.omrscanner.database.entities.AnswerKeyEntity;
 import com.example.omrscanner.database.entities.AssessmentEntity;
+import com.example.omrscanner.database.entities.QuizEntity;
 import com.example.omrscanner.database.entities.ClassEntity;
 import com.example.omrscanner.database.entities.ScanEntity;
 import com.example.omrscanner.models.ActivityFolder;
@@ -192,16 +193,17 @@ public final class DataMapper {
      * Create a new {@link AnswerKeyEntity} from raw fields.
      * Generates a 7-character UUID and sets timestamps automatically.
      *
+     * @param teacherId  owning teacher — the signed-in teacher creating this key
      * @param name       display name, e.g. "Midterm Science Q1"
      * @param schoolYear e.g. "2025-2026"
      * @param sheetType  e.g. "ZPH50"
      * @param answers    comma-separated answers, e.g. "A,B,C,D,..."
      */
-    public static AnswerKeyEntity toAnswerKeyEntity(String name, String schoolYear,
-            String sheetType, String answers) {
+    public static AnswerKeyEntity toAnswerKeyEntity(int teacherId, String name, String schoolYear,
+                                                    String sheetType, String answers) {
         // 7-char short UUID — consistent with AssessmentEntity / ClassEntity style
         String id = UUID.randomUUID().toString().replace("-", "").substring(0, 7);
-        return new AnswerKeyEntity(id, name, schoolYear, sheetType, answers);
+        return new AnswerKeyEntity(id, teacherId, name, schoolYear, sheetType, answers);
     }
 
     /**
@@ -252,6 +254,46 @@ public final class DataMapper {
      *
      * @return map of scan DB id -> permanent scan number (1-based).
      */
+    public static ScanEntry toScanEntry(com.example.omrscanner.database.entities.QuizScanEntity entity,
+                                        Map<Integer, String> answers) {
+        ScanEntry scan = new ScanEntry();
+        scan.setLrn(entity.studentLrn);
+        boolean hasRealScore = (entity.score != null);
+        scan.setScore(hasRealScore ? entity.score : entity.detectedBubbles);
+        scan.setScored(hasRealScore);
+        scan.setNumItems(entity.numItems);
+        scan.setImagePath(entity.imagePath);
+        scan.setOverlayImagePath(entity.overlayImagePath);
+        scan.setKeyReferenceImagePath(entity.keyReferenceImagePath);
+        scan.setTimestamp(entity.timestamp);
+        scan.setAnswers(answers != null ? answers : new LinkedHashMap<>());
+        return scan;
+    }
+
+    public static Map<Integer, String> toQuizAnswerMap(
+            List<com.example.omrscanner.database.entities.QuizScanAnswerEntity> answerEntities) {
+        Map<Integer, String> map = new LinkedHashMap<>();
+        if (answerEntities != null) {
+            for (com.example.omrscanner.database.entities.QuizScanAnswerEntity a : answerEntities) {
+                map.put(a.itemNumber, a.answer);
+            }
+        }
+        return map;
+    }
+
+    public static Map<Integer, Integer> computeQuizScanNumbers(
+            List<com.example.omrscanner.database.entities.QuizScanEntity> scans) {
+        Map<Integer, Integer> numbers = new LinkedHashMap<>();
+        if (scans == null) return numbers;
+        List<com.example.omrscanner.database.entities.QuizScanEntity> byInsertionOrder =
+                new java.util.ArrayList<>(scans);
+        byInsertionOrder.sort((a, b) -> Integer.compare(a.id, b.id));
+        for (int i = 0; i < byInsertionOrder.size(); i++) {
+            numbers.put(byInsertionOrder.get(i).id, i + 1);
+        }
+        return numbers;
+    }
+
     public static Map<Integer, Integer> computeScanNumbers(List<ScanEntity> scans) {
         Map<Integer, Integer> numbers = new LinkedHashMap<>();
         if (scans == null) return numbers;
@@ -261,5 +303,33 @@ public final class DataMapper {
             numbers.put(byInsertionOrder.get(i).id, i + 1);
         }
         return numbers;
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // QUIZ  ↔  ActivityFolder  (quiz "term" is stashed in assessmentType)
+    // ═════════════════════════════════════════════════════════════════════════
+
+    public static QuizEntity toQuizEntity(ActivityFolder q, String classId) {
+        QuizEntity entity = new QuizEntity(q.getId(), classId, q.getName(),
+                q.getAssessmentType(), q.getExamDate());
+        entity.sheetType = q.getSheetType(); // overrides the constructor's "ZPH40" default with e.g. "ZPH40 (30 Items)"
+        entity.createdAt = q.getCreatedAt() > 0 ? q.getCreatedAt() : System.currentTimeMillis();
+        entity.examDateEpoch = q.getExamDateEpoch() > 0 ? q.getExamDateEpoch() : entity.createdAt;
+        entity.updatedAt = System.currentTimeMillis();
+        entity.answerKeyId = q.getAnswerKeyId();
+        return entity;
+    }
+
+    public static ActivityFolder toActivityFolder(com.example.omrscanner.database.entities.QuizEntity entity) {
+        ActivityFolder q = new ActivityFolder();
+        q.setId(entity.id);
+        q.setName(entity.name);
+        q.setSheetType(entity.sheetType);
+        q.setExamDate(entity.examDate);
+        q.setExamDateEpoch(entity.examDateEpoch);
+        q.setCreatedAt(entity.createdAt);
+        q.setAnswerKeyId(entity.answerKeyId);
+        q.setAssessmentType(entity.term); // term reuses this field in-memory
+        return q;
     }
 }

@@ -37,6 +37,7 @@ import com.example.omrscanner.dashboard.ClassExporter;
 import com.example.omrscanner.dashboard.ClassScreenRenderer;
 import com.example.omrscanner.dashboard.DashboardDialogs;
 import com.example.omrscanner.dashboard.DashboardUiHelper;
+import com.example.omrscanner.dashboard.EcdcScreenRenderer;
 import com.example.omrscanner.dashboard.HomeScreenRenderer;
 import com.example.omrscanner.database.DataMapper;
 import com.example.omrscanner.database.OMRRepository;
@@ -100,6 +101,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     public static final String EXTRA_SHEET_TYPE = "sheet_type";
     public static final String EXTRA_CLASS_ID = "class_id";
     public static final String EXTRA_ACTIVITY_ID = "activity_id";
+    public static final String EXTRA_IS_QUIZ = "is_quiz";
     public static final String EXTRA_ANSWER_KEY_ID = "answer_key_id";
 
     // ── Screen names ──
@@ -110,6 +112,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private static final String SCREEN_ASSESSMENTS = "assessments";
     private static final String SCREEN_ANSWERKEYS = "answerkeys";
     private static final String SCREEN_SCANS = "scans";
+    private static final String SCREEN_QUIZZES = "quizzes";
+    private static final String SCREEN_ECD = "ecd";
+    private static final String SCREEN_ECD_CLASS = "ecd_class";
+    private static final String SCREEN_ECD_STUDENT = "ecd_student";
 
     // ── Sort constants (delegated to renderers, kept here for initialisation) ──
     private static final String CLASS_SORT_NEWEST = HomeScreenRenderer.CLASS_SORT_NEWEST;
@@ -124,9 +130,14 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
     private String currentScreen = SCREEN_HOME;
     private String screenBeforeChromeTab = SCREEN_HOME;
+    private String lastEcdScreen = SCREEN_ECD;
     private boolean activityOpenedFromAssessmentsTab = false;
+    private boolean activityOpenedFromQuizzesTab = false;
     private List<ClassFolder> classFolders = new ArrayList<>();
     private ClassFolder selectedClass = null;
+    // Home's class selection can be clobbered by ECDC-tab navigation (they share
+    // selectedClass). This snapshot lets Home restore its own class after that.
+    private ClassFolder homeSelectedClassSnapshot = null;
     private ActivityFolder selectedActivity = null;
     private String selectedSheetType = null;
     private String selectedSheetFilter = null;
@@ -140,6 +151,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private List<AnswerKeyEntity> answerKeys = new ArrayList<>();
     private Map<String, AnswerKeyLinkInfo> answerKeyLinkInfo = new java.util.HashMap<>();
     private Map<String, List<AnswerKeyLinkedAssessment>> answerKeyLinkedAssessments = new java.util.HashMap<>();
+    private Map<String, List<com.example.omrscanner.database.projections.AnswerKeyLinkedQuiz>> answerKeyLinkedQuizzes = new java.util.HashMap<>();
 
     private String classSearchQuery = "";
     private String selectedClassGradeFilter = null;
@@ -147,17 +159,61 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private String selectedClassSort = CLASS_SORT_NEWEST;
     private String homeGroupBy = "GRADE"; // GRADE or YEAR
 
+    private String ecdSearchQuery = "";
+    private String selectedEcdGradeFilter = null;
+    private String selectedEcdSchoolYearFilter = null;
+    private String selectedEcdSort = CLASS_SORT_NEWEST;
+    private String ecdGroupBy = "GRADE"; // GRADE or YEAR
+    private boolean ecdFilterPanelVisible = false;
+
+    // ECDC class screen state: which period is selected, the in-progress
+    // student search, and which class this state currently belongs to (so
+    // switching classes resets it instead of leaking a stale period/query).
+    private static final String ECD_PERIOD_BOSY = "BOSY"; // Beginning of School Year
+    private static final String ECD_PERIOD_MOSY = "MOSY"; // Middle of School Year
+    private static final String ECD_PERIOD_EOSY = "EOSY"; // End of School Year
+    private String selectedEcdPeriod = null;
+    private String ecdStudentSearchQuery = "";
+    private String ecdStudentSearchLoadedForClassId = null;
+    private int ecdStudentSearchGeneration = 0;
+
+    // ECDC student checklist screen state. The "saved" map mirrors what's in the
+    // ecdc_responses table; the "draft" map is what's currently on screen. They
+    // differ exactly when there are unsaved changes (competency id -> STATUS_*).
+    private String selectedEcdStudentLrn = null;
+    private String selectedEcdStudentName = null;
+    // Class the open student belongs to. selectedClass is shared with Home, so
+    // this is how a stale student is detected after the user roams other tabs.
+    private String ecdStudentClassId = null;
+    private Integer selectedEcdDomainId = null;
+    private List<com.example.omrscanner.database.entities.EcdcDomainEntity> ecdDomains = new ArrayList<>();
+    private List<com.example.omrscanner.database.entities.EcdcCompetencyEntity> ecdCompetencies = new ArrayList<>();
+    private Map<Integer, String> ecdSavedStatuses = new java.util.HashMap<>();
+    private Map<Integer, String> ecdDraftStatuses = new java.util.HashMap<>();
+    // competency id -> "P"/"O"/"R". Only holds entries for Present marks that have a type.
+    private Map<Integer, String> ecdSavedPresentTypes = new java.util.HashMap<>();
+    private Map<Integer, String> ecdDraftPresentTypes = new java.util.HashMap<>();
+    private int ecdChecklistLoadGeneration = 0;
+
     private String assessmentSearchQuery = "";
     private String selectedAssessmentSort = ASSESSMENT_SORT_NEWEST;
     private String classGroupBy = "SHEET"; // SHEET or TYPE
     private String selectedClassTypeFilter = null;
 
     private String myAssessmentsSearchQuery = "";
+    private String myQuizzesSearchQuery = "";
+    private Runnable pendingMyQuizzesSearchRunnable;
     private String selectedMyAssessmentsSort = ASSESSMENT_SORT_NEWEST;
     private String myAssessmentsGroupBy = "SHEET"; // SHEET, TYPE, or CLASS
     private String selectedMyAssessmentsSheetFilter = null;
     private String selectedMyAssessmentsTypeFilter = null;
     private String selectedMyAssessmentsClassFilter = null;
+
+    private String selectedMyQuizzesSort = ASSESSMENT_SORT_NEWEST;
+    private String myQuizzesGroupBy = "SHEET"; // SHEET, TYPE, or CLASS
+    private String selectedMyQuizzesSheetFilter = null;
+    private String selectedMyQuizzesTypeFilter = null;
+    private String selectedMyQuizzesClassFilter = null;
 
     private String answerKeysSearchQuery = "";
     private String selectedAnswerKeysSort = ASSESSMENT_SORT_NEWEST;
@@ -167,10 +223,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private String answerKeysGroupBy = "SHEET"; // SHEET or STATUS
 
     private int homeQueryGeneration = 0;
+    private int ecdQueryGeneration = 0;
     private int assessmentQueryGeneration = 0;
 
     private final Handler searchDebounceHandler = new Handler(Looper.getMainLooper());
     private Runnable pendingHomeSearchRunnable;
+    private Runnable pendingEcdSearchRunnable;
+    private Runnable pendingEcdStudentSearchRunnable;
     private Runnable pendingAssessmentSearchRunnable;
     private Runnable pendingMyAssessmentsSearchRunnable;
     private Runnable pendingAnswerKeysSearchRunnable;
@@ -189,6 +248,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private DashboardUiHelper ui;
     private HomeScreenRenderer homeRenderer;
     private ClassScreenRenderer classRenderer;
+    private EcdcScreenRenderer ecdcRenderer;
     private ActivityScreenRenderer activityRenderer;
     private DashboardDialogs dialogs;
 
@@ -196,20 +256,21 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     // VIEWS
     // ═══════════════════════════════════════════════════════════════
 
-    private ImageButton btnBack, btnUpload, btnHelp;
+    private ImageButton btnBack, btnUpload, btnGoToUsers;
     private TextView topBarTitle, topBarBadge;
     private TextView tvTeacherName;
     private TextView tvLastSynced;
     private LinearLayout teacherNameRow;
 
-    private View screenHome, screenAssessments, screenAnswerKeys, screenScans;
+    private View screenHome, screenAssessments, screenAnswerKeys, screenScans, screenQuizzes, screenECD, screenEcdClass, screenEcdStudent;
     private ScrollView screenClass, screenActivity, screenUser;
 
     private android.widget.FrameLayout bottomNav;
-    private LinearLayout navHomeTab, navUserTab, navAssessmentsTab, navAnswerKeysTab, navScansTab;
-    private ImageView navHomeIcon, navUserIcon, navAssessmentsIcon, navAnswerKeysIcon, navScansIcon;
-    private TextView navHomeLabel, navUserLabel, navAssessmentsLabel, navAnswerKeysLabel, navScansLabel;
+    private LinearLayout navHomeTab, navUserTab, navAssessmentsTab, navAnswerKeysTab, navScansTab, navQuizzesTab, navECDTab;
+    private ImageView navHomeIcon, navUserIcon, navAssessmentsIcon, navAnswerKeysIcon, navScansIcon, navQuizzesIcon, navECDIcon;
+    private TextView navHomeLabel, navUserLabel, navAssessmentsLabel, navAnswerKeysLabel, navScansLabel, navQuizzesLabel, navECDLabel;
 
+    private TextView homeAllClassesCount;
     private LinearLayout scansAllList, scansAllEmpty;
     private TextView scansAllCount, scansAllSummaryCount, scansAllSummaryTeacher;
     private ScansScreenRenderer scansRenderer;
@@ -241,14 +302,39 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private LinearLayout userRescanRow;
     private LinearLayout userBackupRow, userRestoreRow;
     private LinearLayout userCalibrateProModeRow, userResetProModeRow;
+    private LinearLayout userHelpFaqRow;
     private BackupManager backupManager;
     private androidx.activity.result.ActivityResultLauncher<String> createBackupFileLauncher;
     private androidx.activity.result.ActivityResultLauncher<String[]> openBackupFileLauncher;
+    private androidx.activity.result.ActivityResultLauncher<String> pickProfilePhotoLauncher;
+    private View userAvatarContainer;
+    private ImageView userAvatarImage, userAvatarPlaceholder;
     private androidx.activity.result.ActivityResultLauncher<String> storagePermissionLauncher;
     private androidx.activity.result.ActivityResultLauncher<android.content.Intent> allFilesAccessLauncher;
     private Runnable pendingStorageAction;
 
     private LinearLayout homeEmpty, homeClassList;
+    private LinearLayout ecdAllList, ecdAllEmpty;
+    private TextView ecdSummaryCount, ecdSummaryTypes, ecdAllCount;
+    private TextView ecdClassTeacherLabel;
+    private TextView ecdClassStudentCount;
+    private EditText ecdSearchInput;
+    private TextView ecdClassSortPicker;
+    private LinearLayout ecdFilterPanel, ecdGroupSwitcher, ecdGradeFilterBlock, ecdSchoolYearFilterBlock;
+    private LinearLayout ecdGradeFilterChips, ecdSchoolYearFilterChips;
+    private android.widget.ImageView ecdFilterToggle;
+    // ECDC class screen: period picker -> student search -> result cards.
+    private LinearLayout ecdPeriodSwitcher, ecdStudentSearchBlock, ecdStudentResultsList;
+    private EditText ecdStudentSearchInput;
+    private TextView ecdStudentResultsEmpty;
+    // ECDC student checklist screen: domain pills -> competency cards -> Save.
+    private LinearLayout ecdDomainSwitcher, ecdCompetencyList, ecdSaveBar;
+    private TextView ecdStudentName, ecdStudentMeta, ecdStudentProgress;
+    // Date button on the student card. The picked date is what gets uploaded as last_ticked_at.
+    private View ecdStudentDateButton;
+    private TextView ecdStudentDateText;
+    private Long ecdStudentDateMillis = null;
+    private TextView ecdDomainHint, ecdDomainTitle, ecdSaveButton;
     private TextView homeSummaryClassCount, homeSummaryAssessmentCount;
     private EditText homeClassSearchInput;
     private TextView homeClassSortPicker;
@@ -259,6 +345,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private boolean homeFilterPanelVisible = false;
 
     private TextView classTeacherLabel, classNameLabel, classActivityCount, classStudentSyncSubtitle, homeTeacherLabel;
+    private TextView ecdSummaryTeacher;
     private LinearLayout classEmpty, classActivityList, classSheetTabs, classGroupSwitcher;
     private TextView classAssessmentCount;
     private EditText classAssessmentSearchInput;
@@ -275,6 +362,16 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private LinearLayout myAssessmentsFilterPanel;
     private android.widget.ImageView myAssessmentsFilterToggle;
     private boolean myAssessmentsFilterPanelVisible = false;
+
+    private LinearLayout quizzesAllList, quizzesAllEmpty;
+    private TextView quizzesAllCount;
+    private TextView quizzesSummaryTeacher, quizzesSummaryCount;
+    private LinearLayout myQuizzesGroupSwitcher, myQuizzesSheetTabs;
+    private EditText myQuizzesSearchInput;
+    private TextView myQuizzesSortPicker;
+    private LinearLayout myQuizzesFilterPanel;
+    private android.widget.ImageView myQuizzesFilterToggle;
+    private boolean myQuizzesFilterPanelVisible = false;
 
     private LinearLayout answerKeysAllList, answerKeysAllEmpty;
     private TextView answerKeysAllCount;
@@ -293,6 +390,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private boolean answerKeysFilterPanelVisible = false;
     private View classAssessmentsHeaderAddBtn;
     private View assessmentsHeaderAddBtn;
+    private View quizzesHeaderAddBtn;
 
     private CardView scanCtaCard;
     private LinearLayout scansHeader, activityScanList, activityScansEmpty;
@@ -319,10 +417,15 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private static final String SYNC_PATH = "/api/classrooms/sync"; // route to the STARS system (classes)
     private static final String ASSESSMENT_SYNC_PATH = "/api/students/sync"; // (student_lrn)
     private static final String ASSESSMENTS_SYNC_PATH = "/api/assessment/sync"; // pulls a teacher's assessments + answer keys (user_id)
+    private static final String ECDC_DOMAINS_SYNC_PATH = "/api/ecdc/domains"; // pulls the ECDC domain + competency reference list (GET, not classroom-scoped)
     private static final String UPLOAD_ASSESSMENT_PATH = "/api/upload/assessment"; // multipart CSV upload
+    private static final String ECDC_UPLOAD_PATH = "/api/ecdc/upload"; // POST: individual + mass ECDC results (same JSON shape)
     /** Matches Toast.LENGTH_SHORT's on-screen duration — used to delay a UI refresh until the sync toast has finished showing. */
     private static final long TOAST_SHORT_DELAY_MS = 2000;
     private static final String SYNC_PREFS = "omr_sync_prefs";
+    // ECDC class screen: the last few students opened from the search, per class.
+    private static final String ECD_RECENT_PREFS = "ecd_recent_students_prefs";
+    private static final int ECD_RECENT_MAX = 5;
     private static final String SYNC_PREFS_KEY_PREFIX = "last_sync_millis_";
     private static final String PREF_LAST_GLOBAL_SYNC = "last_global_sync_millis";
     private static final long STUDENT_SYNC_STALE_MS = 24L * 60 * 60 * 1000; // 24 hours
@@ -351,10 +454,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     runOnUiThread(() -> Toast.makeText(this, "Backing up…", Toast.LENGTH_SHORT).show());
                     backupManager.exportBackup(uri, new BackupManager.ExportCallback() {
                         @Override
-                        public void onSuccess(int assessmentCount, int scanCount, int answerKeyCount) {
+                        public void onSuccess(int assessmentCount, int scanCount, int answerKeyCount,
+                                              int quizCount, int quizScanCount, int ecdcMarkCount) {
                             runOnUiThread(() -> ui.showToast("Backup saved ✓  (" + assessmentCount
-                                    + " assessment(s), " + scanCount + " scan(s), " + answerKeyCount
-                                    + " answer key(s)) — keep this file safe, you'll need it to restore."));
+                                    + " assessment(s), " + scanCount + " scan(s), " + quizCount
+                                    + " quiz(zes), " + quizScanCount + " quiz scan(s), " + answerKeyCount
+                                    + " answer key(s), " + ecdcMarkCount + " ECDC mark(s)) — keep this file safe, you'll need it to restore."));
                         }
 
                         @Override
@@ -403,6 +508,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     }
                 });
 
+        pickProfilePhotoLauncher = registerForActivityResult(
+                new androidx.activity.result.contract.ActivityResultContracts.GetContent(),
+                uri -> {
+                    if (uri != null) saveProfilePhoto(uri);
+                });
+
         openBackupFileLauncher = registerForActivityResult(
                 new androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
                 uri -> {
@@ -412,16 +523,34 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                         backupManager.restoreBackup(uri, new BackupManager.RestoreCallback() {
                             @Override
                             public void onSuccess(int restoredAssessments, int restoredScans,
-                                                  int restoredAnswerKeys, int skippedAssessments,
-                                                  int failedExports) {
+                                                  int restoredAnswerKeys, int restoredQuizzes,
+                                                  int restoredQuizScans, int skippedAssessments,
+                                                  int skippedQuizzes, int failedExports,
+                                                  int restoredEcdcMarks, int skippedEcdcMarks) {
                                 runOnUiThread(() -> {
                                     ui.showToast("Restore complete ✓  (" + restoredAssessments
                                             + " assessment(s), " + restoredScans + " scan(s), "
-                                            + restoredAnswerKeys + " answer key(s))");
+                                            + restoredQuizzes + " quiz(zes), " + restoredQuizScans
+                                            + " quiz scan(s), " + restoredAnswerKeys + " answer key(s), "
+                                            + restoredEcdcMarks + " ECDC mark(s))");
                                     if (skippedAssessments > 0) {
                                         ui.showErrorDialog("Some data was skipped",
                                                 skippedAssessments + " assessment(s) were skipped because their "
                                                         + "class isn't synced to your account anymore.");
+                                    }
+                                    if (skippedQuizzes > 0) {
+                                        ui.showErrorDialog("Some quizzes were skipped",
+                                                skippedQuizzes + " quiz(zes) were skipped because their "
+                                                        + "class isn't synced to your account anymore. Quizzes "
+                                                        + "have no server copy, so re-syncing the class won't "
+                                                        + "bring them back — sync the class first, then restore "
+                                                        + "this backup again.");
+                                    }
+                                    if (skippedEcdcMarks > 0) {
+                                        ui.showErrorDialog("Some ECDC marks were skipped",
+                                                skippedEcdcMarks + " ECDC mark(s) were skipped because their "
+                                                        + "class isn't synced to your account yet. Sync the "
+                                                        + "class first, then restore this backup again.");
                                     }
                                     if (failedExports > 0) {
                                         ui.showErrorDialog("Some assessments couldn't be prepared for upload",
@@ -488,6 +617,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         ui = new DashboardUiHelper(this);
         homeRenderer = new HomeScreenRenderer(this, ui);
         classRenderer = new ClassScreenRenderer(this, ui);
+        ecdcRenderer = new EcdcScreenRenderer(this, ui);
         activityRenderer = new ActivityScreenRenderer(this, ui);
         scansRenderer = new ScansScreenRenderer(this, ui);
         dialogs = new DashboardDialogs(this, ui, repo, this);
@@ -556,6 +686,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     // BACK HANDLER
     // ═══════════════════════════════════════════════════════════════
 
+    /** Where the "back" action from SCREEN_ACTIVITY should land, based on which tab opened it. */
+    private String getActivityBackScreen() {
+        if (activityOpenedFromQuizzesTab) return SCREEN_QUIZZES;
+        return activityOpenedFromAssessmentsTab ? SCREEN_ASSESSMENTS : SCREEN_CLASS;
+    }
+
     private void initBackHandler() {
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
@@ -566,10 +702,16 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     selectHomeTab();
                 } else if (SCREEN_ACTIVITY.equals(currentScreen)) {
                     selectedActivity = null;
-                    showScreen(activityOpenedFromAssessmentsTab ? SCREEN_ASSESSMENTS : SCREEN_CLASS);
+                    showScreen(getActivityBackScreen());
                 } else if (SCREEN_CLASS.equals(currentScreen)) {
                     selectedClass = null;
                     showScreen(SCREEN_HOME);
+                } else if (SCREEN_ECD_STUDENT.equals(currentScreen)) {
+                    // showScreen() asks about unsaved marks before actually leaving.
+                    showScreen(SCREEN_ECD_CLASS);
+                } else if (SCREEN_ECD_CLASS.equals(currentScreen)) {
+                    selectedClass = null;
+                    showScreen(SCREEN_ECD);
                 } else {
                     setEnabled(false);
                     getOnBackPressedDispatcher().onBackPressed();
@@ -585,7 +727,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private void initViews() {
         btnBack = findViewById(R.id.btnBack);
         btnUpload = findViewById(R.id.btnUpload);
-        btnHelp = findViewById(R.id.btnHelp);
+        btnGoToUsers = findViewById(R.id.btnGoToUsers);
         topBarTitle = findViewById(R.id.topBarTitle);
         topBarBadge = findViewById(R.id.topBarBadge);
         tvTeacherName = findViewById(R.id.tvTeacherName);
@@ -596,6 +738,29 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         screenAssessments = findViewById(R.id.screenAssessments);
         screenAnswerKeys = findViewById(R.id.screenAnswerKeys);
         screenScans = findViewById(R.id.screenScans);
+        screenQuizzes = findViewById(R.id.screenQuizzes);
+        screenECD = findViewById(R.id.screenECD);
+        screenEcdClass = findViewById(R.id.screenEcdClass);
+        ecdClassTeacherLabel = findViewById(R.id.ecdClassTeacherLabel);
+        ecdClassStudentCount = findViewById(R.id.ecdClassStudentCount);
+        ecdPeriodSwitcher = findViewById(R.id.ecdPeriodSwitcher);
+        ecdStudentSearchBlock = findViewById(R.id.ecdStudentSearchBlock);
+        ecdStudentSearchInput = findViewById(R.id.ecdStudentSearchInput);
+        ecdStudentResultsList = findViewById(R.id.ecdStudentResultsList);
+        ecdStudentResultsEmpty = findViewById(R.id.ecdStudentResultsEmpty);
+        screenEcdStudent = findViewById(R.id.screenEcdStudent);
+        ecdStudentName = findViewById(R.id.ecdStudentName);
+        ecdStudentMeta = findViewById(R.id.ecdStudentMeta);
+        ecdStudentProgress = findViewById(R.id.ecdStudentProgress);
+        ecdStudentDateButton = findViewById(R.id.ecdStudentDateButton);
+        ecdStudentDateText = findViewById(R.id.ecdStudentDateText);
+        ecdStudentDateButton.setOnClickListener(v -> pickEcdStudentDate());
+        ecdDomainSwitcher = findViewById(R.id.ecdDomainSwitcher);
+        ecdDomainHint = findViewById(R.id.ecdDomainHint);
+        ecdDomainTitle = findViewById(R.id.ecdDomainTitle);
+        ecdCompetencyList = findViewById(R.id.ecdCompetencyList);
+        ecdSaveBar = findViewById(R.id.ecdSaveBar);
+        ecdSaveButton = findViewById(R.id.ecdSaveButton);
         screenClass = findViewById(R.id.screenClass);
         screenActivity = findViewById(R.id.screenActivity);
         screenUser = findViewById(R.id.screenUser);
@@ -606,6 +771,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         navAssessmentsTab = findViewById(R.id.navAssessmentsTab);
         navAnswerKeysTab = findViewById(R.id.navAnswerKeysTab);
         navScansTab = findViewById(R.id.navScansTab);
+        navQuizzesTab = findViewById(R.id.navQuizzesTab);
+        navQuizzesIcon = findViewById(R.id.navQuizzesIcon);
+        navQuizzesLabel = findViewById(R.id.navQuizzesLabel);
+        navECDTab = findViewById(R.id.navECDTab);
+        navECDIcon = findViewById(R.id.navECDIcon);
+        navECDLabel = findViewById(R.id.navECDLabel);
         navHomeIcon = findViewById(R.id.navHomeIcon);
         navUserIcon = findViewById(R.id.navUserIcon);
         navAssessmentsIcon = findViewById(R.id.navAssessmentsIcon);
@@ -636,6 +807,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         scansAssessmentFilterBlock = findViewById(R.id.scansAssessmentFilterBlock);
         scansNeedsCorrectionFilterBlock = findViewById(R.id.scansNeedsCorrectionFilterBlock);
         userNameText = findViewById(R.id.userNameText);
+        userAvatarContainer = findViewById(R.id.userAvatarContainer);
+        userAvatarImage = findViewById(R.id.userAvatarImage);
+        userAvatarPlaceholder = findViewById(R.id.userAvatarPlaceholder);
+        userAvatarContainer.setOnClickListener(v -> pickProfilePhotoLauncher.launch("image/*"));
         userSchoolText = findViewById(R.id.userSchoolText);
         userLastSynced = findViewById(R.id.userLastSynced);
         userRescanRow = findViewById(R.id.userRescanRow);
@@ -643,6 +818,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         userRestoreRow = findViewById(R.id.userRestoreRow);
         userCalibrateProModeRow = findViewById(R.id.userCalibrateProModeRow);
         userResetProModeRow = findViewById(R.id.userResetProModeRow);
+        userHelpFaqRow = findViewById(R.id.userHelpFaqRow);
         userStatClasses = findViewById(R.id.userStatClasses);
         userStatAssessments = findViewById(R.id.userStatAssessments);
         userStatScans = findViewById(R.id.userStatScans);
@@ -668,10 +844,27 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         homeFilterPanel = findViewById(R.id.homeFilterPanel);
         homeFilterToggle = findViewById(R.id.homeFilterToggle);
         homeSummaryClassCount = findViewById(R.id.homeSummaryClassCount);
+        homeAllClassesCount = findViewById(R.id.homeAllClassesCount);
         homeSummaryAssessmentCount = findViewById(R.id.homeSummaryAssessmentCount);
+
+        ecdAllList = findViewById(R.id.ecdAllList);
+        ecdAllEmpty = findViewById(R.id.ecdAllEmpty);
+        ecdSummaryCount = findViewById(R.id.ecdSummaryCount);
+        ecdSummaryTypes = findViewById(R.id.ecdSummaryTypes);
+        ecdAllCount = findViewById(R.id.ecdAllCount);
+        ecdSearchInput = findViewById(R.id.ecdSearchInput);
+        ecdClassSortPicker = findViewById(R.id.ecdClassSortPicker);
+        ecdFilterPanel = findViewById(R.id.ecdFilterPanel);
+        ecdGroupSwitcher = findViewById(R.id.ecdGroupSwitcher);
+        ecdGradeFilterBlock = findViewById(R.id.ecdGradeFilterBlock);
+        ecdSchoolYearFilterBlock = findViewById(R.id.ecdSchoolYearFilterBlock);
+        ecdGradeFilterChips = findViewById(R.id.ecdGradeFilterChips);
+        ecdSchoolYearFilterChips = findViewById(R.id.ecdSchoolYearFilterChips);
+        ecdFilterToggle = findViewById(R.id.ecdFilterToggle);
 
         classTeacherLabel = findViewById(R.id.classTeacherLabel);
         homeTeacherLabel = findViewById(R.id.homeTeacherLabel);
+        ecdSummaryTeacher = findViewById(R.id.ecdSummaryTeacher);
         classNameLabel = findViewById(R.id.classNameLabel);
         classActivityCount = findViewById(R.id.classActivityCount);
         classStudentSyncSubtitle = findViewById(R.id.classStudentSyncSubtitle);
@@ -697,6 +890,18 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         myAssessmentsFilterPanel = findViewById(R.id.myAssessmentsFilterPanel);
         myAssessmentsFilterToggle = findViewById(R.id.myAssessmentsFilterToggle);
 
+        quizzesAllList = findViewById(R.id.quizzesAllList);
+        quizzesAllEmpty = findViewById(R.id.quizzesAllEmpty);
+        quizzesAllCount = findViewById(R.id.quizzesAllCount);
+        quizzesSummaryTeacher = findViewById(R.id.quizzesSummaryTeacher);
+        quizzesSummaryCount = findViewById(R.id.quizzesSummaryCount);
+        myQuizzesGroupSwitcher = findViewById(R.id.myQuizzesGroupSwitcher);
+        myQuizzesSheetTabs = findViewById(R.id.myQuizzesSheetTabs);
+        myQuizzesSearchInput = findViewById(R.id.myQuizzesSearchInput);
+        myQuizzesSortPicker = findViewById(R.id.myQuizzesSortPicker);
+        myQuizzesFilterPanel = findViewById(R.id.myQuizzesFilterPanel);
+        myQuizzesFilterToggle = findViewById(R.id.myQuizzesFilterToggle);
+
         answerKeysAllList = findViewById(R.id.answerKeysAllList);
         answerKeysAllEmpty = findViewById(R.id.answerKeysAllEmpty);
         answerKeysAllCount = findViewById(R.id.answerKeysAllCount);
@@ -717,6 +922,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         classSyncAssessmentsRow = findViewById(R.id.classSyncAssessmentsRow);
         classAssessmentsHeaderAddBtn = findViewById(R.id.classAssessmentsHeaderAddBtn);
         assessmentsHeaderAddBtn = findViewById(R.id.assessmentsHeaderAddBtn);
+        quizzesHeaderAddBtn = findViewById(R.id.quizzesHeaderAddBtn);
         scanCtaCard = findViewById(R.id.scanCtaCard);
         scanCtaSub = findViewById(R.id.scanCtaSub);
         scansHeader = findViewById(R.id.scansHeader);
@@ -744,7 +950,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
         userRescanRow.setOnClickListener(v -> showQrGuide());
         userBackupRow.setOnClickListener(v -> {
-            String fileName = "omrscanner_backup_"
+            String teacherPart = (globalTeacherName != null && !globalTeacherName.trim().isEmpty())
+                    ? globalTeacherName.trim().replaceAll("[^a-zA-Z0-9 _-]", "").replaceAll("\\s+", "_")
+                    : "unknown_teacher";
+            String fileName = teacherPart + "_backup_"
                     + new SimpleDateFormat("yyyy-MM-dd_HHmm", Locale.getDefault()).format(new java.util.Date())
                     + ".zip";
             createBackupFileLauncher.launch(fileName);
@@ -752,16 +961,32 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         userRestoreRow.setOnClickListener(v -> openBackupFileLauncher.launch(new String[]{"application/zip"}));
         userCalibrateProModeRow.setOnClickListener(v -> showProModeCalibrationGuide());
         userResetProModeRow.setOnClickListener(v -> showResetProModeDialog());
+        userHelpFaqRow.setOnClickListener(v -> showFaqDialog());
 
         navHomeTab.setOnClickListener(v -> selectHomeTab());
         navUserTab.setOnClickListener(v -> selectUserTab());
         navAssessmentsTab.setOnClickListener(v -> selectAssessmentsTab());
         navAnswerKeysTab.setOnClickListener(v -> selectAnswerKeysTab());
         navScansTab.setOnClickListener(v -> selectScansTab());
+        navQuizzesTab.setOnClickListener(v -> selectQuizzesTab());
+        navECDTab.setOnClickListener(v -> selectECDTab());
 
         btnBack.setOnClickListener(v -> navigateBack());
         btnUpload.setOnClickListener(v -> dialogs.showGlobalUploadClassDialog());
-        btnHelp.setOnClickListener(v -> showFaqDialog());
+        btnUpload.setElevation(0f);
+        btnUpload.setStateListAnimator(null);
+        btnGoToUsers.setOnClickListener(v -> selectUserTab());
+        // The 2dp elevation casts a shadow that shows through the translucent circle
+        // and renders as a darker octagon inside the border, so this button casts none.
+        btnGoToUsers.setElevation(0f);
+        btnGoToUsers.setStateListAnimator(null);
+        btnGoToUsers.setOutlineProvider(new android.view.ViewOutlineProvider() {
+            @Override
+            public void getOutline(View view, android.graphics.Outline outline) {
+                outline.setOval(0, 0, view.getWidth(), view.getHeight());
+            }
+        });
+        btnGoToUsers.setClipToOutline(true);
         fabMain.setOnClickListener(v -> toggleFabMenu());
         fabScrim.setOnClickListener(v -> closeFabMenu());
 
@@ -783,6 +1008,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         classAssessmentsHeaderAddBtn.setOnClickListener(v -> dialogs.showNewActivityDialog());
 
         assessmentsHeaderAddBtn.setOnClickListener(v -> showAssessmentClassPickerDialog());
+        quizzesHeaderAddBtn.setOnClickListener(v -> showQuizClassPickerDialog());
 
         fabTestRow.setOnClickListener(v -> {
             closeFabMenu();
@@ -797,6 +1023,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
         findViewById(R.id.homeSyncClassRow).setOnClickListener(v -> onSyncClicked());
         findViewById(R.id.classSyncStudentsRow).setOnClickListener(v -> onAssessmentSyncClicked());
+        findViewById(R.id.ecdSyncStudentsRow).setOnClickListener(v -> onEcdcDomainsSyncClicked());
+        findViewById(R.id.ecdUploadButton).setOnClickListener(v -> onEcdcUploadClicked());
+        findViewById(R.id.ecdSummaryButton).setOnClickListener(v -> showEcdcSummaryCard());
+        ecdSaveButton.setOnClickListener(v -> saveEcdcDraft(null));
 
         fabAssessmentSyncRow.setOnClickListener(v -> {
             closeFabMenu();
@@ -805,15 +1035,23 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
         //teacherNameRow.setOnClickListener(v -> dialogs.showEditTeacherNameDialog());
 
-        breadcrumbRoot.setOnClickListener(v -> {
+        breadcrumbRoot.setOnClickListener(v -> runAfterEcdChecklistExitCheck(() -> {
+            if (SCREEN_ACTIVITY.equals(currentScreen) && activityOpenedFromQuizzesTab) {
+                // Quiz trail root = the Quizzes tab list
+                selectedActivity = null;
+                showScreen(SCREEN_QUIZZES);
+                return;
+            }
             selectedClass = null;
             selectedActivity = null;
-            showScreen(SCREEN_HOME);
-        });
+            showScreen(isEcdFamily(currentScreen) ? SCREEN_ECD : SCREEN_HOME);
+        }));
         breadcrumbClass.setOnClickListener(v -> {
             if (SCREEN_ACTIVITY.equals(currentScreen)) {
                 selectedActivity = null;
-                showScreen(activityOpenedFromAssessmentsTab ? SCREEN_ASSESSMENTS : SCREEN_CLASS);
+                showScreen(getActivityBackScreen());
+            } else if (SCREEN_ECD_STUDENT.equals(currentScreen)) {
+                showScreen(SCREEN_ECD_CLASS);
             }
         });
         // Go directly to camera — no scan method picker
@@ -835,6 +1073,37 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             public void afterTextChanged(Editable s) {
                 classSearchQuery = s != null ? s.toString().trim() : "";
                 scheduleHomeSearchRefresh();
+            }
+        });
+
+        ecdSearchInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int st, int c, int a) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int st, int b, int c) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                ecdSearchQuery = s != null ? s.toString().trim() : "";
+                scheduleEcdSearchRefresh();
+            }
+        });
+        ecdStudentSearchInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int st, int c, int a) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int st, int b, int c) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                ecdStudentSearchQuery = s != null ? s.toString().trim() : "";
+                scheduleEcdStudentSearchRefresh();
             }
         });
         classAssessmentSearchInput.addTextChangedListener(new TextWatcher() {
@@ -866,6 +1135,17 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             public void afterTextChanged(Editable s) {
                 myAssessmentsSearchQuery = s != null ? s.toString().trim() : "";
                 scheduleMyAssessmentsSearchRefresh();
+            }
+        });
+
+        myQuizzesSearchInput.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int st, int c, int a) { }
+            @Override public void onTextChanged(CharSequence s, int st, int b, int c) { }
+            @Override public void afterTextChanged(Editable s) {
+                myQuizzesSearchQuery = s != null ? s.toString().trim() : "";
+                if (pendingMyQuizzesSearchRunnable != null) searchDebounceHandler.removeCallbacks(pendingMyQuizzesSearchRunnable);
+                pendingMyQuizzesSearchRunnable = () -> { if (SCREEN_QUIZZES.equals(currentScreen)) renderQuizzesScreen(); };
+                searchDebounceHandler.postDelayed(pendingMyQuizzesSearchRunnable, 300);
             }
         });
 
@@ -907,6 +1187,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     updateSortPickers();
                     if (SCREEN_HOME.equals(currentScreen)) renderHomeScreen();
                 }));
+        ecdClassSortPicker.setOnClickListener(v ->
+                homeRenderer.showClassSortDialog(selectedEcdSort, key -> {
+                    selectedEcdSort = key;
+                    updateSortPickers();
+                    if (SCREEN_ECD.equals(currentScreen)) renderEcdScreen();
+                }));
         classAssessmentSortPicker.setOnClickListener(v ->
                 classRenderer.showAssessmentSortDialog(selectedAssessmentSort, key -> {
                     selectedAssessmentSort = key;
@@ -918,6 +1204,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     selectedMyAssessmentsSort = key;
                     updateSortPickers();
                     if (SCREEN_ASSESSMENTS.equals(currentScreen)) renderAssessmentsScreen();
+                }));
+        myQuizzesSortPicker.setOnClickListener(v ->
+                classRenderer.showAssessmentSortDialog(selectedMyQuizzesSort, key -> {
+                    selectedMyQuizzesSort = key;
+                    updateSortPickers();
+                    if (SCREEN_QUIZZES.equals(currentScreen)) renderQuizzesScreen();
                 }));
         answerKeysSortPicker.setOnClickListener(v ->
                 classRenderer.showAssessmentSortDialog(selectedAnswerKeysSort, key -> {
@@ -941,6 +1233,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             homeRenderer.updateFilterToggleAppearance(homeFilterToggle, homeFilterPanelVisible,
                     selectedClassGradeFilter, selectedClassSchoolYearFilter, selectedClassSort);
         });
+        ecdFilterToggle.setOnClickListener(v -> {
+            ecdFilterPanelVisible = !ecdFilterPanelVisible;
+            ecdFilterPanel.setVisibility(ecdFilterPanelVisible ? View.VISIBLE : View.GONE);
+            homeRenderer.updateFilterToggleAppearance(ecdFilterToggle, ecdFilterPanelVisible,
+                    selectedEcdGradeFilter, selectedEcdSchoolYearFilter, selectedEcdSort);
+        });
 
         classAssessmentFilterToggle.setOnClickListener(v -> {
             classAssessmentFilterPanelVisible = !classAssessmentFilterPanelVisible;
@@ -960,6 +1258,17 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                             || selectedMyAssessmentsSheetFilter != null
                             || selectedMyAssessmentsTypeFilter != null
                             || selectedMyAssessmentsClassFilter != null);
+        });
+
+        myQuizzesFilterToggle.setOnClickListener(v -> {
+            myQuizzesFilterPanelVisible = !myQuizzesFilterPanelVisible;
+            myQuizzesFilterPanel.setVisibility(myQuizzesFilterPanelVisible ? View.VISIBLE : View.GONE);
+            classRenderer.updateAssessmentFilterToggleAppearance(myQuizzesFilterToggle,
+                    myQuizzesFilterPanelVisible,
+                    !ASSESSMENT_SORT_NEWEST.equals(selectedMyQuizzesSort)
+                            || selectedMyQuizzesSheetFilter != null
+                            || selectedMyQuizzesTypeFilter != null
+                            || selectedMyQuizzesClassFilter != null);
         });
 
         answerKeysFilterToggle.setOnClickListener(v -> {
@@ -1075,6 +1384,25 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 .show();
     }
 
+    private void showQuizClassPickerDialog() {
+        if (classFolders == null || classFolders.isEmpty()) {
+            ui.showErrorDialog("No classes yet", "Create a class first before adding a quiz.");
+            return;
+        }
+        String[] classNames = new String[classFolders.size()];
+        for (int i = 0; i < classFolders.size(); i++) classNames[i] = classFolders.get(i).getDisplayName();
+
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(
+                this, R.style.ThemeOverlay_OMRScanner_Dialog)
+                .setTitle("Select a class")
+                .setItems(classNames, (dialog, which) -> {
+                    selectedClass = classFolders.get(which);
+                    dialogs.showNewQuizDialog();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
     private void onAssessmentSyncClicked() {
         if (selectedClass == null) {
             ui.showErrorDialog("No class selected", "Open a class before syncing its students.");
@@ -1092,6 +1420,596 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             }
             performAssessmentSync(selectedClass.getClassroomId(), user.serverIp);
         });
+    }
+
+    private void onEcdcDomainsSyncClicked() {
+        // Only teachers who actually have an ECDC (Kinder) class may sync ECDC data.
+        if (getEcdcClassFolders().isEmpty()) {
+            ui.showErrorDialog("No ECDC classes",
+                    "ECDC sync is only available to teachers with an ECDC (Kinder) class.");
+            return;
+        }
+        repo.getActiveUser(user -> {
+            if (user == null || user.serverIp == null || user.serverIp.trim().isEmpty()) {
+                runOnUiThread(() -> ui.showErrorDialog("Scan required",
+                        "Please scan your QR code from the website system before syncing."));
+                return;
+            }
+            syncEcdcDomains(this, user.serverIp);
+        });
+    }
+
+    /**
+     * ECDC class screen "Upload". For now this only BUILDS the upload JSON from the
+     * saved marks of the open class + period and prints it to logcat (tag
+     * OMR_ECDC_UPLOAD) -- nothing is sent to the server yet.
+     */
+    private void onEcdcUploadClicked() {
+        if (selectedClass == null) {
+            ui.showErrorDialog("No class selected", "Open a class before uploading its ECDC data.");
+            return;
+        }
+        if (selectedClass.getClassroomId() == null) {
+            ui.showErrorDialog("Missing classroom ID", "This class wasn't synced from the server, so it has no classroom ID to upload ECDC data for.");
+            return;
+        }
+        if (selectedEcdPeriod == null) {
+            ui.showErrorDialog("Choose a period", "Pick Beginning, Middle or End first, then tap Upload.");
+            return;
+        }
+        // The upload reads what's in the database, not what's on screen. If the teacher has
+        // unsaved marks, offer to save first instead of silently uploading the old data.
+        if (hasEcdUnsavedChanges()) {
+            new com.google.android.material.dialog.MaterialAlertDialogBuilder(
+                    this, R.style.ThemeOverlay_OMRScanner_Dialog)
+                    .setTitle("Unsaved changes")
+                    .setMessage("You have marks that haven't been saved. Save them first so they're included in the upload.")
+                    .setPositiveButton("Save & upload", (d, w) -> saveEcdcDraft(this::onEcdcUploadClicked))
+                    .setNegativeButton("Cancel", null)
+                    .show();
+            return;
+        }
+        List<DashboardUiHelper.IncompleteDomain> incompleteDomains = incompleteEcdDomains();
+        if (!incompleteDomains.isEmpty()) {
+            ui.showIncompleteDomainsDialog("Complete all domains first",
+                    "Finish marking these domains before uploading:", incompleteDomains);
+            return;
+        }
+        if (selectedEcdStudentLrn == null || selectedEcdStudentLrn.trim().isEmpty()) {
+            ui.showErrorDialog("No student selected", "Open a student before uploading their ECDC data.");
+            return;
+        }
+
+        // Capture now: the selection can change while the DB reads run in the background.
+        final String classId = selectedClass.getId();
+        final int classroomId = selectedClass.getClassroomId();
+        final String period = selectedEcdPeriod;
+        final String lrn = selectedEcdStudentLrn;
+
+        repo.getActiveUser(user -> {
+            if (user == null || user.userId == null) {
+                runOnUiThread(() -> ui.showErrorDialog("Sign-in required",
+                        "Please sign in before uploading ECDC data."));
+                return;
+            }
+            final int userId = user.userId;
+            repo.getEcdcDomains(domains -> repo.getAllEcdcCompetencies(competencies ->
+                    repo.getEcdcResponses(classId, lrn, period, responses -> {
+                        if (responses == null || responses.isEmpty()) {
+                            runOnUiThread(() -> ui.showErrorDialog("Nothing to upload",
+                                    "No saved ECDC marks for " + EcdcScreenRenderer.periodLabel(period)
+                                            + " for this student yet."));
+                            return;
+                        }
+                        final int missingTypes = countPresentMarksMissingType(responses)[0];
+                        if (missingTypes > 0) {
+                            final List<DashboardUiHelper.IncompleteDomain> noTypeDomains =
+                                    findDomainsMissingPresentType(domains, competencies, responses);
+                            runOnUiThread(() -> ui.showIncompleteDomainsDialog("Choose a type first",
+                                    missingTypes + (missingTypes == 1 ? " Present mark has" : " Present marks have")
+                                            + " no type (P, O or R) selected. Choose one for each in these "
+                                            + "domains, save, then upload again:",
+                                    noTypeDomains));
+                            return;
+                        }
+                        // All checks passed: the date comes from the student card's date button.
+                        repo.getEcdcStudentDate(classId, lrn, period, dateMillis -> {
+                            if (dateMillis == null) {
+                                runOnUiThread(() -> ui.showErrorDialog("Set the date first",
+                                        "Tap the date button on the student card to set this student's "
+                                                + "assessment date, then upload again."));
+                                return;
+                            }
+                            runOnUiThread(() -> {
+                                try {
+                                    java.util.Map<String, Long> dateByLrn = new java.util.HashMap<>();
+                                    dateByLrn.put(lrn, dateMillis);
+                                    org.json.JSONObject payload = com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder
+                                            .build(classroomId, userId, period, responses, domains, competencies, dateByLrn);
+                                    com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder.logPayload(payload.toString());
+                                    uploadEcdcPayload(user.serverIp, payload, "ECDC results for " + selectedEcdStudentName);
+                                } catch (org.json.JSONException e) {
+                                    android.util.Log.e("OMR_ECDC_UPLOAD", "Could not build upload JSON: " + e.getMessage(), e);
+                                    ui.showErrorDialog("Upload failed",
+                                            "Could not build the upload data: " + e.getMessage());
+                                }
+                            });
+                        });
+                    })));
+        });
+    }
+
+    /**
+     * Domain names that still have at least one competency without a saved
+     * status, for the student currently open on the checklist screen. An
+     * empty list means every domain is fully marked.
+     */
+    private List<DashboardUiHelper.IncompleteDomain> incompleteEcdDomains() {
+        List<DashboardUiHelper.IncompleteDomain> incomplete = new ArrayList<>();
+        for (com.example.omrscanner.database.entities.EcdcDomainEntity d : ecdDomains) {
+            int remaining = 0;
+            for (com.example.omrscanner.database.entities.EcdcCompetencyEntity c : ecdCompetencies) {
+                if (c.domainId != d.id) continue;
+                if (!ecdSavedStatuses.containsKey(c.id)) remaining++;
+            }
+            if (remaining > 0) {
+                incomplete.add(new DashboardUiHelper.IncompleteDomain(
+                        EcdcScreenRenderer.shortDomainName(d.domain),
+                        EcdcScreenRenderer.domainThemeColor(d.domain),
+                        remaining));
+            }
+        }
+        return incomplete;
+    }
+
+    /**
+     * ECDC class screen "Mass Upload". Same as the per-student Upload, but for every
+     * student in the open class who has saved marks for the chosen period: builds ONE
+     * payload (the "students" array holds all of them) and prints it to logcat (tag
+     * OMR_ECDC_UPLOAD). Nothing is sent to the server yet.
+     */
+    private void showEcdcMassUploadPeriodPicker(ClassFolder cls) {
+        final String[] periodKeys = {ECD_PERIOD_BOSY, ECD_PERIOD_MOSY, ECD_PERIOD_EOSY};
+        final int[] selected = {-1};
+
+        CharSequence[] items = new CharSequence[periodKeys.length];
+        for (int i = 0; i < periodKeys.length; i++) {
+            android.text.SpannableString s = new android.text.SpannableString(
+                    EcdcScreenRenderer.periodLabel(periodKeys[i]));
+            s.setSpan(new android.text.style.ForegroundColorSpan(Color.BLACK), 0, s.length(), 0);
+            items[i] = s;
+        }
+
+        androidx.appcompat.app.AlertDialog dialog =
+                new com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_OMRScanner_Dialog)
+                        .setTitle("Choose Assessment Period")
+                        .setSingleChoiceItems(items, -1, (d, which) -> {
+                            selected[0] = which;
+                            ((androidx.appcompat.app.AlertDialog) d)
+                                    .getButton(android.content.DialogInterface.BUTTON_POSITIVE)
+                                    .setEnabled(true);
+                        })
+                        .setPositiveButton("Upload", (d, which) -> {
+                            if (selected[0] >= 0) runEcdcMassUpload(cls, periodKeys[selected[0]]);
+                        })
+                        .setNegativeButton("Cancel", null)
+                        .show();
+
+        // Nothing is pre-selected, so "Upload" stays disabled until a period is picked.
+        dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).setEnabled(false);
+    }
+
+    /** {saved Present marks with no P/O/R chosen, distinct students that have such marks}. */
+    /**
+     * Mass Upload guard helper: which students have Present marks with no P/O/R type,
+     * and how many each, so the dialog can name them instead of just counting them.
+     */
+    private List<DashboardUiHelper.IncompleteStudent> findStudentsMissingPresentType(
+            List<com.example.omrscanner.database.entities.StudentLrnEntity> roster,
+            List<com.example.omrscanner.database.entities.EcdcResponseEntity> responses) {
+        List<DashboardUiHelper.IncompleteStudent> result = new ArrayList<>();
+        if (responses == null) return result;
+
+        Map<String, Integer> missingByLrn = new java.util.HashMap<>();
+        for (com.example.omrscanner.database.entities.EcdcResponseEntity r : responses) {
+            if (com.example.omrscanner.database.entities.EcdcResponseEntity.STATUS_PRESENT.equals(r.status)
+                    && r.presentType == null) {
+                Integer n = missingByLrn.get(r.lrn);
+                missingByLrn.put(r.lrn, n == null ? 1 : n + 1);
+            }
+        }
+        if (missingByLrn.isEmpty()) return result;
+
+        final int color = Color.parseColor("#D97706");
+        java.util.Set<String> listed = new java.util.HashSet<>();
+        if (roster != null) {
+            for (com.example.omrscanner.database.entities.StudentLrnEntity s : roster) {
+                Integer n = missingByLrn.get(s.lrn);
+                if (n == null) continue;
+                listed.add(s.lrn);
+                String fullName = ((s.lastName != null ? s.lastName : "") + ", "
+                        + (s.firstName != null ? s.firstName : "")
+                        + (s.middleName != null && !s.middleName.isEmpty() ? " " + s.middleName : "")).trim();
+                result.add(new DashboardUiHelper.IncompleteStudent(fullName,
+                        Collections.singletonList(new DashboardUiHelper.IncompleteDomain(
+                                "Present marks with no type", color, n))));
+            }
+        }
+        // Marks for an LRN that is no longer on the roster still block the upload, so list them too.
+        for (Map.Entry<String, Integer> e : missingByLrn.entrySet()) {
+            if (listed.contains(e.getKey())) continue;
+            result.add(new DashboardUiHelper.IncompleteStudent("LRN " + e.getKey(),
+                    Collections.singletonList(new DashboardUiHelper.IncompleteDomain(
+                            "Present marks with no type", color, e.getValue()))));
+        }
+        Collections.sort(result, (a, b) -> a.name.compareToIgnoreCase(b.name));
+        return result;
+    }
+
+    /**
+     * Single-student Upload guard helper: which domains contain Present marks with no
+     * P/O/R type, and how many in each, so the dialog can point at the exact domain.
+     */
+    private List<DashboardUiHelper.IncompleteDomain> findDomainsMissingPresentType(
+            List<com.example.omrscanner.database.entities.EcdcDomainEntity> domains,
+            List<com.example.omrscanner.database.entities.EcdcCompetencyEntity> competencies,
+            List<com.example.omrscanner.database.entities.EcdcResponseEntity> responses) {
+        List<DashboardUiHelper.IncompleteDomain> result = new ArrayList<>();
+        if (domains == null || competencies == null || responses == null) return result;
+
+        Map<Integer, Integer> domainIdByCompetencyId = new java.util.HashMap<>();
+        for (com.example.omrscanner.database.entities.EcdcCompetencyEntity c : competencies) {
+            domainIdByCompetencyId.put(c.id, c.domainId);
+        }
+
+        Map<Integer, Integer> missingByDomainId = new java.util.HashMap<>();
+        for (com.example.omrscanner.database.entities.EcdcResponseEntity r : responses) {
+            if (!com.example.omrscanner.database.entities.EcdcResponseEntity.STATUS_PRESENT.equals(r.status)
+                    || r.presentType != null) continue;
+            Integer domainId = domainIdByCompetencyId.get(r.competencyId);
+            if (domainId == null) continue;
+            Integer n = missingByDomainId.get(domainId);
+            missingByDomainId.put(domainId, n == null ? 1 : n + 1);
+        }
+
+        // Keep the domains in their normal checklist order.
+        for (com.example.omrscanner.database.entities.EcdcDomainEntity d : domains) {
+            Integer n = missingByDomainId.get(d.id);
+            if (n == null) continue;
+            result.add(new DashboardUiHelper.IncompleteDomain(
+                    EcdcScreenRenderer.shortDomainName(d.domain),
+                    EcdcScreenRenderer.domainThemeColor(d.domain),
+                    n));
+        }
+        return result;
+    }
+
+    private int[] countPresentMarksMissingType(
+            List<com.example.omrscanner.database.entities.EcdcResponseEntity> responses) {
+        int marks = 0;
+        java.util.Set<String> students = new java.util.HashSet<>();
+        if (responses != null) {
+            for (com.example.omrscanner.database.entities.EcdcResponseEntity r : responses) {
+                if (com.example.omrscanner.database.entities.EcdcResponseEntity.STATUS_PRESENT.equals(r.status)
+                        && r.presentType == null) {
+                    marks++;
+                    students.add(r.lrn);
+                }
+            }
+        }
+        return new int[]{marks, students.size()};
+    }
+
+    private void runEcdcMassUpload(ClassFolder cls, String period) {
+        if (cls == null) {
+            ui.showErrorDialog("No class selected", "Choose a class before uploading its ECDC data.");
+            return;
+        }
+        if (cls.getClassroomId() == null) {
+            ui.showErrorDialog("Missing classroom ID", "This class wasn't synced from the server, so it has no classroom ID to upload ECDC data for.");
+            return;
+        }
+
+        // Capture now: the selection can change while the DB reads run in the background.
+        final String classId = cls.getId();
+        final int classroomId = cls.getClassroomId();
+
+        repo.getActiveUser(user -> {
+            if (user == null || user.userId == null) {
+                runOnUiThread(() -> ui.showErrorDialog("Sign-in required",
+                        "Please sign in before uploading ECDC data."));
+                return;
+            }
+            final int userId = user.userId;
+            repo.getEcdcDomains(domains -> repo.getAllEcdcCompetencies(competencies ->
+                    repo.getEcdcResponsesForClassPeriod(classId, period, allResponses ->
+                            repo.getStudentsByClass(classId, roster -> {
+                                if (allResponses == null || allResponses.isEmpty()) {
+                                    runOnUiThread(() -> ui.showErrorDialog("Nothing to upload",
+                                            "No saved ECDC marks for " + EcdcScreenRenderer.periodLabel(period)
+                                                    + " in this class yet."));
+                                    return;
+                                }
+
+                                // Marks saved under an LRN that is no longer on this class's roster
+                                // (e.g. the student was transferred and the class re-synced) can't be
+                                // uploaded with this class. Skip them instead of blocking everyone else.
+                                // If the roster is empty (students not synced), don't filter at all:
+                                // an empty roster would otherwise make every student look "removed".
+                                final List<com.example.omrscanner.database.entities.EcdcResponseEntity> responses;
+                                final java.util.Set<String> skippedLrns = new java.util.LinkedHashSet<>();
+                                if (roster == null || roster.isEmpty()) {
+                                    responses = allResponses;
+                                } else {
+                                    java.util.Set<String> rosterLrns = new java.util.HashSet<>();
+                                    for (com.example.omrscanner.database.entities.StudentLrnEntity s : roster) {
+                                        rosterLrns.add(s.lrn);
+                                    }
+                                    responses = new ArrayList<>();
+                                    for (com.example.omrscanner.database.entities.EcdcResponseEntity r : allResponses) {
+                                        if (rosterLrns.contains(r.lrn)) {
+                                            responses.add(r);
+                                        } else {
+                                            skippedLrns.add(r.lrn);
+                                        }
+                                    }
+                                }
+                                if (responses.isEmpty()) {
+                                    final int skippedCount = skippedLrns.size();
+                                    runOnUiThread(() -> ui.showErrorDialog("Nothing to upload",
+                                            "The only saved marks for " + EcdcScreenRenderer.periodLabel(period)
+                                                    + " belong to " + skippedCount
+                                                    + (skippedCount == 1 ? " student" : " students")
+                                                    + " who are no longer on this class's roster. "
+                                                    + "Re-sync the class students if that's unexpected."));
+                                    return;
+                                }
+
+                                // Guard: every student in the class must have every domain fully marked
+                                // for this period, or the whole mass upload is blocked.
+                                List<DashboardUiHelper.IncompleteStudent> incompleteStudents =
+                                        findIncompleteEcdcStudents(roster, responses, domains, competencies);
+                                if (!incompleteStudents.isEmpty()) {
+                                    final int n = incompleteStudents.size();
+                                    runOnUiThread(() -> ui.showIncompleteStudentsDialog(
+                                            "Complete all students first",
+                                            n + (n == 1 ? " student has" : " students have")
+                                                    + " unmarked competencies for "
+                                                    + EcdcScreenRenderer.periodLabel(period)
+                                                    + ". Finish these before uploading:",
+                                            incompleteStudents));
+                                    return;
+                                }
+                                final int[] missingTypes = countPresentMarksMissingType(responses);
+                                if (missingTypes[0] > 0) {
+                                    final List<DashboardUiHelper.IncompleteStudent> noType =
+                                            findStudentsMissingPresentType(roster, responses);
+                                    runOnUiThread(() -> ui.showIncompleteStudentsDialog("Choose a type first",
+                                            missingTypes[0] + (missingTypes[0] == 1 ? " Present mark" : " Present marks")
+                                                    + " across " + missingTypes[1]
+                                                    + (missingTypes[1] == 1 ? " student has" : " students have")
+                                                    + " no type (P, O or R) selected. Open each student, "
+                                                    + "choose one, save, then upload again:",
+                                            noType));
+                                    return;
+                                }
+                                // All checks passed: every student being uploaded needs the date
+                                // set on their own card.
+                                repo.getEcdcStudentDatesForClassPeriod(classId, period, dateByLrn -> {
+                                    java.util.Set<String> uploadingLrns = new java.util.LinkedHashSet<>();
+                                    for (com.example.omrscanner.database.entities.EcdcResponseEntity r : responses) {
+                                        uploadingLrns.add(r.lrn);
+                                    }
+                                    Map<String, String> nameByLrn = new java.util.HashMap<>();
+                                    if (roster != null) {
+                                        for (com.example.omrscanner.database.entities.StudentLrnEntity s : roster) {
+                                            nameByLrn.put(s.lrn, ((s.lastName != null ? s.lastName : "") + ", "
+                                                    + (s.firstName != null ? s.firstName : "")
+                                                    + (s.middleName != null && !s.middleName.isEmpty() ? " " + s.middleName : "")).trim());
+                                        }
+                                    }
+                                    List<String> noDate = new ArrayList<>();
+                                    for (String l : uploadingLrns) {
+                                        if (dateByLrn.get(l) == null) {
+                                            noDate.add(nameByLrn.containsKey(l) ? nameByLrn.get(l) : l);
+                                        }
+                                    }
+                                    if (!noDate.isEmpty()) {
+                                        Collections.sort(noDate, String.CASE_INSENSITIVE_ORDER);
+                                        StringBuilder sb = new StringBuilder();
+                                        int shown = Math.min(noDate.size(), 10);
+                                        for (int k = 0; k < shown; k++) {
+                                            sb.append("\u2022 ").append(noDate.get(k)).append("\n");
+                                        }
+                                        if (noDate.size() > shown) {
+                                            sb.append("\u2026and ").append(noDate.size() - shown).append(" more\n");
+                                        }
+                                        final String msg = noDate.size()
+                                                + (noDate.size() == 1 ? " student has" : " students have")
+                                                + " no assessment date for "
+                                                + EcdcScreenRenderer.periodLabel(period)
+                                                + ". Open each one, tap the date button on their card, "
+                                                + "then upload again:\n\n" + sb;
+                                        runOnUiThread(() -> ui.showErrorDialog("Set the dates first", msg));
+                                        return;
+                                    }
+                                    runOnUiThread(() -> {
+                                        try {
+                                            org.json.JSONObject payload = com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder
+                                                    .build(classroomId, userId, period, responses, domains, competencies, dateByLrn);
+                                            com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder.logPayload(payload.toString());
+                                            final int studentCount = payload.getJSONArray("students").length();
+                                            uploadEcdcPayload(user.serverIp, payload, "ECDC results for " + studentCount
+                                                    + " student" + (studentCount == 1 ? "" : "s")
+                                                    + (skippedLrns.isEmpty() ? ""
+                                                    : " (skipping " + skippedLrns.size()
+                                                    + " not on roster)"));
+                                        } catch (org.json.JSONException e) {
+                                            android.util.Log.e("OMR_ECDC_UPLOAD", "Could not build mass upload JSON: " + e.getMessage(), e);
+                                            ui.showErrorDialog("Upload failed",
+                                                    "Could not build the upload data: " + e.getMessage());
+                                        }
+                                    });
+                                });
+                            }))));
+        });
+    }
+
+    /**
+     * For a mass upload: every roster student with at least one competency that has no saved
+     * status for the chosen period, together with the domains still missing marks. Students with
+     * no saved marks at all are skipped (they aren't uploaded). Empty list = safe to upload.
+     */
+    private List<DashboardUiHelper.IncompleteStudent> findIncompleteEcdcStudents(
+            List<com.example.omrscanner.database.entities.StudentLrnEntity> roster,
+            List<com.example.omrscanner.database.entities.EcdcResponseEntity> responses,
+            List<com.example.omrscanner.database.entities.EcdcDomainEntity> domains,
+            List<com.example.omrscanner.database.entities.EcdcCompetencyEntity> competencies) {
+        List<DashboardUiHelper.IncompleteStudent> result = new ArrayList<>();
+        if (roster == null || domains == null || competencies == null) return result;
+
+        Map<String, java.util.Set<Integer>> markedByLrn = new java.util.HashMap<>();
+        if (responses != null) {
+            for (com.example.omrscanner.database.entities.EcdcResponseEntity r : responses) {
+                markedByLrn.computeIfAbsent(r.lrn, k -> new java.util.HashSet<>()).add(r.competencyId);
+            }
+        }
+
+        for (com.example.omrscanner.database.entities.StudentLrnEntity s : roster) {
+            java.util.Set<Integer> marked = markedByLrn.get(s.lrn);
+            // Untouched students (no saved marks for this period) are simply not uploaded,
+            // so they don't block. Only students who started but didn't finish do.
+            if (marked == null || marked.isEmpty()) continue;
+            List<DashboardUiHelper.IncompleteDomain> missing = new ArrayList<>();
+            for (com.example.omrscanner.database.entities.EcdcDomainEntity d : domains) {
+                int remaining = 0;
+                for (com.example.omrscanner.database.entities.EcdcCompetencyEntity c : competencies) {
+                    if (c.domainId != d.id) continue;
+                    if (marked == null || !marked.contains(c.id)) remaining++;
+                }
+                if (remaining > 0) {
+                    missing.add(new DashboardUiHelper.IncompleteDomain(
+                            EcdcScreenRenderer.shortDomainName(d.domain),
+                            EcdcScreenRenderer.domainThemeColor(d.domain),
+                            remaining));
+                }
+            }
+            if (!missing.isEmpty()) {
+                String fullName = ((s.lastName != null ? s.lastName : "") + ", "
+                        + (s.firstName != null ? s.firstName : "")
+                        + (s.middleName != null && !s.middleName.isEmpty() ? " " + s.middleName : "")).trim();
+                result.add(new DashboardUiHelper.IncompleteStudent(fullName, missing));
+            }
+        }
+        Collections.sort(result, (a, b) -> a.name.compareToIgnoreCase(b.name));
+        return result;
+    }
+
+    /**
+     * Sends an ECDC upload payload to the STARS system (POST /api/ecdc/upload).
+     * Used by BOTH the per-student Upload and the Mass Upload: the server takes the
+     * same JSON shape for either (one student or many in "students").
+     * Re-uploading the same period replaces that student's answers, so a retry after a
+     * failed or interrupted upload is safe.
+     */
+    private void uploadEcdcPayload(String serverIp, org.json.JSONObject payload, String uploadLabel) {
+        if (serverIp == null || serverIp.trim().isEmpty()) {
+            runOnUiThread(() -> ui.showErrorDialog("Scan required",
+                    "Please scan your QR code from the website system before uploading."));
+            return;
+        }
+        final String baseUrl = serverIp.trim();
+        final String json = payload.toString();
+        runOnUiThread(() -> ui.showToast("Uploading " + uploadLabel + "…"));
+
+        new Thread(() -> {
+            java.net.HttpURLConnection conn = null;
+            try {
+                java.net.URL url = new java.net.URL(baseUrl + ECDC_UPLOAD_PATH);
+                conn = (java.net.HttpURLConnection) url.openConnection();
+                conn.setConnectTimeout(8000);
+                conn.setReadTimeout(60000); // a whole class is a large payload and the server rescoring takes a moment
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                conn.setRequestProperty("Accept", "application/json");
+                conn.setDoOutput(true);
+
+                byte[] bodyBytes = json.getBytes("UTF-8");
+                conn.setFixedLengthStreamingMode(bodyBytes.length);
+                try (java.io.OutputStream os = conn.getOutputStream()) {
+                    os.write(bodyBytes);
+                }
+
+                final int code = conn.getResponseCode();
+                java.io.InputStream is = (code >= 200 && code < 300)
+                        ? conn.getInputStream() : conn.getErrorStream();
+
+                StringBuilder sb = new StringBuilder();
+                if (is != null) {
+                    try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                            new java.io.InputStreamReader(is, "UTF-8"))) {
+                        String line;
+                        while ((line = reader.readLine()) != null) sb.append(line);
+                    }
+                }
+                final String responseBody = sb.toString();
+                android.util.Log.d("OMR_ECDC_UPLOAD", "HTTP " + code + " — raw response: " + responseBody);
+
+                org.json.JSONObject root;
+                try {
+                    root = new org.json.JSONObject(responseBody);
+                } catch (org.json.JSONException notJson) {
+                    // e.g. an HTML error page from the server
+                    runOnUiThread(() -> ui.showErrorDialog("Upload failed",
+                            "The server answered with HTTP " + code + " and an unreadable response."));
+                    return;
+                }
+
+                final String message = root.optString("message", "");
+
+                if (root.optBoolean("success", false)) {
+                    org.json.JSONObject data = root.optJSONObject("data");
+                    final int students = data != null ? data.optInt("students_uploaded", 0) : 0;
+                    final int saved = data != null ? data.optInt("responses_saved", 0) : 0;
+                    final int skipped = data != null ? data.optInt("responses_skipped", 0) : 0;
+                    runOnUiThread(() -> ui.showToast("Upload complete: " + students
+                            + (students == 1 ? " student" : " students") + ", " + saved + " answers saved"
+                            + (skipped > 0 ? " (" + skipped + " not tested)" : "")));
+                    return;
+                }
+
+                // Failure: show the server's message plus up to 5 of its specific reasons
+                // (e.g. "LRN 1084... does not exist on this classroom.").
+                StringBuilder detail = new StringBuilder(
+                        message.isEmpty() ? "The server rejected the upload (HTTP " + code + ")." : message);
+                org.json.JSONObject errs = root.optJSONObject("errors");
+                if (errs != null) {
+                    java.util.Iterator<String> keys = errs.keys();
+                    int total = 0, shown = 0;
+                    while (keys.hasNext()) {
+                        String key = keys.next();
+                        org.json.JSONArray arr = errs.optJSONArray(key);
+                        String first = (arr != null && arr.length() > 0) ? arr.optString(0) : errs.optString(key);
+                        total++;
+                        if (shown < 5 && !first.isEmpty() && !first.equals(message)) {
+                            detail.append("\n\n• ").append(first);
+                            shown++;
+                        }
+                    }
+                    if (total > shown && shown > 0) detail.append("\n\n…and ").append(total - shown).append(" more.");
+                }
+                final String errorText = detail.toString();
+                runOnUiThread(() -> ui.showErrorDialog("Upload failed", errorText));
+
+            } catch (Exception e) {
+                android.util.Log.e("OMR_ECDC_UPLOAD", "Upload failed: " + e.getClass().getSimpleName() + ": " + e.getMessage(), e);
+                final String reason = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                runOnUiThread(() -> ui.showErrorDialog("Upload failed",
+                        "Could not reach the STARS system: " + reason));
+            } finally {
+                if (conn != null) conn.disconnect();
+            }
+        }).start();
     }
 
     private void onClassAssessmentsSyncClicked() {
@@ -1132,8 +2050,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
      * class screen isn't showing.
      */
     public void refreshAfterAssessmentsSync() {
-        if (!SCREEN_CLASS.equals(currentScreen) || selectedClass == null) return;
-        renderClassScreen();
+        if (SCREEN_CLASS.equals(currentScreen) && selectedClass != null) {
+            renderClassScreen();
+        } else if (SCREEN_QUIZZES.equals(currentScreen)) {
+            // Quizzes read the same synced student_lrn roster as assessments, so a
+            // sync should repaint the "X of Y scanned" badges here too if it's open.
+            renderQuizzesScreen();
+        }
     }
 
     /** Picks ZPH40 for n < 41 items, otherwise ZPH60, e.g. 25 -> "ZPH40 (25 Items)". */
@@ -1205,6 +2128,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
                 com.example.omrscanner.database.AppDatabase db =
                         com.example.omrscanner.database.AppDatabase.getInstance(context);
+
+                com.example.omrscanner.database.entities.ClassEntity syncClass = db.classDao().getById(localClassId);
+                Integer syncTeacherId = (syncClass != null) ? syncClass.teacherId : null;
 
                 int savedCount = 0;
                 if (assessments != null) {
@@ -1280,7 +2206,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                             String keyId = java.util.UUID.randomUUID().toString().substring(0, 7).toUpperCase();
                             com.example.omrscanner.database.entities.AnswerKeyEntity key =
                                     new com.example.omrscanner.database.entities.AnswerKeyEntity(
-                                            keyId, title, schoolYear, sheetType, answers.toString());
+                                            keyId, syncTeacherId, title, schoolYear, sheetType, answers.toString());
                             db.answerKeyDao().insert(key);
 
                             String assessmentId = java.util.UUID.randomUUID().toString().substring(0, 7).toUpperCase();
@@ -1635,6 +2561,24 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             if (SCREEN_HOME.equals(currentScreen)) renderHomeScreen();
         };
         searchDebounceHandler.postDelayed(pendingHomeSearchRunnable, 220);
+    }
+
+    private void scheduleEcdSearchRefresh() {
+        if (pendingEcdSearchRunnable != null)
+            searchDebounceHandler.removeCallbacks(pendingEcdSearchRunnable);
+        pendingEcdSearchRunnable = () -> {
+            if (SCREEN_ECD.equals(currentScreen)) renderEcdScreen();
+        };
+        searchDebounceHandler.postDelayed(pendingEcdSearchRunnable, 220);
+    }
+
+    private void scheduleEcdStudentSearchRefresh() {
+        if (pendingEcdStudentSearchRunnable != null)
+            searchDebounceHandler.removeCallbacks(pendingEcdStudentSearchRunnable);
+        pendingEcdStudentSearchRunnable = () -> {
+            if (SCREEN_ECD_CLASS.equals(currentScreen)) renderEcdStudentResults();
+        };
+        searchDebounceHandler.postDelayed(pendingEcdStudentSearchRunnable, 220);
     }
 
     private void scheduleAssessmentSearchRefresh() {
@@ -2123,15 +3067,22 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         addFaqCategory(body, "GETTING STARTED");
         addFaqItem(body,
                 "How do I connect the app to my account?",
-                "Scan your QR code from the STARS website (your teacher account's QR page). This saves your name, school, and the server address on your device so the app knows where to sync.");
+                "Open the Profile tab and tap Scan QR code, then scan the QR code from the STARS website (your teacher account's QR page). This saves your name, school, and the server address on your device so the app knows where to sync.");
         addFaqItem(body,
                 "What does \"Sync\" on the home screen do?",
                 "It pulls your assigned classes and sections from the STARS system into the app.");
         addFaqItem(body,
                 "Do I need internet access to use the app?",
-                "No, not for scanning. Classes, assessments, answer keys, and scans are all stored locally on your device. You only need a connection to the server when syncing classes/students or uploading assessment results.");
+                "No, not for scanning or marking ECDC checklists. Classes, assessments, answer keys, quizzes, scans, and ECDC marks are all stored locally on your device. You only need a connection to the server when syncing classes/students or uploading assessment results or ECDC data.");
 
         // ── Classes & syncing ────────────────────────────────────────
+        addFaqItem(body,
+                "Where did the Help button go?",
+                "Help & FAQ now lives in the Profile tab, under SUPPORT. The Profile tab is also where you scan your QR code, back up or restore your data, change your photo, and calibrate Pro Mode.");
+        addFaqItem(body,
+                "What do the tabs at the bottom do?",
+                "Home, Assessments, Scans, Quizzes, ECDCs, Answer Keys, and Profile. The bar scrolls sideways, so swipe it if a tab is off-screen.");
+
         addFaqCategory(body, "CLASSES & SYNCING");
         addFaqItem(body,
                 "What does syncing students inside a class do?",
@@ -2174,6 +3125,67 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 "The Scans tab shows a flat, read-only list of every scan across all your classes. To edit a scan, open it from its own class → assessment screen instead.");
 
         // ── Troubleshooting ──────────────────────────────────────────
+        addFaqItem(body,
+                "Why does the app ask if I want to replace a scan?",
+                "Scanning a student whose LRN is already saved in that quiz or assessment would create a duplicate, so the app asks first. Choose replace to overwrite the earlier scan with the new one.");
+        addFaqItem(body,
+                "What is Pro Mode calibration?",
+                "It's a one-time setup per sheet type for sheets that don't line up with the default template, such as crumpled sheets, printer margin drift, photocopies, or a sheet that differs from the master. Find it in the Profile tab. You can clear saved calibrations with Reset calibration.");
+
+        // ── Quizzes ──────────────────────────────────────────────────
+        addFaqCategory(body, "QUIZZES");
+        addFaqItem(body,
+                "How are Quizzes different from Assessments?",
+                "Quizzes have their own tab and are scanned and graded in a similar way, but they are stored only on your device. There is no server copy, so backing up is the only way to recover them if you uninstall the app or change phones.");
+        addFaqItem(body,
+                "How do I know if an answer key is used by a quiz?",
+                "Answer key cards show a badge when the key is linked to a quiz or an assessment.");
+
+        // ── ECDC ─────────────────────────────────────────────────────
+        addFaqCategory(body, "ECDC CHECKLIST");
+        addFaqItem(body,
+                "What is the ECDCs tab?",
+                "ECDC stands for Early Childhood Development Checklist. Open a class, choose a student, then mark each competency, grouped by domain. Pick a period first: Beginning, Middle, or End of School Year.");
+        addFaqItem(body,
+                "What do Present, Not present, and Not tested mean?",
+                "Each competency needs one of the three choices. Not tested items are skipped on the server instead of being saved as answers. Tap the Save button to keep your marks. If you leave with unsaved changes, the app asks first.");
+        addFaqItem(body,
+                "What is the Type row (P, O, R)?",
+                "When you mark a competency Present, a Type row appears inside the card. Tap it to expand it and choose P, O, or R. Every Present mark needs a type before it can be uploaded.");
+        addFaqItem(body,
+                "What does the eye button show?",
+                "A summary card for the student: how many competencies are Present, Not present, Not tested, or still unmarked, overall and per domain.");
+        addFaqItem(body,
+                "What are Recent searches?",
+                "When you search for a student in a class, the students you opened recently are listed so you can jump back to them quickly.");
+        addFaqItem(body,
+                "How do I upload a student's ECDC results?",
+                "Open the student, choose the period, and tap Upload. Every domain must be fully marked first, and you must have scanned your QR code. Uploading the same period again replaces that student's earlier answers, so retrying after a failed upload is safe.");
+        addFaqItem(body,
+                "What is Mass Upload?",
+                "In the ECDC class screen, use the three-dot menu on the class card and choose Mass Upload, then pick a period. It uploads every student who has saved marks for that period in one go. Students with no saved marks for that period are skipped.");
+        addFaqItem(body,
+                "Why does the app say \"Complete all students first\" or \"Choose a type first\"?",
+                "Mass Upload is blocked until every student being uploaded has all domains marked, and every Present mark has a type (P, O, or R). The message lists who or what is still missing. Fix those, save, and upload again.");
+
+        // ── Profile & backup ─────────────────────────────────────────
+        addFaqCategory(body, "PROFILE & BACKUP");
+        addFaqItem(body,
+                "How do I change my profile photo?",
+                "Tap the circle with the camera icon at the top of the Profile tab. The photo is saved on your device and is included in your backups.");
+        addFaqItem(body,
+                "What does Back up my data save?",
+                "Your assessments, scans, answers, answer keys, scan images, quizzes, quiz scans, ECDC checklist marks, and your profile photo. Classes, student lists, and account info are not included, because they come back when you scan your QR code and sync.");
+        addFaqItem(body,
+                "How do I back up my data?",
+                "Profile tab, then Back up my data. You choose where to save it. The file is a .zip named with your name and the date and time, for example Juan_Dela_Cruz_backup_2026-10-03_1430.zip. Keep it somewhere safe, because quizzes have no other copy.");
+        addFaqItem(body,
+                "How do I restore from a backup?",
+                "Profile tab, then Restore from backup, and pick your backup .zip. Scan your QR code and sync your classes first. Anything that belongs to a class that isn't synced to your account is skipped, and you'll need to sync that class and restore again.");
+        addFaqItem(body,
+                "What happens if another teacher signs in on my phone?",
+                "Signing in with a different teacher's QR code no longer erases the data on the device. Each teacher's classes, assessments, answer keys, and quizzes stay separate, so you only see your own.");
+
         addFaqCategory(body, "TROUBLESHOOTING");
         addFaqItem(body,
                 "Why does the app say \"Can't Reach Server\"?",
@@ -2277,7 +3289,18 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     // ═══════════════════════════════════════════════════════════════
 
     private void showScreen(String screen) {
+        // Leaving the ECDC checklist with marks that were never saved: ask first.
+        // Every route out (back, breadcrumb, bottom-nav tabs) funnels through here.
+        if (SCREEN_ECD_STUDENT.equals(currentScreen) && !SCREEN_ECD_STUDENT.equals(screen)
+                && hasEcdUnsavedChanges()) {
+            confirmLeaveEcdChecklist(() -> showScreen(screen));
+            return;
+        }
         closeFabMenu();
+        boolean leavingEcdFamily = isEcdFamily(currentScreen) && !isEcdFamily(screen);
+        if (leavingEcdFamily) {
+            lastEcdScreen = currentScreen;
+        }
         currentScreen = screen;
 
         screenHome.setVisibility(View.GONE);
@@ -2287,6 +3310,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         screenAssessments.setVisibility(View.GONE);
         screenAnswerKeys.setVisibility(View.GONE);
         screenScans.setVisibility(View.GONE);
+        screenQuizzes.setVisibility(View.GONE);
+        screenECD.setVisibility(View.GONE);
+        screenEcdClass.setVisibility(View.GONE);
+        screenEcdStudent.setVisibility(View.GONE);
 
         switch (screen) {
             case SCREEN_HOME:
@@ -2308,12 +3335,16 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
             case SCREEN_CLASS:
                 if (selectedClass == null) {
+                    selectedClass = homeSelectedClassSnapshot;
+                }
+                if (selectedClass == null) {
                     showScreen(SCREEN_HOME);
                     return;
                 }
                 screenClass.setVisibility(View.VISIBLE);
                 btnBack.setVisibility(View.VISIBLE);
                 fabMain.setVisibility(View.GONE);
+                breadcrumbRoot.setText("Classes");
                 topBarTitle.setText(selectedClass.getDisplayName());
                 topBarBadge.setVisibility(View.VISIBLE);
                 topBarBadge.setText("📁 " + selectedClass.getActivityCount());
@@ -2347,12 +3378,20 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 breadcrumbBar.setVisibility(View.VISIBLE);
                 breadcrumbDivider.setVisibility(View.VISIBLE);
                 breadcrumbSep1.setVisibility(View.VISIBLE);
-                breadcrumbClass.setVisibility(View.VISIBLE);
-                breadcrumbClass.setText(selectedClass.getDisplayName());
-                breadcrumbClass.setTextColor(Color.parseColor("#0038A8"));
-                breadcrumbSep2.setVisibility(View.VISIBLE);
                 breadcrumbActivity.setVisibility(View.VISIBLE);
                 breadcrumbActivity.setText(selectedActivity.getName());
+                if (activityOpenedFromQuizzesTab) {
+                    // Quiz trail has only two levels: Quizzes > quiz name
+                    breadcrumbRoot.setText("Quizzes");
+                    breadcrumbClass.setVisibility(View.GONE);
+                    breadcrumbSep2.setVisibility(View.GONE);
+                } else {
+                    breadcrumbRoot.setText("Classes");
+                    breadcrumbClass.setVisibility(View.VISIBLE);
+                    breadcrumbClass.setText(selectedClass.getDisplayName());
+                    breadcrumbClass.setTextColor(Color.parseColor("#0038A8"));
+                    breadcrumbSep2.setVisibility(View.VISIBLE);
+                }
                 renderActivityScreen();
                 break;
 
@@ -2399,6 +3438,88 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 breadcrumbDivider.setVisibility(View.GONE);
                 renderScansScreen();
                 break;
+
+            case SCREEN_QUIZZES:
+                screenQuizzes.setVisibility(View.VISIBLE);
+                btnBack.setVisibility(View.GONE);
+                fabMain.setVisibility(View.GONE);
+                topBarTitle.setText("Quizzes");
+                topBarBadge.setVisibility(View.GONE);
+                breadcrumbBar.setVisibility(View.GONE);
+                breadcrumbDivider.setVisibility(View.GONE);
+                renderQuizzesScreen();
+                break;
+
+            case SCREEN_ECD:
+                screenECD.setVisibility(View.VISIBLE);
+                btnBack.setVisibility(View.GONE);
+                fabMain.setVisibility(View.GONE);
+                topBarTitle.setText("ECD");
+                topBarBadge.setVisibility(View.GONE);
+                breadcrumbBar.setVisibility(View.GONE);
+                breadcrumbDivider.setVisibility(View.GONE);
+                if (!ecdSearchQuery.equals(ecdSearchInput.getText().toString())) {
+                    ecdSearchInput.setText(ecdSearchQuery);
+                    ecdSearchInput.setSelection(ecdSearchInput.getText().length());
+                }
+                updateSortPickers();
+                renderEcdScreen();
+                break;
+
+            case SCREEN_ECD_CLASS:
+                if (selectedClass == null) {
+                    showScreen(SCREEN_ECD);
+                    return;
+                }
+                screenEcdClass.setVisibility(View.VISIBLE);
+                btnBack.setVisibility(View.VISIBLE);
+                fabMain.setVisibility(View.GONE);
+                topBarTitle.setText(selectedClass.getDisplayName());
+                topBarBadge.setVisibility(View.GONE);
+                breadcrumbBar.setVisibility(View.VISIBLE);
+                breadcrumbDivider.setVisibility(View.VISIBLE);
+                breadcrumbRoot.setText("ECDC");
+                breadcrumbSep1.setVisibility(View.VISIBLE);
+                breadcrumbClass.setVisibility(View.VISIBLE);
+                breadcrumbClass.setText(selectedClass.getDisplayName());
+                breadcrumbClass.setTextColor(Color.parseColor("#1E293B"));
+                breadcrumbSep2.setVisibility(View.GONE);
+                breadcrumbActivity.setVisibility(View.GONE);
+                if (ecdClassTeacherLabel != null) {
+                    ecdClassTeacherLabel.setText(globalTeacherName != null && !globalTeacherName.isEmpty()
+                            ? "Teacher: " + globalTeacherName : "Teacher: Unknown");
+                }
+                refreshStudentSyncSubtitle(selectedClass.getId());
+                setupEcdClassStudentSearch();
+                break;
+
+            case SCREEN_ECD_STUDENT:
+                if (selectedClass == null || selectedEcdPeriod == null
+                        || selectedEcdStudentLrn == null
+                        || !selectedClass.getId().equals(ecdStudentClassId)) {
+                    // Stale student (e.g. the shared selectedClass changed while the
+                    // user was on another tab) — fall back one level.
+                    showScreen(selectedClass != null ? SCREEN_ECD_CLASS : SCREEN_ECD);
+                    return;
+                }
+                screenEcdStudent.setVisibility(View.VISIBLE);
+                btnBack.setVisibility(View.VISIBLE);
+                fabMain.setVisibility(View.GONE);
+                topBarTitle.setText(selectedEcdStudentName);
+                topBarBadge.setVisibility(View.VISIBLE);
+                topBarBadge.setText(selectedEcdPeriod);
+                breadcrumbBar.setVisibility(View.VISIBLE);
+                breadcrumbDivider.setVisibility(View.VISIBLE);
+                breadcrumbRoot.setText("ECDC");
+                breadcrumbSep1.setVisibility(View.VISIBLE);
+                breadcrumbClass.setVisibility(View.VISIBLE);
+                breadcrumbClass.setText(selectedClass.getDisplayName());
+                breadcrumbClass.setTextColor(Color.parseColor("#0038A8"));
+                breadcrumbSep2.setVisibility(View.VISIBLE);
+                breadcrumbActivity.setVisibility(View.VISIBLE);
+                breadcrumbActivity.setText(selectedEcdStudentName);
+                setupEcdStudentScreen();
+                break;
         }
 
         updateBottomNavSelection(screen);
@@ -2406,12 +3527,34 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
     /** True for the "chrome" tabs that sit alongside Home in the bottom nav. */
     private boolean isChromeTab(String screen) {
+        // A quiz's scan list (opened from the Quizzes tab) lives in the Quizzes tab's stack,
+        // not Home's — so it must never be remembered as Home's "screen before".
+        if (SCREEN_ACTIVITY.equals(screen) && activityOpenedFromQuizzesTab) return true;
+        // isEcdFamily covers both SCREEN_ECD and SCREEN_ECD_CLASS, so leaving
+        // either one (not just the ECD root) is treated as leaving to another
+        // tab — otherwise Home's own remembered screen gets skipped or
+        // overwritten by whatever screen ECDC happened to be on.
         return SCREEN_USER.equals(screen) || SCREEN_ASSESSMENTS.equals(screen)
-                || SCREEN_ANSWERKEYS.equals(screen) || SCREEN_SCANS.equals(screen);
+                || SCREEN_ANSWERKEYS.equals(screen) || SCREEN_SCANS.equals(screen)
+                || SCREEN_QUIZZES.equals(screen) || isEcdFamily(screen);
+    }
+
+    /** True for the ECD tab's own root list and any screen inside its stack (e.g. a class). */
+    private boolean isEcdFamily(String screen) {
+        return SCREEN_ECD.equals(screen) || SCREEN_ECD_CLASS.equals(screen)
+                || SCREEN_ECD_STUDENT.equals(screen);
     }
 
     /** Switches to the Home tab's remembered screen (called by the tab tap or back button). */
     private void selectHomeTab() {
+        if (SCREEN_ACTIVITY.equals(currentScreen) && activityOpenedFromQuizzesTab) {
+            // Leaving the Quizzes stack for Home: drop the quiz and land on Home's own screen.
+            selectedActivity = null;
+            activityOpenedFromQuizzesTab = false;
+            showScreen(screenBeforeChromeTab != null && !SCREEN_ACTIVITY.equals(screenBeforeChromeTab)
+                    ? screenBeforeChromeTab : SCREEN_HOME);
+            return;
+        }
         if (isChromeTab(currentScreen)) {
             showScreen(screenBeforeChromeTab != null ? screenBeforeChromeTab : SCREEN_HOME);
         } else if (!SCREEN_HOME.equals(currentScreen)) {
@@ -2461,6 +3604,34 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         }
     }
 
+    private void selectQuizzesTab() {
+        if (SCREEN_ACTIVITY.equals(currentScreen) && activityOpenedFromQuizzesTab) {
+            // Already inside the Quizzes stack — a second tap jumps back to its root list.
+            selectedActivity = null;
+            showScreen(SCREEN_QUIZZES);
+            return;
+        }
+        if (!SCREEN_QUIZZES.equals(currentScreen)) {
+            if (!isChromeTab(currentScreen)) {
+                screenBeforeChromeTab = currentScreen;
+            }
+            showScreen(SCREEN_QUIZZES);
+        }
+    }
+
+    private void selectECDTab() {
+        if (SCREEN_ECD_CLASS.equals(currentScreen) || SCREEN_ECD_STUDENT.equals(currentScreen)) {
+            // Already inside the ECD tab's own stack — a second tap on the tab
+            // jumps back to its root, same as Home's behavior.
+            showScreen(SCREEN_ECD);
+        } else if (!SCREEN_ECD.equals(currentScreen)) {
+            if (!isChromeTab(currentScreen)) {
+                screenBeforeChromeTab = currentScreen;
+            }
+            showScreen(lastEcdScreen);
+        }
+    }
+
     /** Colors the active vs inactive tab icon/label. */
     private void updateBottomNavSelection(String screen) {
         int activeColor = Color.parseColor("#FFFFFF");
@@ -2475,7 +3646,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         boolean assessmentsActive = SCREEN_ASSESSMENTS.equals(screen);
         boolean answerKeysActive = SCREEN_ANSWERKEYS.equals(screen);
         boolean scansActive = SCREEN_SCANS.equals(screen);
-        boolean homeActive = !userActive && !assessmentsActive && !answerKeysActive && !scansActive;
+        boolean quizzesActive = SCREEN_QUIZZES.equals(screen)
+                || (SCREEN_ACTIVITY.equals(screen) && activityOpenedFromQuizzesTab);
+        boolean ecdActive = isEcdFamily(screen);
+        boolean homeActive = !userActive && !assessmentsActive && !answerKeysActive && !scansActive && !quizzesActive && !ecdActive;
 
         navHomeIcon.setColorFilter(activeColor);
         navHomeIcon.setImageAlpha(homeActive ? activeAlpha : inactiveAlpha);
@@ -2493,31 +3667,201 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         navScansIcon.setImageAlpha(scansActive ? activeAlpha : inactiveAlpha);
         navScansLabel.setTextColor(scansActive ? activeColor : inactiveColor);
 
-        navUserIcon.setColorFilter(activeColor);
+        // A white color filter would turn the photo into a white blob, so only filter the icon.
+        if (navUserShowsPhoto) navUserIcon.clearColorFilter();
+        else navUserIcon.setColorFilter(activeColor);
         navUserIcon.setImageAlpha(userActive ? activeAlpha : inactiveAlpha);
         navUserLabel.setTextColor(userActive ? activeColor : inactiveColor);
+
+        navQuizzesIcon.setColorFilter(activeColor);
+        navQuizzesIcon.setImageAlpha(quizzesActive ? activeAlpha : inactiveAlpha);
+        navQuizzesLabel.setTextColor(quizzesActive ? activeColor : inactiveColor);
+
+        navECDIcon.setColorFilter(activeColor);
+        navECDIcon.setImageAlpha(ecdActive ? activeAlpha : inactiveAlpha);
+        navECDLabel.setTextColor(ecdActive ? activeColor : inactiveColor);
+    }
+
+    // ── Profile photo ────────────────────────────────────────────────────
+    // Saved as filesDir/images/profile_<userId>.jpg. BackupManager already zips and
+    // restores everything in filesDir/images, so the photo rides along with backups.
+    // users.profile_photo_path points at it; if that path is missing or stale (fresh
+    // install + restored backup), the file is found again by its userId-based name.
+
+    private static final int PROFILE_PHOTO_MAX_PX = 512;
+
+    /** True while the bottom-nav Profile icon is showing the user's photo instead of the person icon. */
+    private boolean navUserShowsPhoto = false;
+
+    private java.io.File profilePhotoFile(int userId) {
+        java.io.File dir = new java.io.File(getFilesDir(), "images");
+        //noinspection ResultOfMethodCallIgnored
+        dir.mkdirs();
+        return new java.io.File(dir, "profile_" + userId + ".jpg");
+    }
+
+    private void saveProfilePhoto(android.net.Uri uri) {
+        repo.getActiveUser(user -> {
+            if (user == null || user.userId == null) {
+                runOnUiThread(() -> ui.showErrorDialog("Sign-in required",
+                        "Scan your QR code before setting a profile photo."));
+                return;
+            }
+            final int userId = user.userId;
+            try {
+                android.graphics.Bitmap bmp = decodeSquareProfileBitmap(uri);
+                if (bmp == null) throw new java.io.IOException("Could not read that image.");
+                java.io.File out = profilePhotoFile(userId);
+                try (java.io.FileOutputStream fos = new java.io.FileOutputStream(out)) {
+                    bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, fos);
+                }
+                repo.setProfilePhotoPath(userId, out.getAbsolutePath(),
+                        v -> runOnUiThread(() -> showProfilePhoto(bmp)));
+            } catch (Exception e) {
+                runOnUiThread(() -> ui.showErrorDialog("Photo not saved",
+                        e.getMessage() != null ? e.getMessage() : "Could not save that photo."));
+            }
+        });
+    }
+
+    /** Decodes, applies EXIF rotation, center-crops to a square, and downsizes to PROFILE_PHOTO_MAX_PX. */
+    private android.graphics.Bitmap decodeSquareProfileBitmap(android.net.Uri uri)
+            throws java.io.IOException {
+        android.graphics.BitmapFactory.Options bounds = new android.graphics.BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        try (java.io.InputStream in = getContentResolver().openInputStream(uri)) {
+            android.graphics.BitmapFactory.decodeStream(in, null, bounds);
+        }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null;
+
+        int sample = 1;
+        int shortSide = Math.min(bounds.outWidth, bounds.outHeight);
+        while (shortSide / (sample * 2) >= PROFILE_PHOTO_MAX_PX) sample *= 2;
+
+        android.graphics.BitmapFactory.Options opts = new android.graphics.BitmapFactory.Options();
+        opts.inSampleSize = sample;
+        android.graphics.Bitmap decoded;
+        try (java.io.InputStream in = getContentResolver().openInputStream(uri)) {
+            decoded = android.graphics.BitmapFactory.decodeStream(in, null, opts);
+        }
+        if (decoded == null) return null;
+
+        int rotation = 0;
+        try (java.io.InputStream in = getContentResolver().openInputStream(uri)) {
+            if (in != null) {
+                int o = new androidx.exifinterface.media.ExifInterface(in).getAttributeInt(
+                        androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION,
+                        androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL);
+                if (o == androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90) rotation = 90;
+                else if (o == androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180) rotation = 180;
+                else if (o == androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270) rotation = 270;
+            }
+        } catch (Exception ignored) {
+            // No EXIF data — use the image as decoded.
+        }
+
+        int side = Math.min(decoded.getWidth(), decoded.getHeight());
+        int x = (decoded.getWidth() - side) / 2;
+        int y = (decoded.getHeight() - side) / 2;
+        android.graphics.Matrix m = new android.graphics.Matrix();
+        if (rotation != 0) m.postRotate(rotation);
+        float scale = Math.min(1f, (float) PROFILE_PHOTO_MAX_PX / side);
+        m.postScale(scale, scale);
+        return android.graphics.Bitmap.createBitmap(decoded, x, y, side, side, m, true);
+    }
+
+    /** Shows the active account's saved photo on the User tab, or the default person icon. */
+    private void loadProfilePhoto() {
+        repo.getActiveUser(user -> {
+            android.graphics.Bitmap bmp = null;
+            if (user != null && user.userId != null) {
+                java.io.File f = user.profilePhotoPath != null
+                        ? new java.io.File(user.profilePhotoPath) : null;
+                if (f == null || !f.isFile()) {
+                    f = profilePhotoFile(user.userId); // path unset/stale: find it by name
+                }
+                if (f.isFile()) {
+                    bmp = android.graphics.BitmapFactory.decodeFile(f.getAbsolutePath());
+                    if (bmp != null && !f.getAbsolutePath().equals(user.profilePhotoPath)) {
+                        repo.setProfilePhotoPath(user.userId, f.getAbsolutePath(), null);
+                    }
+                }
+            }
+            final android.graphics.Bitmap shown = bmp;
+            runOnUiThread(() -> showProfilePhoto(shown));
+        });
+    }
+
+    private void showProfilePhoto(android.graphics.Bitmap bmp) {
+        // User tab avatar
+        if (bmp != null) {
+            userAvatarImage.setImageBitmap(bmp);
+            userAvatarImage.setVisibility(View.VISIBLE);
+            userAvatarPlaceholder.setVisibility(View.GONE);
+        } else {
+            userAvatarImage.setImageDrawable(null);
+            userAvatarImage.setVisibility(View.GONE);
+            userAvatarPlaceholder.setVisibility(View.VISIBLE);
+        }
+
+        // Bottom-nav Profile tab: the photo (round) in place of the person icon.
+        if (bmp != null) {
+            androidx.core.graphics.drawable.RoundedBitmapDrawable navCircle =
+                    androidx.core.graphics.drawable.RoundedBitmapDrawableFactory.create(getResources(), bmp);
+            navCircle.setCircular(true);
+            navUserShowsPhoto = true;
+            navUserIcon.setImageTintList(null);
+            navUserIcon.setImageDrawable(navCircle);
+        } else {
+            navUserShowsPhoto = false;
+            navUserIcon.setImageResource(R.drawable.ic_person);
+            navUserIcon.setImageTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#CCFFFFFF")));
+        }
+        updateBottomNavSelection(currentScreen); // re-apply tint/dimming to whichever icon is showing
+
+        // Home header button: the photo fills the circle; with no photo, fall back to the
+        // white person icon (padded and tinted, as in the layout).
+        if (bmp != null) {
+            // Circular photo inside an opaque white circle (the padding is the white ring).
+            androidx.core.graphics.drawable.RoundedBitmapDrawable circle =
+                    androidx.core.graphics.drawable.RoundedBitmapDrawableFactory.create(getResources(), bmp);
+            circle.setCircular(true);
+            btnGoToUsers.setImageTintList(null);
+            btnGoToUsers.setBackgroundResource(R.drawable.bg_icon_circle_white);
+            btnGoToUsers.setPadding(ui.dp(4), ui.dp(4), ui.dp(4), ui.dp(4));
+            btnGoToUsers.setImageDrawable(circle);
+        } else {
+            // No photo: original translucent circle with the white person icon.
+            btnGoToUsers.setBackgroundResource(R.drawable.bg_icon_circle_white);
+            btnGoToUsers.setImageResource(R.drawable.ic_person);
+            btnGoToUsers.setImageTintList(android.content.res.ColorStateList.valueOf(Color.WHITE));
+            btnGoToUsers.setPadding(ui.dp(11), ui.dp(11), ui.dp(11), ui.dp(11));
+        }
     }
 
     /** Populates the User tab with the currently active user's info, activity stats, and account details. */
     private void refreshUserScreen() {
         String displayName = globalTeacherName != null ? globalTeacherName.trim() : "";
         userNameText.setText(!displayName.isEmpty() ? displayName : "Scan your QR code to set your name");
+        loadProfilePhoto();
         updateLastSyncedLabel();
 
         SimpleDateFormat sdf = new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault());
 
         // Activity stats
-        repo.countClasses(count -> runOnUiThread(() ->
-                userStatClasses.setText(String.valueOf(count))));
-        repo.countAssessments(count -> runOnUiThread(() ->
-                userStatAssessments.setText(String.valueOf(count))));
-        repo.countScans(count -> runOnUiThread(() ->
-                userStatScans.setText(String.valueOf(count))));
-        repo.getAllAnswerKeys(keys -> runOnUiThread(() ->
-                userStatAnswerKeys.setText(String.valueOf(keys != null ? keys.size() : 0))));
+        ensureTeacherId(teacherId -> {
+            repo.countClasses(teacherId, count -> runOnUiThread(() ->
+                    userStatClasses.setText(String.valueOf(count))));
+            repo.countAssessments(teacherId, count -> runOnUiThread(() ->
+                    userStatAssessments.setText(String.valueOf(count))));
+            repo.countScans(teacherId, count -> runOnUiThread(() ->
+                    userStatScans.setText(String.valueOf(count))));
+            repo.getAllAnswerKeys(teacherId, keys -> runOnUiThread(() ->
+                    userStatAnswerKeys.setText(String.valueOf(keys != null ? keys.size() : 0))));
+        });
 
         // Local teacher profile timestamps
-        repo.getFirstTeacher(teacher -> runOnUiThread(() -> {
+        ensureTeacherId(teacherId -> repo.getTeacherById(teacherId, teacher -> runOnUiThread(() -> {
             if (teacher != null) {
                 userDetailMemberSince.setText(sdf.format(new java.util.Date(teacher.createdAt)));
                 userDetailLastUpdated.setText(sdf.format(new java.util.Date(teacher.updatedAt)));
@@ -2525,7 +3869,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 userDetailMemberSince.setText("—");
                 userDetailLastUpdated.setText("—");
             }
-        }));
+        })));
 
         // Linked backend account details
         repo.getActiveUser(user -> runOnUiThread(() -> {
@@ -2827,7 +4171,14 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 break;
             case SCREEN_ACTIVITY:
                 selectedActivity = null;
-                showScreen(activityOpenedFromAssessmentsTab ? SCREEN_ASSESSMENTS : SCREEN_CLASS);
+                showScreen(getActivityBackScreen());
+                break;
+            case SCREEN_ECD_STUDENT:
+                showScreen(SCREEN_ECD_CLASS);
+                break;
+            case SCREEN_ECD_CLASS:
+                selectedClass = null;
+                showScreen(SCREEN_ECD);
                 break;
         }
     }
@@ -2892,6 +4243,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         }
         homeSummaryClassCount.setText(String.valueOf(classFolders.size()));
         homeSummaryAssessmentCount.setText(String.valueOf(totalAssessments));
+        if (homeAllClassesCount != null) homeAllClassesCount.setText(String.valueOf(classFolders.size()));
 
         homeRenderer.updateFilterToggleAppearance(homeFilterToggle, homeFilterPanelVisible,
                 selectedClassGradeFilter, selectedClassSchoolYearFilter, selectedClassSort);
@@ -2960,10 +4312,126 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                                 "The selected class could not be loaded. Please try again.");
                                         return;
                                     }
+                                    homeSelectedClassSnapshot = selectedClass;
                                     selectedSheetFilter = null;
                                     assessmentSearchQuery = "";
                                     selectedAssessmentSort = ASSESSMENT_SORT_NEWEST;
                                     showScreen(SCREEN_CLASS);
+                                }));
+                    }
+                })));
+    }
+
+    /** An ECDC class is a Kinder class -- the same rule the STARS server uses. This enforces a guard rail against syncs from teachers without ECDC classes. Refer to ECDC sync from EcdcUploadPayloadBuilder.java*/
+    private static boolean isEcdcGrade(String grade) {
+        return grade != null && grade.trim().toLowerCase(java.util.Locale.ROOT).startsWith("kinder");
+    }
+
+    /** The synced classes (from memory) that belong on the ECDC tab. */
+    private List<ClassFolder> getEcdcClassFolders() {
+        List<ClassFolder> ecdcClasses = new ArrayList<>();
+        for (ClassFolder c : classFolders) {
+            if (isEcdcGrade(c.getGrade())) ecdcClasses.add(c);
+        }
+        return ecdcClasses;
+    }
+
+    /**
+     * ECD tab: shows the same synced classes as Home, read from the classFolders
+     * already loaded into memory. No separate sync action — this just reflects
+     * whatever the last "Sync Class" from Home pulled down.
+     */
+    private void renderEcdScreen() {
+        ecdAllList.removeAllViews();
+
+        //checks if a teacher contains ECDC data, and creates a folder to store the data
+
+        final List<ClassFolder> ecdcClassFolders = getEcdcClassFolders();
+        if (ecdSummaryCount != null) ecdSummaryCount.setText(String.valueOf(ecdcClassFolders.size()));
+        if (ecdAllCount != null) ecdAllCount.setText(String.valueOf(ecdcClassFolders.size()));
+
+        homeRenderer.updateFilterToggleAppearance(ecdFilterToggle, ecdFilterPanelVisible,
+                selectedEcdGradeFilter, selectedEcdSchoolYearFilter, selectedEcdSort);
+
+        classRenderer.buildGroupBySwitcher(ecdGroupSwitcher, new String[][]{
+                {"Grade", "GRADE"},
+                {"School Year", "YEAR"},
+        }, ecdGroupBy, key -> {
+            ecdGroupBy = key;
+            renderEcdScreen();
+        });
+        ecdGradeFilterBlock.setVisibility("GRADE".equals(ecdGroupBy) ? View.VISIBLE : View.GONE);
+        ecdSchoolYearFilterBlock.setVisibility("YEAR".equals(ecdGroupBy) ? View.VISIBLE : View.GONE);
+
+        String activeGradeFilter = "GRADE".equals(ecdGroupBy) ? selectedEcdGradeFilter : null;
+        String activeYearFilter = "YEAR".equals(ecdGroupBy) ? selectedEcdSchoolYearFilter : null;
+
+        final int requestId = ++ecdQueryGeneration;
+        ensureTeacherId(teacherId -> repo.queryClassList(teacherId, ecdSearchQuery, activeGradeFilter,
+                activeYearFilter, selectedEcdSort, rows -> runOnUiThread(() -> {
+                    if (requestId != ecdQueryGeneration || !SCREEN_ECD.equals(currentScreen))
+                        return;
+
+                    List<String> grades = homeRenderer.getDistinctGrades(ecdcClassFolders);
+                    List<String> years = homeRenderer.getDistinctSchoolYears(ecdcClassFolders);
+
+                    boolean stale = homeRenderer.buildHomeFilterChips(
+                            ecdGradeFilterChips, ecdSchoolYearFilterChips,
+                            grades, years,
+                            selectedEcdGradeFilter, selectedEcdSchoolYearFilter,
+                            v -> {
+                                selectedEcdGradeFilter = v;
+                                if (SCREEN_ECD.equals(currentScreen)) renderEcdScreen();
+                            },
+                            v -> {
+                                selectedEcdSchoolYearFilter = v;
+                                if (SCREEN_ECD.equals(currentScreen)) renderEcdScreen();
+                            },
+                            () -> SCREEN_ECD.equals(currentScreen));
+                    if (stale) return;
+
+                    // Keep only ECDC (Kinder) classes; everything else belongs to Home.
+                    // Refer to teacher table, it will be stored there.
+                    List<ClassListRow> ecdcRows = new ArrayList<>();
+                    if (rows != null) {
+                        for (ClassListRow row : rows) {
+                            if (isEcdcGrade(row.grade)) ecdcRows.add(row);
+                        }
+                    }
+
+                    if (ecdcRows.isEmpty()) {
+                        ecdAllEmpty.setVisibility(View.VISIBLE);
+                        ecdAllList.setVisibility(View.GONE);
+                        return;
+                    }
+                    ecdAllEmpty.setVisibility(View.GONE);
+                    ecdAllList.setVisibility(View.VISIBLE);
+                    for (ClassListRow row : ecdcRows) {
+                        ecdAllList.addView(homeRenderer.createClassCard(
+                                row, globalTeacherName,
+                                () -> {
+                                    ClassFolder c = findClassById(row.id);
+                                    if (c != null) showEcdcMassUploadPeriodPicker(c);
+                                },
+                                () -> {
+                                    ClassFolder c = findClassById(row.id);
+                                    if (c != null) dialogs.showEditClassDialog(c);
+                                },
+                                () -> {
+                                    ClassFolder c = findClassById(row.id);
+                                    if (c != null) dialogs.showDeleteClassConfirmation(c);
+                                },
+                                () -> {
+                                    selectedClass = findClassById(row.id);
+                                    if (selectedClass == null) {
+                                        ui.showErrorDialog("Class unavailable",
+                                                "The selected class could not be loaded. Please try again.");
+                                        return;
+                                    }
+                                    selectedSheetFilter = null;
+                                    assessmentSearchQuery = "";
+                                    selectedAssessmentSort = ASSESSMENT_SORT_NEWEST;
+                                    showScreen(SCREEN_ECD_CLASS);
                                 }));
                     }
                 })));
@@ -2979,18 +4447,546 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
      * no-ops if the class screen isn't showing or a different class is now open.
      */
     public void refreshStudentSyncSubtitle(String classId) {
-        if (!SCREEN_CLASS.equals(currentScreen) || selectedClass == null || classStudentSyncSubtitle == null)
+        boolean onClassScreen = SCREEN_CLASS.equals(currentScreen) && classStudentSyncSubtitle != null;
+        boolean onEcdClassScreen = SCREEN_ECD_CLASS.equals(currentScreen) && ecdClassStudentCount != null;
+        if ((!onClassScreen && !onEcdClassScreen) || selectedClass == null)
             return;
         if (classId != null && !classId.equals(selectedClass.getId()))
             return;
 
-        classStudentSyncSubtitle.setText("Checking…");
+        if (onClassScreen) classStudentSyncSubtitle.setText("Checking…");
+        if (onEcdClassScreen) ecdClassStudentCount.setText("Checking…");
+
         repo.getStudentCountForClass(selectedClass.getId(), count -> runOnUiThread(() -> {
-            if (!SCREEN_CLASS.equals(currentScreen) || selectedClass == null || classStudentSyncSubtitle == null)
+            if (selectedClass == null || (classId != null && !classId.equals(selectedClass.getId())))
                 return;
             int c = (count != null) ? count : 0;
-            classStudentSyncSubtitle.setText(c > 0 ? (c + " student" + (c == 1 ? "" : "s") + " synced") : "Not synced");
+            String label = c > 0 ? (c + " student" + (c == 1 ? "" : "s") + " synced") : "Not synced";
+            if (SCREEN_CLASS.equals(currentScreen) && classStudentSyncSubtitle != null) {
+                classStudentSyncSubtitle.setText(label);
+            }
+            if (SCREEN_ECD_CLASS.equals(currentScreen) && ecdClassStudentCount != null) {
+                ecdClassStudentCount.setText(label);
+            }
         }));
+    }
+
+    /**
+     * Sets up the ECDC class screen's period picker + student search. Called
+     * every time SCREEN_ECD_CLASS is shown. If we've switched to a different
+     * class since last time, the period/search/results are reset so nothing
+     * from the previous class lingers.
+     */
+    private void setupEcdClassStudentSearch() {
+        if (selectedClass == null) return;
+
+        if (!selectedClass.getId().equals(ecdStudentSearchLoadedForClassId)) {
+            ecdStudentSearchLoadedForClassId = selectedClass.getId();
+            selectedEcdPeriod = null;
+            ecdStudentSearchQuery = "";
+            ecdStudentSearchInput.setText("");
+            ecdStudentResultsList.removeAllViews();
+        }
+
+        classRenderer.buildGroupBySwitcher(ecdPeriodSwitcher, new String[][]{
+                {"Beginning", ECD_PERIOD_BOSY},
+                {"Middle", ECD_PERIOD_MOSY},
+                {"End", ECD_PERIOD_EOSY},
+        }, selectedEcdPeriod, key -> {
+            selectedEcdPeriod = key;
+            setupEcdClassStudentSearch();
+            renderEcdStudentResults();
+        });
+
+        boolean periodChosen = selectedEcdPeriod != null;
+        ecdStudentSearchBlock.setVisibility(periodChosen ? View.VISIBLE : View.GONE);
+        if (periodChosen) {
+            renderEcdStudentResults();
+        }
+    }
+
+    /** Runs the LRN/name search against the currently selected class + period and renders result cards. */
+    private void renderEcdStudentResults() {
+        if (selectedClass == null || selectedEcdPeriod == null) return;
+
+        final String classId = selectedClass.getId();
+        final String query = ecdStudentSearchQuery;
+        final int requestId = ++ecdStudentSearchGeneration;
+
+        if (query.isEmpty()) {
+            ecdStudentResultsList.removeAllViews();
+            List<String[]> recents = getEcdRecentStudents(classId);
+            if (recents.isEmpty()) {
+                ecdStudentResultsEmpty.setVisibility(View.VISIBLE);
+                ecdStudentResultsEmpty.setText("Type a name or LRN to find a student.");
+                return;
+            }
+            ecdStudentResultsEmpty.setVisibility(View.GONE);
+
+            TextView header = new TextView(this);
+            header.setText("Recent searches");
+            header.setTextColor(Color.parseColor("#64748B"));
+            header.setTextSize(11);
+            header.setTypeface(null, android.graphics.Typeface.BOLD);
+            header.setPadding(ui.dp(2), 0, 0, ui.dp(8));
+            ecdStudentResultsList.addView(header);
+
+            for (String[] r : recents) {
+                final String lrn = r[0];
+                final String fullName = r[1];
+                ecdStudentResultsList.addView(homeRenderer.createStudentResultCard(fullName, lrn,
+                        () -> openEcdStudent(lrn, fullName)));
+            }
+            return;
+        }
+
+        repo.searchStudentsInClass(classId, query, results -> runOnUiThread(() -> {
+            if (requestId != ecdStudentSearchGeneration || !SCREEN_ECD_CLASS.equals(currentScreen))
+                return;
+            if (selectedClass == null || !classId.equals(selectedClass.getId()))
+                return;
+
+            ecdStudentResultsList.removeAllViews();
+
+            if (results == null || results.isEmpty()) {
+                ecdStudentResultsEmpty.setVisibility(View.VISIBLE);
+                ecdStudentResultsEmpty.setText("No students match \"" + query + "\".");
+                return;
+            }
+            ecdStudentResultsEmpty.setVisibility(View.GONE);
+
+            for (com.example.omrscanner.database.entities.StudentLrnEntity s : results) {
+                String fullName = ((s.lastName != null ? s.lastName : "") + ", "
+                        + (s.firstName != null ? s.firstName : "")
+                        + (s.middleName != null && !s.middleName.isEmpty() ? " " + s.middleName : "")).trim();
+                final String lrn = s.lrn;
+                ecdStudentResultsList.addView(homeRenderer.createStudentResultCard(fullName, lrn,
+                        () -> openEcdStudent(lrn, fullName)));
+            }
+        }));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // RENDER — ECDC STUDENT CHECKLIST
+    // ═══════════════════════════════════════════════════════════════
+
+    /** Most-recent-first list of {lrn, fullName} students opened from this class's search. */
+    private List<String[]> getEcdRecentStudents(String classId) {
+        List<String[]> out = new ArrayList<>();
+        if (classId == null) return out;
+        String raw = getSharedPreferences(ECD_RECENT_PREFS, MODE_PRIVATE).getString(classId, null);
+        if (raw == null) return out;
+        try {
+            org.json.JSONArray arr = new org.json.JSONArray(raw);
+            for (int i = 0; i < arr.length() && out.size() < ECD_RECENT_MAX; i++) {
+                org.json.JSONObject o = arr.getJSONObject(i);
+                out.add(new String[]{o.optString("lrn"), o.optString("name")});
+            }
+        } catch (org.json.JSONException ignored) {
+            // Corrupt entry: treat as no recents.
+        }
+        return out;
+    }
+
+    /** Moves this student to the top of the class's recents and trims the list to the max. */
+    private void recordEcdRecentStudent(String classId, String lrn, String fullName) {
+        if (classId == null || lrn == null) return;
+        List<String[]> list = getEcdRecentStudents(classId);
+        for (int i = list.size() - 1; i >= 0; i--) {
+            if (lrn.equals(list.get(i)[0])) list.remove(i);
+        }
+        list.add(0, new String[]{lrn, fullName != null ? fullName : ""});
+        try {
+            org.json.JSONArray arr = new org.json.JSONArray();
+            for (int i = 0; i < list.size() && i < ECD_RECENT_MAX; i++) {
+                arr.put(new org.json.JSONObject()
+                        .put("lrn", list.get(i)[0])
+                        .put("name", list.get(i)[1]));
+            }
+            getSharedPreferences(ECD_RECENT_PREFS, MODE_PRIVATE).edit()
+                    .putString(classId, arr.toString()).apply();
+        } catch (org.json.JSONException ignored) {
+        }
+    }
+
+    /** Opens the checklist for one student under the currently selected class + period. */
+    private void openEcdStudent(String lrn, String fullName) {
+        if (selectedClass == null || selectedEcdPeriod == null) return;
+        if (lrn == null || lrn.trim().isEmpty()) {
+            // Marks are keyed by (class, LRN, period), so without an LRN they couldn't be saved.
+            ui.showErrorDialog("No LRN on record",
+                    "This student has no LRN, so their checklist can't be saved. "
+                            + "Re-sync the class students and try again.");
+            return;
+        }
+        selectedEcdStudentLrn = lrn;
+        selectedEcdStudentName = fullName;
+        ecdStudentClassId = selectedClass.getId();
+        recordEcdRecentStudent(ecdStudentClassId, lrn, fullName);
+        selectedEcdDomainId = null;
+        ecdSavedStatuses = new java.util.HashMap<>();
+        ecdDraftStatuses = new java.util.HashMap<>();
+        ecdSavedPresentTypes = new java.util.HashMap<>();
+        ecdDraftPresentTypes = new java.util.HashMap<>();
+        ecdStudentDateMillis = null;
+        showScreen(SCREEN_ECD_STUDENT);
+    }
+
+    /**
+     * Loads the synced domains + competencies and this student's saved marks, then
+     * renders the domain pills. Runs every time the screen is shown, so returning
+     * from another tab always reflects what's actually in the database.
+     */
+    private void setupEcdStudentScreen() {
+        final String classId = ecdStudentClassId;
+        final String lrn = selectedEcdStudentLrn;
+        final String period = selectedEcdPeriod;
+        final int requestId = ++ecdChecklistLoadGeneration;
+
+        ecdStudentName.setText(selectedEcdStudentName);
+        ecdStudentMeta.setText("LRN: " + lrn + "  \u2022  " + EcdcScreenRenderer.periodLabel(period));
+        ecdStudentProgress.setText("Loading\u2026");
+        ecdCompetencyList.removeAllViews();
+
+        ecdStudentDateMillis = null;
+        renderEcdStudentDate();
+        repo.getEcdcStudentDate(classId, lrn, period, millis -> runOnUiThread(() -> {
+            if (requestId != ecdChecklistLoadGeneration
+                    || !SCREEN_ECD_STUDENT.equals(currentScreen)) return;
+            ecdStudentDateMillis = millis;
+            renderEcdStudentDate();
+        }));
+
+        repo.getEcdcDomains(domains -> repo.getAllEcdcCompetencies(competencies ->
+                repo.getEcdcResponses(classId, lrn, period, responses -> runOnUiThread(() -> {
+                    if (requestId != ecdChecklistLoadGeneration
+                            || !SCREEN_ECD_STUDENT.equals(currentScreen)) return;
+
+                    ecdDomains = domains != null ? domains : new ArrayList<>();
+                    ecdCompetencies = competencies != null ? competencies : new ArrayList<>();
+
+                    ecdSavedStatuses = new java.util.HashMap<>();
+                    ecdSavedPresentTypes = new java.util.HashMap<>();
+                    if (responses != null) {
+                        for (com.example.omrscanner.database.entities.EcdcResponseEntity r : responses) {
+                            ecdSavedStatuses.put(r.competencyId, r.status);
+                            if (r.presentType != null) {
+                                ecdSavedPresentTypes.put(r.competencyId, r.presentType);
+                            }
+                        }
+                    }
+                    ecdDraftStatuses = new java.util.HashMap<>(ecdSavedStatuses);
+                    ecdDraftPresentTypes = new java.util.HashMap<>(ecdSavedPresentTypes);
+
+                    // A re-sync can remove a domain; don't keep a selection that no longer exists.
+                    if (selectedEcdDomainId != null && findEcdDomain(selectedEcdDomainId) == null) {
+                        selectedEcdDomainId = null;
+                    }
+
+                    renderEcdDomainPills();
+                    renderEcdCompetencies();
+                }))));
+    }
+
+    private com.example.omrscanner.database.entities.EcdcDomainEntity findEcdDomain(int domainId) {
+        for (com.example.omrscanner.database.entities.EcdcDomainEntity d : ecdDomains) {
+            if (d.id == domainId) return d;
+        }
+        return null;
+    }
+
+    /** The row of domain pills — same pill style as the Assessment Period picker. */
+    private void renderEcdDomainPills() {
+        ecdcRenderer.buildDomainPills(ecdDomainSwitcher, ecdDomains, selectedEcdDomainId, domainId -> {
+            selectedEcdDomainId = domainId;
+            renderEcdDomainPills();
+            renderEcdCompetencies();
+        });
+    }
+
+    /**
+     * The competency cards for the selected domain, built from the in-memory list
+     * and the working draft — so switching pills never loses unsaved marks.
+     */
+    private void renderEcdCompetencies() {
+        ecdCompetencyList.removeAllViews();
+
+        boolean hasDomains = !ecdDomains.isEmpty();
+        ecdSaveBar.setVisibility(hasDomains ? View.VISIBLE : View.GONE);
+        updateEcdProgress();
+
+        if (!hasDomains) {
+            ecdDomainHint.setText("No ECDC domains on this device yet. "
+                    + "Go back to the class and tap Sync ECCD first.");
+            ecdDomainHint.setVisibility(View.VISIBLE);
+            ecdDomainTitle.setVisibility(View.GONE);
+            return;
+        }
+        if (selectedEcdDomainId == null) {
+            ecdDomainHint.setText("Select a domain to see its competencies.");
+            ecdDomainHint.setVisibility(View.VISIBLE);
+            ecdDomainTitle.setVisibility(View.GONE);
+            return;
+        }
+
+        final int domainId = selectedEcdDomainId;
+        com.example.omrscanner.database.entities.EcdcDomainEntity selectedDomain = findEcdDomain(domainId);
+        final String domainName = selectedDomain != null ? selectedDomain.domain : null;
+        int number = 0;
+        for (com.example.omrscanner.database.entities.EcdcCompetencyEntity c : ecdCompetencies) {
+            if (c.domainId != domainId) continue;
+            number++;
+            final int competencyId = c.id;
+            ecdCompetencyList.addView(ecdcRenderer.createCompetencyRow(number, c.competency, domainName,
+                    ecdDraftStatuses.get(competencyId), ecdDraftPresentTypes.get(competencyId),
+                    (status, presentType) -> {
+                        // null status = the teacher un-selected the mark
+                        if (status == null) {
+                            ecdDraftStatuses.remove(competencyId);
+                        } else {
+                            ecdDraftStatuses.put(competencyId, status);
+                        }
+                        // The type only exists for Present marks.
+                        if (presentType == null) {
+                            ecdDraftPresentTypes.remove(competencyId);
+                        } else {
+                            ecdDraftPresentTypes.put(competencyId, presentType);
+                        }
+                        updateEcdProgress();
+                    }));
+        }
+
+        if (number == 0) {
+            ecdDomainHint.setText("This domain has no competencies.");
+            ecdDomainHint.setVisibility(View.VISIBLE);
+            ecdDomainTitle.setVisibility(View.GONE);
+        } else {
+            ecdDomainHint.setVisibility(View.GONE);
+            ecdDomainTitle.setVisibility(View.VISIBLE);
+            updateEcdProgress(); // fills in the domain title now that the domain is known
+        }
+    }
+
+    /** Refreshes the overall + per-domain "x of y marked" counters and the Save button state. */
+    private void updateEcdProgress() {
+        int total = ecdCompetencies.size();
+        int marked = 0;
+        for (com.example.omrscanner.database.entities.EcdcCompetencyEntity c : ecdCompetencies) {
+            if (ecdDraftStatuses.get(c.id) != null) marked++;
+        }
+        boolean dirty = hasEcdUnsavedChanges();
+        ecdStudentProgress.setText(marked + " of " + total + " marked"
+                + (dirty ? "  \u2022  unsaved changes" : ""));
+
+        if (selectedEcdDomainId != null) {
+            int domainTotal = 0;
+            int domainMarked = 0;
+            for (com.example.omrscanner.database.entities.EcdcCompetencyEntity c : ecdCompetencies) {
+                if (c.domainId != selectedEcdDomainId) continue;
+                domainTotal++;
+                if (ecdDraftStatuses.get(c.id) != null) domainMarked++;
+            }
+            com.example.omrscanner.database.entities.EcdcDomainEntity d = findEcdDomain(selectedEcdDomainId);
+            ecdDomainTitle.setText((d != null && d.domain != null ? d.domain : "")
+                    + "  \u2022  " + domainMarked + " of " + domainTotal + " marked");
+        }
+        ecdcRenderer.styleSaveButton(ecdSaveButton, dirty);
+    }
+
+    /** Eye button on the ECDC student screen: tallies of the marks currently on screen. */
+    private void showEcdcSummaryCard() {
+        if (ecdDomains.isEmpty() || ecdCompetencies.isEmpty()) {
+            ui.showToast("No ECDC checklist loaded yet.");
+            return;
+        }
+        View card = ecdcRenderer.createSummaryCard(
+                selectedEcdStudentName,
+                "LRN: " + selectedEcdStudentLrn + "  \u2022  "
+                        + EcdcScreenRenderer.periodLabel(selectedEcdPeriod),
+                ecdDomains, ecdCompetencies, ecdDraftStatuses);
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(
+                this, R.style.ThemeOverlay_OMRScanner_Dialog)
+                .setView(card)
+                .setPositiveButton("Close", null)
+                .show();
+    }
+
+    /** Shows the picked date on the student card's date button (or a prompt if none yet). */
+    private void renderEcdStudentDate() {
+        if (ecdStudentDateText == null) return;
+        if (ecdStudentDateMillis == null) {
+            ecdStudentDateText.setText("Set assessment date");
+        } else {
+            ecdStudentDateText.setText(new java.text.SimpleDateFormat("MMM dd, yyyy",
+                    java.util.Locale.getDefault()).format(new java.util.Date(ecdStudentDateMillis)));
+        }
+    }
+
+    /**
+     * Student card date button: pick the date, and it is stored straight away (it does not
+     * wait for the checklist's Save). This is the date uploaded as last_ticked_at.
+     */
+    private void pickEcdStudentDate() {
+        if (ecdStudentClassId == null || selectedEcdStudentLrn == null || selectedEcdPeriod == null) {
+            return;
+        }
+        final String classId = ecdStudentClassId;
+        final String lrn = selectedEcdStudentLrn;
+        final String period = selectedEcdPeriod;
+        final java.util.Calendar cal = java.util.Calendar.getInstance();
+        if (ecdStudentDateMillis != null) cal.setTimeInMillis(ecdStudentDateMillis);
+
+        new android.app.DatePickerDialog(this, (view, year, month, day) -> {
+            java.util.Calendar picked = java.util.Calendar.getInstance();
+            picked.set(year, month, day, 12, 0, 0);
+            picked.set(java.util.Calendar.MILLISECOND, 0);
+            final long millis = picked.getTimeInMillis();
+            repo.setEcdcStudentDate(classId, lrn, period, millis, ok -> runOnUiThread(() -> {
+                if (!Boolean.TRUE.equals(ok)) {
+                    ui.showErrorDialog("Couldn't save date",
+                            "The assessment date could not be saved. Please try again.");
+                    return;
+                }
+                // Only touch the card if the same student/period is still on screen.
+                if (lrn.equals(selectedEcdStudentLrn) && period.equals(selectedEcdPeriod)) {
+                    ecdStudentDateMillis = millis;
+                    renderEcdStudentDate();
+                }
+                ui.showToast("Date saved \u2713");
+            }));
+        }, cal.get(java.util.Calendar.YEAR),
+                cal.get(java.util.Calendar.MONTH),
+                cal.get(java.util.Calendar.DAY_OF_MONTH)).show();
+    }
+
+    private boolean hasEcdUnsavedChanges() {
+        return !ecdDraftStatuses.equals(ecdSavedStatuses)
+                || !ecdDraftPresentTypes.equals(ecdSavedPresentTypes);
+    }
+
+    /**
+     * Writes every mark that differs from what's already saved. {@code afterSave}
+     * (may be null) runs on the UI thread only if the write succeeded.
+     */
+    private void saveEcdcDraft(Runnable afterSave) {
+        if (ecdStudentClassId == null || selectedEcdStudentLrn == null || selectedEcdPeriod == null) {
+            return;
+        }
+        final long now = System.currentTimeMillis();
+        List<com.example.omrscanner.database.entities.EcdcResponseEntity> changed = new ArrayList<>();
+        for (Map.Entry<Integer, String> e : ecdDraftStatuses.entrySet()) {
+            final String draftType = ecdDraftPresentTypes.get(e.getKey());
+            final boolean sameStatus = e.getValue().equals(ecdSavedStatuses.get(e.getKey()));
+            final boolean sameType = java.util.Objects.equals(
+                    draftType, ecdSavedPresentTypes.get(e.getKey()));
+            if (sameStatus && sameType) continue;
+            com.example.omrscanner.database.entities.EcdcResponseEntity r =
+                    new com.example.omrscanner.database.entities.EcdcResponseEntity();
+            r.classId = ecdStudentClassId;
+            r.lrn = selectedEcdStudentLrn;
+            r.period = selectedEcdPeriod;
+            r.competencyId = e.getKey();
+            r.status = e.getValue();
+            r.presentType = com.example.omrscanner.database.entities.EcdcResponseEntity
+                    .STATUS_PRESENT.equals(e.getValue()) ? draftType : null;
+            r.updatedAt = now;
+            changed.add(r);
+        }
+        // Marks that were saved earlier but have since been un-selected.
+        List<Integer> cleared = new ArrayList<>();
+        for (Integer competencyId : ecdSavedStatuses.keySet()) {
+            if (!ecdDraftStatuses.containsKey(competencyId)) cleared.add(competencyId);
+        }
+        if (changed.isEmpty() && cleared.isEmpty()) {
+            if (afterSave != null) afterSave.run();
+            return;
+        }
+
+        // Snapshot what is being written: anything the user taps while the write is in
+        // flight stays "unsaved" instead of being silently marked as saved.
+        final Map<Integer, String> snapshot = new java.util.HashMap<>(ecdDraftStatuses);
+        final Map<Integer, String> typeSnapshot = new java.util.HashMap<>(ecdDraftPresentTypes);
+        final int requestId = ecdChecklistLoadGeneration;
+        final String saveClassId = ecdStudentClassId;
+        final String saveLrn = selectedEcdStudentLrn;
+        final String savePeriod = selectedEcdPeriod;
+        repo.saveEcdcResponses(saveClassId, saveLrn, savePeriod, changed, cleared, ok -> runOnUiThread(() -> {
+            if (!Boolean.TRUE.equals(ok)) {
+                ui.showErrorDialog("Couldn't save",
+                        "The checklist could not be saved. Your marks are still on screen \u2014 please try again.");
+                return;
+            }
+            // If the checklist was reloaded (or another student opened) while the write was
+            // in flight, the fresh load already reflects what's in the DB — leave it alone.
+            if (requestId == ecdChecklistLoadGeneration) {
+                ecdSavedStatuses = snapshot;
+                ecdSavedPresentTypes = typeSnapshot;
+                if (SCREEN_ECD_STUDENT.equals(currentScreen)) updateEcdProgress();
+            }
+            ui.showToast("Saved \u2713");
+            if (afterSave != null) afterSave.run();
+        }));
+    }
+
+    /** Runs {@code proceed} now, or after the unsaved-changes prompt if the checklist has unsaved marks. */
+    private void runAfterEcdChecklistExitCheck(Runnable proceed) {
+        if (SCREEN_ECD_STUDENT.equals(currentScreen) && hasEcdUnsavedChanges()) {
+            confirmLeaveEcdChecklist(proceed);
+        } else {
+            proceed.run();
+        }
+    }
+
+    private void confirmLeaveEcdChecklist(Runnable proceed) {
+        final com.google.android.material.dialog.MaterialAlertDialogBuilder builder =
+                new com.google.android.material.dialog.MaterialAlertDialogBuilder(
+                        this, R.style.ThemeOverlay_OMRScanner_Dialog);
+
+        // The stock button bar stacks three buttons vertically. Same buttons (same dialog
+        // button style), but placed in our own horizontal row under the message.
+        LinearLayout buttonRow = new LinearLayout(builder.getContext());
+        buttonRow.setOrientation(LinearLayout.HORIZONTAL);
+        buttonRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        buttonRow.setPadding(ui.dp(16), ui.dp(8), ui.dp(16), ui.dp(12));
+
+        builder.setTitle("Unsaved changes")
+                .setMessage("You've marked competencies for this student that haven't been saved yet.")
+                .setView(buttonRow);
+        final androidx.appcompat.app.AlertDialog dialog = builder.create();
+
+        buttonRow.addView(createEcdDialogButton(builder.getContext(), "Keep editing",
+                dialog::dismiss));
+        buttonRow.addView(createEcdDialogButton(builder.getContext(), "Discard", () -> {
+            dialog.dismiss();
+            ecdDraftStatuses = new java.util.HashMap<>(ecdSavedStatuses);
+            ecdDraftPresentTypes = new java.util.HashMap<>(ecdSavedPresentTypes);
+            proceed.run();
+        }));
+        buttonRow.addView(createEcdDialogButton(builder.getContext(), "Save", () -> {
+            dialog.dismiss();
+            saveEcdcDraft(proceed);
+        }));
+
+        dialog.show();
+    }
+
+    /**
+     * A stock dialog text button (same look as setPositiveButton etc.) for the unsaved-changes
+     * row. Equal width per button; the text shrinks slightly instead of wrapping if it's tight.
+     */
+    private com.google.android.material.button.MaterialButton createEcdDialogButton(
+            android.content.Context dialogContext, String label, Runnable onClick) {
+        com.google.android.material.button.MaterialButton b =
+                new com.google.android.material.button.MaterialButton(dialogContext, null,
+                        androidx.appcompat.R.attr.buttonBarPositiveButtonStyle);
+        b.setText(label);
+        b.setMaxLines(1);
+        b.setAutoSizeTextTypeUniformWithConfiguration(
+                10, 14, 1, android.util.TypedValue.COMPLEX_UNIT_SP);
+        b.setLayoutParams(new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        b.setOnClickListener(v -> onClick.run());
+        return b;
     }
 
     private void renderClassScreen() {
@@ -3046,7 +5042,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
                     int rowCount = (rows != null) ? rows.size() : 0;
                     if (classAssessmentCount != null)
-                        classAssessmentCount.setText(rowCount + " total");
+                        classAssessmentCount.setText(String.valueOf(rowCount));
 
                     if (rowCount == 0) {
                         classEmpty.setVisibility(View.VISIBLE);
@@ -3083,6 +5079,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                     }
                                     selectedActivity = a;
                                     activityOpenedFromAssessmentsTab = false;
+                                    activityOpenedFromQuizzesTab = false;
                                     showScreen(SCREEN_ACTIVITY);
                                 }));
                     }
@@ -3104,7 +5101,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     ? "Teacher: " + summaryTeacherName : "Teacher: Unknown");
         }
 
-        repo.queryAllScans(null, null, null, null, "",
+        ensureTeacherId(teacherId -> repo.queryAllScans(teacherId, null, null, null, null, "",
                 allRows -> runOnUiThread(() -> {
                     if (!SCREEN_SCANS.equals(currentScreen)) return;
 
@@ -3203,7 +5200,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     for (ScanListRow row : rows) {
                         scansAllList.addView(scansRenderer.createScanCard(row));
                     }
-                }));
+                })));
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -3261,7 +5258,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         String activeTypeFilter = "TYPE".equals(myAssessmentsGroupBy) ? selectedMyAssessmentsTypeFilter : null;
         String activeClassFilter = "CLASS".equals(myAssessmentsGroupBy) ? selectedMyAssessmentsClassFilter : null;
 
-        repo.queryAllAssessments(activeSheetFilter, activeTypeFilter, activeClassFilter,
+        ensureTeacherId(teacherId -> repo.queryAllAssessments(teacherId, activeSheetFilter, activeTypeFilter, activeClassFilter,
                 myAssessmentsSearchQuery, selectedMyAssessmentsSort, rows -> runOnUiThread(() -> {
                     if (!SCREEN_ASSESSMENTS.equals(currentScreen)) return;
 
@@ -3306,10 +5303,112 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                     selectedClass = ownerClass;
                                     selectedActivity = a;
                                     activityOpenedFromAssessmentsTab = true;
+                                    activityOpenedFromQuizzesTab = false;
                                     showScreen(SCREEN_ACTIVITY);
                                 }));
                     }
-                }));
+                })));
+    }
+
+    /** Renders the Quizzes tab. Card, sort, and filter bay mirror Assessments. */
+    private void renderQuizzesScreen() {
+        quizzesAllList.removeAllViews();
+
+        String summaryTeacherName = (activeUserFirstName != null && !activeUserFirstName.isEmpty())
+                ? (activeUserFirstName + (activeUserLastName != null && !activeUserLastName.isEmpty() ? " " + activeUserLastName : ""))
+                : globalTeacherName;
+        quizzesSummaryTeacher.setText(summaryTeacherName != null && !summaryTeacherName.isEmpty()
+                ? "Teacher: " + summaryTeacherName : "Teacher: Unknown");
+
+        classRenderer.updateAssessmentFilterToggleAppearance(myQuizzesFilterToggle,
+                myQuizzesFilterPanelVisible,
+                !ASSESSMENT_SORT_NEWEST.equals(selectedMyQuizzesSort)
+                        || selectedMyQuizzesSheetFilter != null
+                        || selectedMyQuizzesTypeFilter != null
+                        || selectedMyQuizzesClassFilter != null);
+
+        classRenderer.buildGroupBySwitcher(myQuizzesGroupSwitcher, myQuizzesGroupBy, key -> {
+            myQuizzesGroupBy = key;
+            renderQuizzesScreen();
+        });
+
+        // Unfiltered pass first — used only to populate the term/class tab options.
+        ensureTeacherId(teacherId -> repo.queryAllQuizzes(teacherId, null, null, null, ASSESSMENT_SORT_NEWEST, tabRows -> runOnUiThread(() -> {
+            if (!SCREEN_QUIZZES.equals(currentScreen)) return;
+
+            List<ActivityFolder> allQuizzesAcrossClasses = new ArrayList<>();
+            for (AssessmentListRow r : (tabRows != null ? tabRows : new ArrayList<AssessmentListRow>())) {
+                ActivityFolder f = new ActivityFolder();
+                f.setSheetType(r.sheetType); // "ZPH40 • 1st Term" etc.
+                allQuizzesAcrossClasses.add(f);
+            }
+
+            if ("TYPE".equals(myQuizzesGroupBy)) {
+                classRenderer.buildAssessmentTypeTabs(myQuizzesSheetTabs, allQuizzesAcrossClasses,
+                        selectedMyQuizzesTypeFilter, filterVal -> {
+                            selectedMyQuizzesTypeFilter = filterVal;
+                            renderQuizzesScreen();
+                        });
+            } else if ("CLASS".equals(myQuizzesGroupBy)) {
+                classRenderer.buildClassGroupTabs(myQuizzesSheetTabs, classFolders,
+                        selectedMyQuizzesClassFilter, filterVal -> {
+                            selectedMyQuizzesClassFilter = filterVal;
+                            renderQuizzesScreen();
+                        });
+            } else {
+                classRenderer.buildClassSheetTabs(myQuizzesSheetTabs, allQuizzesAcrossClasses,
+                        selectedMyQuizzesSheetFilter, filterVal -> {
+                            selectedMyQuizzesSheetFilter = filterVal;
+                            renderQuizzesScreen();
+                        });
+            }
+
+            String activeTermFilter = "TYPE".equals(myQuizzesGroupBy) ? selectedMyQuizzesTypeFilter : null;
+            String activeClassFilter = "CLASS".equals(myQuizzesGroupBy) ? selectedMyQuizzesClassFilter : null;
+
+            repo.queryAllQuizzes(teacherId, activeTermFilter, activeClassFilter, myQuizzesSearchQuery,
+                    selectedMyQuizzesSort, rows -> runOnUiThread(() -> {
+                        if (!SCREEN_QUIZZES.equals(currentScreen)) return;
+
+                        int rowCount = (rows != null) ? rows.size() : 0;
+                        quizzesAllCount.setText(String.valueOf(rowCount));
+                        quizzesSummaryCount.setText(String.valueOf(rowCount));
+
+                        if (rowCount == 0) {
+                            quizzesAllEmpty.setVisibility(View.VISIBLE);
+                            quizzesAllList.setVisibility(View.GONE);
+                            return;
+                        }
+                        quizzesAllEmpty.setVisibility(View.GONE);
+                        quizzesAllList.setVisibility(View.VISIBLE);
+                        for (AssessmentListRow row : rows) {
+                            quizzesAllList.addView(classRenderer.createActivityCard(row,
+                                    () -> openQuizFor(row.id, dialogs::showEditQuizDialog),
+                                    () -> openQuizFor(row.id, (q, cid) -> dialogs.showAnswerKeyFolderDialog(q, true)),
+                                    () -> openQuizFor(row.id, (q, cid) -> dialogs.showDeleteQuizConfirmation(q)),
+                                    null,
+                                    () -> openQuizFor(row.id, (quiz, classId) -> {
+                                        selectedClass = findClassById(classId);
+                                        selectedActivity = quiz;
+                                        activityOpenedFromAssessmentsTab = false;
+                                        activityOpenedFromQuizzesTab = true;
+                                        showScreen(SCREEN_ACTIVITY);
+                                    }),
+                                    false));
+                        }
+                    }));
+        })));
+    }
+
+    /** Fetches the full QuizEntity by id (async) and hands (ActivityFolder, classId) to the consumer. */
+    private void openQuizFor(String quizId, java.util.function.BiConsumer<ActivityFolder, String> consumer) {
+        repo.getQuizById(quizId, quiz -> runOnUiThread(() -> {
+            if (quiz == null) {
+                ui.showErrorDialog("Quiz unavailable", "The selected quiz could not be loaded. Please try again.");
+                return;
+            }
+            consumer.accept(DataMapper.toActivityFolder(quiz), quiz.classId);
+        }));
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -3455,6 +5554,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                     key,
                     answerKeyLinkInfo.get(key.id),
                     answerKeyLinkedAssessments.get(key.id),
+                    answerKeyLinkedQuizzes.get(key.id),
                     () -> dialogs.showViewAnswerKeyDialog(key),
                     () -> dialogs.showEditAnswerKeyDialog(key),
                     () -> dialogs.showDeleteAnswerKeyConfirmation(key)));
@@ -3468,9 +5568,62 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private void renderActivityScreen() {
         scanCtaSub.setText(selectedActivity.getSheetType());
 
+        if (activityOpenedFromQuizzesTab) {
+            loadQuizScansThenRender();
+            return;
+        }
+
         activityRenderer.renderActivityScreen(
                 activityScanList, activityScansEmpty, scansHeader, scansTotalCount,
-                selectedActivity, selectedClass.getId(), selectedActivity.getId());
+                selectedActivity, selectedClass.getId(), selectedActivity.getId(), false);
+    }
+
+    /** Quiz equivalent of the assessment scan-load block above — reads quiz_scans/quiz_scan_answers only. */
+    private void loadQuizScansThenRender() {
+        final String quizId = selectedActivity.getId();
+        final String rosterClassId = selectedClass.getId();
+        // Same roster lookup the assessment loader uses: LRN -> "Lastname, Firstname Middlename"
+        repo.getStudentsByClass(rosterClassId, rosterEntities -> {
+            Map<String, String> lrnToName = new java.util.HashMap<>();
+            if (rosterEntities != null) {
+                for (com.example.omrscanner.database.entities.StudentLrnEntity s : rosterEntities) {
+                    if (s.lrn == null) continue;
+                    String fullName = DataMapper.formatStudentFullName(s).trim();
+                    if (!fullName.isEmpty()) lrnToName.put(s.lrn, fullName);
+                }
+            }
+            repo.getScansByQuiz(quizId, quizScans -> {
+                List<ScanEntry> scanEntries = new ArrayList<>();
+                if (quizScans == null || quizScans.isEmpty()) {
+                    runOnUiThread(() -> finishQuizScanRender(quizId, scanEntries));
+                    return;
+                }
+                Map<Integer, Integer> scanNumbers = DataMapper.computeQuizScanNumbers(quizScans);
+                AtomicInteger countdown = new AtomicInteger(quizScans.size());
+                for (com.example.omrscanner.database.entities.QuizScanEntity qse : quizScans) {
+                    repo.getQuizScanAnswers(qse.id, answerEntities -> {
+                        Map<Integer, String> answers = DataMapper.toQuizAnswerMap(answerEntities);
+                        ScanEntry entry = DataMapper.toScanEntry(qse, answers);
+                        entry.setStudentName(lrnToName.get(qse.studentLrn));
+                        Integer num = scanNumbers.get(qse.id);
+                        entry.setScanNumber(num != null ? num : 0);
+                        scanEntries.add(entry);
+                        if (countdown.decrementAndGet() == 0) {
+                            runOnUiThread(() -> finishQuizScanRender(quizId, scanEntries));
+                        }
+                    });
+                }
+            });
+        });
+    }
+
+    private void finishQuizScanRender(String quizId, List<ScanEntry> scanEntries) {
+        if (!SCREEN_ACTIVITY.equals(currentScreen) || selectedActivity == null
+                || !quizId.equals(selectedActivity.getId())) return;
+        selectedActivity.setScans(scanEntries);
+        activityRenderer.renderActivityScreen(
+                activityScanList, activityScansEmpty, scansHeader, scansTotalCount,
+                selectedActivity, selectedClass.getId(), selectedActivity.getId(), true);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -3480,10 +5633,14 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private void updateSortPickers() {
         if (homeClassSortPicker != null)
             homeClassSortPicker.setText(homeRenderer.getClassSortLabel(selectedClassSort) + " \u25be");
+        if (ecdClassSortPicker != null)
+            ecdClassSortPicker.setText(homeRenderer.getClassSortLabel(selectedEcdSort) + " \u25be");
         if (classAssessmentSortPicker != null)
             classAssessmentSortPicker.setText(classRenderer.getAssessmentSortLabel(selectedAssessmentSort) + " \u25be");
         if (myAssessmentsSortPicker != null)
             myAssessmentsSortPicker.setText(classRenderer.getAssessmentSortLabel(selectedMyAssessmentsSort) + " \u25be");
+        if (myQuizzesSortPicker != null)
+            myQuizzesSortPicker.setText(classRenderer.getAssessmentSortLabel(selectedMyQuizzesSort) + " \u25be");
         if (answerKeysSortPicker != null)
             answerKeysSortPicker.setText(classRenderer.getAssessmentSortLabel(selectedAnswerKeysSort) + " \u25be");
         if (scansSortPicker != null)
@@ -3568,6 +5725,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         if (selectedSheetType != null) intent.putExtra(EXTRA_SHEET_TYPE, selectedSheetType);
         if (selectedClass != null) intent.putExtra(EXTRA_CLASS_ID, selectedClass.getId());
         if (selectedActivity != null) intent.putExtra(EXTRA_ACTIVITY_ID, selectedActivity.getId());
+        intent.putExtra(EXTRA_IS_QUIZ, activityOpenedFromQuizzesTab);
         startActivity(intent);
     }
 
@@ -3595,33 +5753,13 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             runOnUiThread(this::refreshTeacherNameHeader);
         });
 
-        repo.getFirstTeacher(teacher -> {
-            // Don't let the "teachers" table (name is always "" now that manual editing is
-            // gone) clobber the name we just set from the scanned-in active user above.
-            boolean hasScannedName = activeUserFirstName != null && !activeUserFirstName.isEmpty();
-
-            if (teacher != null) {
-                if (!hasScannedName) {
-                    globalTeacherName = teacher.name != null ? teacher.name : "";
-                }
-                currentTeacherId = teacher.id;
-                loadClassesFromDb(prevClassId, prevActivityId, prevScreen);
-                return;
+        boolean hasScannedName = activeUserFirstName != null && !activeUserFirstName.isEmpty();
+        ensureTeacherId(teacherId -> {
+            if (!hasScannedName) {
+                repo.getTeacherById(teacherId, t ->
+                        globalTeacherName = (t != null && t.name != null) ? t.name : "");
             }
-            repo.upsertTeacher(0, "", ensuredTeacher -> {
-                if (ensuredTeacher != null) {
-                    if (!hasScannedName) {
-                        globalTeacherName = ensuredTeacher.name != null ? ensuredTeacher.name : "";
-                    }
-                    currentTeacherId = ensuredTeacher.id;
-                } else {
-                    if (!hasScannedName) {
-                        globalTeacherName = "";
-                    }
-                    currentTeacherId = -1;
-                }
-                loadClassesFromDb(prevClassId, prevActivityId, prevScreen);
-            });
+            loadClassesFromDb(prevClassId, prevActivityId, prevScreen);
         });
     }
 
@@ -3683,6 +5821,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                         for (AssessmentEntity ae : assessmentEntities) {
                             ActivityFolder af = DataMapper.toActivityFolder(ae);
                             af.setAnswerKeyId(ae.answerKeyId); // carry the soft-link into the in-memory model
+                            af.setServerAssessmentId(ae.serverAssessmentId); // synced assessments already have a server id
                             repo.getScansByAssessment(ae.id, scanEntities -> {
                                 List<ScanEntry> scanEntries = new ArrayList<>();
                                 Map<Integer, Integer> scanNumbers = DataMapper.computeScanNumbers(scanEntities);
@@ -3755,6 +5894,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     }
 
     private void refreshTeacherNameHeader() {
+        loadProfilePhoto();
         String displayName = (activeUserFirstName != null && !activeUserFirstName.isEmpty())
                 ? activeUserFirstName
                 : globalTeacherName;
@@ -3773,6 +5913,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 : displayName;
         if (homeTeacherLabel != null) {
             homeTeacherLabel.setText(fullTeacherName != null && !fullTeacherName.isEmpty()
+                    ? "Teacher: " + fullTeacherName : "Teacher: Unknown");
+        }
+        if (ecdSummaryTeacher != null) {
+            ecdSummaryTeacher.setText(fullTeacherName != null && !fullTeacherName.isEmpty()
                     ? "Teacher: " + fullTeacherName : "Teacher: Unknown");
         }
 
@@ -3803,6 +5947,20 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         runOnUiThread(() -> {
             classFolders = loaded;
             Log.d(TAG, "Loaded " + classFolders.size() + " classes from Room");
+
+            // Quizzes are NOT part of ClassFolder.getActivities(), so
+            // findActivityById() below can never locate them — it would silently
+            // null out selectedActivity and bounce us to SCREEN_HOME. Resolve
+            // quiz activities through the quiz-specific async lookup instead.
+            if (SCREEN_ACTIVITY.equals(prevScreen) && activityOpenedFromQuizzesTab && prevActivityId != null) {
+                openQuizFor(prevActivityId, (quiz, classId) -> {
+                    selectedClass = findClassById(classId);
+                    selectedActivity = quiz;
+                    showScreen(SCREEN_ACTIVITY);
+                });
+                return;
+            }
+
             if (prevClassId != null) {
                 selectedClass = findClassById(prevClassId);
                 if (selectedClass != null && prevActivityId != null)
@@ -3823,6 +5981,69 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         if (activityId == null || lrn == null) return false;
         OMRRepository r = new OMRRepository(context);
         return r.isLrnExistsSync(activityId, lrn);
+    }
+
+    /** Quiz counterpart of {@link #isLrnExists}: checks quiz_scans instead of the assessment scans table. */
+    public static boolean isQuizLrnExists(android.content.Context context,
+                                          String quizId, String lrn) {
+        if (quizId == null || lrn == null) return false;
+        OMRRepository r = new OMRRepository(context);
+        return r.getQuizScanByQuizAndLrnSync(quizId, lrn) != null;
+    }
+
+    public static void saveQuizScanResult(android.content.Context context,
+                                          String classId, String quizId, ScanEntry scanEntry, boolean replace) {
+        if (quizId == null || scanEntry == null) return;
+        OMRRepository r = new OMRRepository(context);
+        com.example.omrscanner.database.entities.QuizScanEntity existing = (replace && scanEntry.getLrn() != null)
+                ? r.getQuizScanByQuizAndLrnSync(quizId, scanEntry.getLrn()) : null;
+        com.example.omrscanner.database.entities.QuizScanEntity entity = new com.example.omrscanner.database.entities.QuizScanEntity();
+        entity.quizId = quizId;
+        entity.studentLrn = scanEntry.getLrn();
+        entity.detectedBubbles = scanEntry.getScore();
+        entity.score = scanEntry.isScored() ? scanEntry.getScore() : null;
+        entity.numItems = scanEntry.getNumItems();
+        entity.imagePath = scanEntry.getImagePath();
+        entity.overlayImagePath = scanEntry.getOverlayImagePath();
+        entity.keyReferenceImagePath = scanEntry.getKeyReferenceImagePath();
+        entity.timestamp = scanEntry.getTimestamp() > 0 ? scanEntry.getTimestamp() : System.currentTimeMillis();
+        entity.updatedAt = System.currentTimeMillis();
+
+        // ── Auto-score against the quiz's own answer key ──
+        com.example.omrscanner.database.entities.QuizEntity quiz = r.getQuizByIdSync(quizId);
+        if (quiz != null && quiz.answerKeyId != null) {
+            com.example.omrscanner.database.entities.AnswerKeyEntity key = r.getAnswerKeyByIdSync(quiz.answerKeyId);
+            if (key != null && key.answers != null && !key.answers.isEmpty()) {
+                String[] correctAnswers = key.answers.split(",");
+                java.util.Map<Integer, String> studentAnswers = scanEntry.getAnswers();
+                int score = 0;
+                for (int i = 0; i < correctAnswers.length; i++) {
+                    String k = correctAnswers[i].trim();
+                    if (k.isEmpty() || k.equals("?")) continue;
+                    String s = (studentAnswers != null && studentAnswers.containsKey(i + 1))
+                            ? studentAnswers.get(i + 1) : "";
+                    if (k.equals(s)) score++;
+                }
+                entity.score = score;
+            }
+        }
+
+        if (existing != null) {
+            entity.id = existing.id;
+            r.updateQuizScan(entity, null);
+            r.deleteQuizScanAnswersByQuizScan(existing.id,
+                    done -> r.insertQuizScanAnswersFromMap(existing.id, scanEntry.getAnswers(), null));
+        } else {
+            r.insertQuizScan(entity, newId -> {
+                if (newId != null && newId > 0) {
+                    r.insertQuizScanAnswersFromMap(newId.intValue(), scanEntry.getAnswers(), null);
+                }
+            });
+        }
+
+        if (onScanSavedListener != null) {
+            new Handler(Looper.getMainLooper()).post(onScanSavedListener);
+        }
     }
 
     public static void saveScanResult(android.content.Context context,
@@ -4031,6 +6252,97 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         }).start();
     }
 
+    public static void syncEcdcDomains(android.content.Context context, String serverIp) {
+        android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+        mainHandler.post(() -> android.widget.Toast.makeText(context, "Syncing ECCD domains…", android.widget.Toast.LENGTH_SHORT).show());
+
+        new Thread(() -> {
+            java.net.HttpURLConnection conn = null;
+            try {
+                java.net.URL url = new java.net.URL(serverIp + ECDC_DOMAINS_SYNC_PATH);
+                conn = (java.net.HttpURLConnection) url.openConnection();
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
+                conn.setRequestMethod("GET");
+                conn.setRequestProperty("Accept", "application/json");
+
+                int code = conn.getResponseCode();
+                java.io.InputStream is = (code >= 200 && code < 300)
+                        ? conn.getInputStream() : conn.getErrorStream();
+
+                StringBuilder sb = new StringBuilder();
+                try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(is, "UTF-8"))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) sb.append(line);
+                }
+
+                String responseBody = sb.toString();
+                android.util.Log.d("OMR_ECDC_SYNC", "HTTP " + code + " — raw response: " + responseBody);
+
+                org.json.JSONObject root = new org.json.JSONObject(responseBody);
+                org.json.JSONArray domains = root.optJSONArray("data");
+
+                if (domains == null || domains.length() == 0) {
+                    mainHandler.post(() -> android.widget.Toast.makeText(context,
+                            "No ECCD domains returned.", android.widget.Toast.LENGTH_SHORT).show());
+                    return;
+                }
+
+                int domainCount = domains.length();
+                java.util.List<com.example.omrscanner.database.entities.EcdcDomainEntity> domainEntities =
+                        new java.util.ArrayList<>();
+                java.util.List<com.example.omrscanner.database.entities.EcdcCompetencyEntity> competencyEntities =
+                        new java.util.ArrayList<>();
+
+                for (int i = 0; i < domainCount; i++) {
+                    org.json.JSONObject domainObj = domains.getJSONObject(i);
+
+                    com.example.omrscanner.database.entities.EcdcDomainEntity domainEntity =
+                            new com.example.omrscanner.database.entities.EcdcDomainEntity();
+                    domainEntity.id = domainObj.optInt("id");
+                    domainEntity.domain = domainObj.optString("domain", null);
+                    domainEntities.add(domainEntity);
+
+                    org.json.JSONArray competencies = domainObj.optJSONArray("competencies");
+                    if (competencies != null) {
+                        for (int j = 0; j < competencies.length(); j++) {
+                            org.json.JSONObject c = competencies.getJSONObject(j);
+                            com.example.omrscanner.database.entities.EcdcCompetencyEntity competencyEntity =
+                                    new com.example.omrscanner.database.entities.EcdcCompetencyEntity();
+                            competencyEntity.id = c.optInt("id");
+                            // The competency is nested under its domain, so use the parent's id
+                            // instead of trusting a "domain_id" field that may be missing (-> 0).
+                            competencyEntity.domainId = domainEntity.id;
+                            competencyEntity.competency = c.optString("competency", null);
+                            competencyEntities.add(competencyEntity);
+                        }
+                    }
+                }
+
+                final int finalCompetencyCount = competencyEntities.size();
+                com.example.omrscanner.database.OMRRepository repo =
+                        new com.example.omrscanner.database.OMRRepository(context);
+                repo.replaceEcdcDomains(domainEntities, competencyEntities, ok ->
+                        mainHandler.post(() -> android.widget.Toast.makeText(context,
+                                Boolean.TRUE.equals(ok)
+                                        ? "Synced " + domainCount + " domains (" + finalCompetencyCount + " competencies)"
+                                        : "Sync failed: could not save ECCD data. Your previous data was kept.",
+                                android.widget.Toast.LENGTH_LONG).show()));
+
+            } catch (Exception e) {
+                android.util.Log.e("OMR_ECDC_SYNC", "Sync failed: " + e.getClass().getSimpleName() + ": " + e.getMessage(), e);
+                mainHandler.post(() -> new com.google.android.material.dialog.MaterialAlertDialogBuilder(context, R.style.ThemeOverlay_OMRScanner_Dialog)
+                        .setTitle("Sync failed")
+                        .setMessage("Could not sync ECCD domains: " + e.getMessage())
+                        .setPositiveButton("OK", null)
+                        .show());
+            } finally {
+                if (conn != null) conn.disconnect();
+            }
+        }).start();
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // DialogHost INTERFACE IMPL
     // ═══════════════════════════════════════════════════════════════
@@ -4097,14 +6409,14 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
     @Override
     public void reloadAnswerKeys() {
-        repo.getAllAnswerKeys(keys -> runOnUiThread(() -> {
+        ensureTeacherId(teacherId -> repo.getAllAnswerKeys(teacherId, keys -> runOnUiThread(() -> {
             answerKeys = (keys != null) ? keys : new ArrayList<>();
-            repo.getAnswerKeyLinkInfo(links -> runOnUiThread(() -> {
+            repo.getAnswerKeyLinkInfo(teacherId, links -> runOnUiThread(() -> {
                 answerKeyLinkInfo.clear();
                 if (links != null) {
                     for (AnswerKeyLinkInfo l : links) answerKeyLinkInfo.put(l.id, l);
                 }
-                repo.getAnswerKeyLinkedAssessments(rows -> runOnUiThread(() -> {
+                repo.getAnswerKeyLinkedAssessments(teacherId, rows -> runOnUiThread(() -> {
                     answerKeyLinkedAssessments.clear();
                     if (rows != null) {
                         for (AnswerKeyLinkedAssessment r : rows) {
@@ -4113,9 +6425,19 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                     .add(r);
                         }
                     }
-                    if (SCREEN_ANSWERKEYS.equals(currentScreen)) renderAnswerKeysScreen();
+                    repo.getAnswerKeyLinkedQuizzes(teacherId, quizRows -> runOnUiThread(() -> {
+                        answerKeyLinkedQuizzes.clear();
+                        if (quizRows != null) {
+                            for (com.example.omrscanner.database.projections.AnswerKeyLinkedQuiz r : quizRows) {
+                                answerKeyLinkedQuizzes
+                                        .computeIfAbsent(r.answerKeyId, k -> new ArrayList<>())
+                                        .add(r);
+                            }
+                        }
+                        if (SCREEN_ANSWERKEYS.equals(currentScreen)) renderAnswerKeysScreen();
+                    }));
                 }));
             }));
-        }));
+        })));
     }
 }

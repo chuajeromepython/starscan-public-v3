@@ -12,14 +12,28 @@ import androidx.sqlite.db.SupportSQLiteDatabase; // database
 import com.example.omrscanner.database.dao.AnswerDao;
 import com.example.omrscanner.database.dao.AnswerKeyDao;
 import com.example.omrscanner.database.dao.AssessmentDao;
+import com.example.omrscanner.database.dao.QuizDao;
+import com.example.omrscanner.database.dao.QuizScanDao;
+import com.example.omrscanner.database.dao.QuizScanAnswerDao;
 import com.example.omrscanner.database.dao.ClassDao;
 import com.example.omrscanner.database.dao.ScanDao;
 import com.example.omrscanner.database.dao.StudentLrnDao;
 import com.example.omrscanner.database.dao.TeacherDao;
 import com.example.omrscanner.database.dao.UserDao;
+import com.example.omrscanner.database.dao.EcdcDomainDao;
+import com.example.omrscanner.database.dao.EcdcCompetencyDao;
+import com.example.omrscanner.database.dao.EcdcResponseDao;
+import com.example.omrscanner.database.dao.EcdcStudentDateDao;
 import com.example.omrscanner.database.entities.AnswerEntity;
 import com.example.omrscanner.database.entities.AnswerKeyEntity;
 import com.example.omrscanner.database.entities.AssessmentEntity;
+import com.example.omrscanner.database.entities.EcdcDomainEntity;
+import com.example.omrscanner.database.entities.EcdcCompetencyEntity;
+import com.example.omrscanner.database.entities.EcdcResponseEntity;
+import com.example.omrscanner.database.entities.EcdcStudentDateEntity;
+import com.example.omrscanner.database.entities.QuizEntity;
+import com.example.omrscanner.database.entities.QuizScanEntity;
+import com.example.omrscanner.database.entities.QuizScanAnswerEntity;
 import com.example.omrscanner.database.entities.ClassEntity;
 import com.example.omrscanner.database.entities.ScanEntity;
 import com.example.omrscanner.database.entities.StudentLrnEntity;
@@ -50,11 +64,28 @@ import com.example.omrscanner.database.entities.UserEntity;
  *   19 → 20: Added student_lrn.first_name/middle_name/last_name so scan
  *            cards can show the student's name above their LRN. Existing
  *            rows stay NULL until the class is re-synced.
- *
+ *   21 → 22: Added quiz_scans + quiz_scan_answers tables. Quiz scans are
+ *            stored separately from assessments' scans/answers tables so
+ *            quizzes stay fully isolated, per their local-only design.
+ *   22 → 23: Added answer_keys.teacher_id (FK -> teachers.id, CASCADE).
+ *            Answer keys were previously global/unowned — every teacher on
+ *            a shared device could read every other teacher's answer keys.
+ *            Backfilled from each key's linked assessment/quiz's class
+ *            owner; keys with no surviving link are dropped (unattributable).
+ *   23 → 24: Added ecdc_domains + ecdc_competencies tables. Reference data
+ *            synced verbatim from GET /api/ecdc/domains (Sync ECCD button);
+ *            rows are keyed by the server's own numeric id and fully
+ *            replaced on every sync, not appended to.
+ *   24 → 25: Added ecdc_responses — the teacher's Present / Not present /
+ *            Not tested marks per student, period and competency. Keyed by
+ *            (class_id, lrn, period, competency_id) with no foreign keys, so
+ *            re-syncing ECDC or the roster can never cascade-delete them.
+ *   25 → 26: Added users.profile_photo_path — local-only profile photo, carried
+ *            across QR re-scans by server userId.
  *
  * Usage:
  * AppDatabase db = AppDatabase.getInstance(context);
- * db.answerKeyDao().getAll();
+ * db.answerKeyDao().getAll(teacherId);
  */
 @Database(entities = {
         TeacherEntity.class,
@@ -64,8 +95,15 @@ import com.example.omrscanner.database.entities.UserEntity;
         AnswerEntity.class,
         AnswerKeyEntity.class,
         UserEntity.class,
-        StudentLrnEntity.class
-}, version = 20, exportSchema = false)
+        StudentLrnEntity.class,
+        QuizEntity.class,
+        QuizScanEntity.class,
+        QuizScanAnswerEntity.class,
+        EcdcDomainEntity.class,
+        EcdcCompetencyEntity.class,
+        EcdcResponseEntity.class,
+        EcdcStudentDateEntity.class
+}, version = 28, exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase {
 
   private static final String DATABASE_NAME = "omrscanner.db";
@@ -335,6 +373,173 @@ public abstract class AppDatabase extends RoomDatabase {
     }
   };
 
+  private static final Migration MIGRATION_20_21 = new Migration(20, 21) {
+    @Override
+    public void migrate(@NonNull SupportSQLiteDatabase db) {
+      // New local-only "quizzes" table. No sync columns by design.
+      db.execSQL("CREATE TABLE IF NOT EXISTS quizzes ("
+              + "id TEXT NOT NULL PRIMARY KEY, "
+              + "class_id TEXT NOT NULL, "
+              + "name TEXT, "
+              + "term TEXT, "
+              + "sheet_type TEXT, "
+              + "exam_date TEXT, "
+              + "exam_date_epoch INTEGER NOT NULL DEFAULT 0, "
+              + "created_at INTEGER NOT NULL DEFAULT 0, "
+              + "updated_at INTEGER NOT NULL DEFAULT 0, "
+              + "answer_key_id TEXT, "
+              + "FOREIGN KEY(class_id) REFERENCES classes(id) ON DELETE CASCADE)");
+      db.execSQL("CREATE INDEX IF NOT EXISTS index_quizzes_class_id ON quizzes(class_id)");
+      db.execSQL("CREATE INDEX IF NOT EXISTS index_quizzes_created_at ON quizzes(created_at)");
+      db.execSQL("CREATE INDEX IF NOT EXISTS index_quizzes_exam_date_epoch ON quizzes(exam_date_epoch)");
+    }
+  };
+
+  private static final Migration MIGRATION_21_22 = new Migration(21, 22) {
+    @Override
+    public void migrate(@NonNull SupportSQLiteDatabase db) {
+      // New local-only "quiz_scans" table — kept separate from "scans" so
+      // quiz data never shares storage (or a foreign key) with assessments.
+      db.execSQL("CREATE TABLE IF NOT EXISTS quiz_scans ("
+              + "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, "
+              + "quiz_id TEXT NOT NULL, "
+              + "student_lrn TEXT, "
+              + "detected_bubbles INTEGER NOT NULL DEFAULT 0, "
+              + "score INTEGER, "
+              + "num_items INTEGER NOT NULL DEFAULT 0, "
+              + "image_path TEXT, "
+              + "overlay_image_path TEXT, "
+              + "key_reference_image_path TEXT, "
+              + "timestamp INTEGER NOT NULL DEFAULT 0, "
+              + "updated_at INTEGER NOT NULL DEFAULT 0, "
+              + "FOREIGN KEY(quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE)");
+      db.execSQL("CREATE INDEX IF NOT EXISTS index_quiz_scans_quiz_id ON quiz_scans(quiz_id)");
+
+      // Mirrors "answers", but foreign-keyed to quiz_scans instead of scans.
+      db.execSQL("CREATE TABLE IF NOT EXISTS quiz_scan_answers ("
+              + "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, "
+              + "quiz_scan_id INTEGER NOT NULL, "
+              + "item_number INTEGER NOT NULL, "
+              + "answer TEXT NOT NULL DEFAULT '', "
+              + "FOREIGN KEY(quiz_scan_id) REFERENCES quiz_scans(id) ON DELETE CASCADE)");
+      db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_quiz_scan_answers_quiz_scan_id_item_number "
+              + "ON quiz_scan_answers(quiz_scan_id, item_number)");
+    }
+  };
+
+  private static final Migration MIGRATION_22_23 = new Migration(22, 23) {
+    @Override
+    public void migrate(@NonNull SupportSQLiteDatabase db) {
+      // answer_keys previously had no owner at all (see class doc history) —
+      // every teacher on a shared device could see every other teacher's
+      // answer keys, including the correct answers themselves, through
+      // AnswerKeyDao's unfiltered queries. Same table-rebuild pattern as
+      // MIGRATION_17_18: SQLite's ALTER TABLE ADD COLUMN can't attach a new
+      // FOREIGN KEY constraint to an existing table.
+      db.execSQL("CREATE TABLE answer_keys_new ("
+              + "id TEXT NOT NULL PRIMARY KEY, "
+              + "teacher_id INTEGER, "
+              + "name TEXT, "
+              + "school_year TEXT, "
+              + "sheet_type TEXT, "
+              + "answers TEXT, "
+              + "created_at INTEGER NOT NULL DEFAULT 0, "
+              + "updated_at INTEGER NOT NULL DEFAULT 0, "
+              + "FOREIGN KEY(teacher_id) REFERENCES teachers(id) ON DELETE CASCADE)");
+
+      // Backfill teacher_id from whichever assessment or quiz currently
+      // references this key, tracing assessment/quiz -> class -> teacher.
+      // A key with no live links (never assigned to anything) can't be
+      // attributed to anyone and is dropped below rather than left as a
+      // permanently-invisible, unowned row.
+      db.execSQL("INSERT INTO answer_keys_new "
+              + "(id, teacher_id, name, school_year, sheet_type, answers, created_at, updated_at) "
+              + "SELECT ak.id, "
+              + "COALESCE("
+              + "  (SELECT c.teacher_id FROM assessments a JOIN classes c ON c.id = a.class_id "
+              + "     WHERE a.answer_key_id = ak.id LIMIT 1), "
+              + "  (SELECT c.teacher_id FROM quizzes q JOIN classes c ON c.id = q.class_id "
+              + "     WHERE q.answer_key_id = ak.id LIMIT 1)"
+              + "), "
+              + "ak.name, ak.school_year, ak.sheet_type, ak.answers, ak.created_at, ak.updated_at "
+              + "FROM answer_keys ak");
+
+      db.execSQL("DELETE FROM answer_keys_new WHERE teacher_id IS NULL");
+
+      db.execSQL("DROP TABLE answer_keys");
+      db.execSQL("ALTER TABLE answer_keys_new RENAME TO answer_keys");
+
+      db.execSQL("CREATE INDEX IF NOT EXISTS index_answer_keys_sheet_type ON answer_keys(sheet_type)");
+      db.execSQL("CREATE INDEX IF NOT EXISTS index_answer_keys_created_at ON answer_keys(created_at)");
+      db.execSQL("CREATE INDEX IF NOT EXISTS index_answer_keys_teacher_id ON answer_keys(teacher_id)");
+    }
+  };
+
+  private static final Migration MIGRATION_23_24 = new Migration(23, 24) {
+    @Override
+    public void migrate(@NonNull SupportSQLiteDatabase db) {
+      db.execSQL("CREATE TABLE IF NOT EXISTS ecdc_domains ("
+              + "id INTEGER NOT NULL PRIMARY KEY, "
+              + "domain TEXT)");
+
+      db.execSQL("CREATE TABLE IF NOT EXISTS ecdc_competencies ("
+              + "id INTEGER NOT NULL PRIMARY KEY, "
+              + "domain_id INTEGER NOT NULL, "
+              + "competency TEXT, "
+              + "FOREIGN KEY(domain_id) REFERENCES ecdc_domains(id) ON DELETE CASCADE)");
+      db.execSQL("CREATE INDEX IF NOT EXISTS index_ecdc_competencies_domain_id "
+              + "ON ecdc_competencies(domain_id)");
+    }
+  };
+
+  private static final Migration MIGRATION_24_25 = new Migration(24, 25) {
+    @Override
+    public void migrate(@NonNull SupportSQLiteDatabase db) {
+      db.execSQL("CREATE TABLE IF NOT EXISTS ecdc_responses ("
+              + "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, "
+              + "class_id TEXT NOT NULL, "
+              + "lrn TEXT NOT NULL, "
+              + "period TEXT NOT NULL, "
+              + "competency_id INTEGER NOT NULL, "
+              + "status TEXT NOT NULL, "
+              + "updated_at INTEGER NOT NULL)");
+      db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS "
+              + "index_ecdc_responses_class_id_lrn_period_competency_id "
+              + "ON ecdc_responses(class_id, lrn, period, competency_id)");
+    }
+  };
+
+  private static final Migration MIGRATION_25_26 = new Migration(25, 26) {
+    @Override
+    public void migrate(@NonNull SupportSQLiteDatabase db) {
+      db.execSQL("ALTER TABLE users ADD COLUMN profile_photo_path TEXT");
+    }
+  };
+
+  private static final Migration MIGRATION_26_27 = new Migration(26, 27) {
+    @Override
+    public void migrate(@NonNull SupportSQLiteDatabase db) {
+      // P/O/R sub-type for "Present" ECDC marks. Nullable: existing marks stay null.
+      db.execSQL("ALTER TABLE ecdc_responses ADD COLUMN present_type TEXT");
+    }
+  };
+
+  // Per-student, per-period ECDC assessment date (sent as last_ticked_at).
+  private static final Migration MIGRATION_27_28 = new Migration(27, 28) {
+    @Override
+    public void migrate(@NonNull SupportSQLiteDatabase db) {
+      db.execSQL("CREATE TABLE IF NOT EXISTS ecdc_student_dates ("
+              + "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, "
+              + "class_id TEXT NOT NULL, "
+              + "lrn TEXT NOT NULL, "
+              + "period TEXT NOT NULL, "
+              + "date_epoch INTEGER NOT NULL)");
+      db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS "
+              + "index_ecdc_student_dates_class_id_lrn_period "
+              + "ON ecdc_student_dates(class_id, lrn, period)");
+    }
+  };
+
   // ── Abstract DAO accessors (Room generates the implementations) ──────────
   public abstract TeacherDao teacherDao();
 
@@ -352,7 +557,21 @@ public abstract class AppDatabase extends RoomDatabase {
 
   public abstract StudentLrnDao studentLrnDao();
 
-  // ── Singleton ────────────────────────────────────────────────────────────
+  public abstract QuizDao quizDao();
+
+  public abstract QuizScanDao quizScanDao();
+
+  public abstract QuizScanAnswerDao quizScanAnswerDao();
+
+  public abstract EcdcDomainDao ecdcDomainDao();
+
+  public abstract EcdcCompetencyDao ecdcCompetencyDao();
+
+  public abstract EcdcResponseDao ecdcResponseDao();
+
+  public abstract EcdcStudentDateDao ecdcStudentDateDao();
+
+  // ── Singleton────────────────────────────────────────────────────────────
   public static AppDatabase getInstance(Context context) {
     if (INSTANCE == null) {
       synchronized (AppDatabase.class) {
@@ -361,7 +580,7 @@ public abstract class AppDatabase extends RoomDatabase {
               context.getApplicationContext(),
               AppDatabase.class,
               DATABASE_NAME)
-                  .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20)
+                  .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28)
               .build();
         }
       }

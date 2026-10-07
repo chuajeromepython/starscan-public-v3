@@ -90,6 +90,7 @@ public class ResultActivity extends AppCompatActivity {
     private String selectedSheetType;
     private String classId;
     private String activityId;
+    private boolean isQuiz;
     private String imageSource;
     private boolean fixedMountMode;
     private boolean tiltAgnosticMode;
@@ -152,6 +153,7 @@ public class ResultActivity extends AppCompatActivity {
         selectedSheetType = getIntent().getStringExtra(DashboardActivity.EXTRA_SHEET_TYPE);
         classId = getIntent().getStringExtra(DashboardActivity.EXTRA_CLASS_ID);
         activityId = getIntent().getStringExtra(DashboardActivity.EXTRA_ACTIVITY_ID);
+        isQuiz = getIntent().getBooleanExtra(DashboardActivity.EXTRA_IS_QUIZ, false);
         imageSource = getIntent().getStringExtra(PreviewActivity.IMAGE_SOURCE);
         fixedMountMode = getIntent().getBooleanExtra(CameraActivity.EXTRA_FIXED_MOUNT_MODE, false);
         tiltAgnosticMode = getIntent().getBooleanExtra(CameraActivity.EXTRA_TILT_AGNOSTIC_MODE, false);
@@ -583,11 +585,19 @@ public class ResultActivity extends AppCompatActivity {
                 if (activityId != null) {
                     com.example.omrscanner.database.OMRRepository repo =
                             new com.example.omrscanner.database.OMRRepository(ResultActivity.this);
-                    com.example.omrscanner.database.entities.AssessmentEntity assessment =
-                            repo.getAssessmentByIdSync(activityId);
-                    if (assessment != null && assessment.answerKeyId != null) {
+                    String answerKeyId = null;
+                    if (isQuiz) {
+                        com.example.omrscanner.database.entities.QuizEntity quiz =
+                                repo.getQuizByIdSync(activityId);
+                        if (quiz != null) answerKeyId = quiz.answerKeyId;
+                    } else {
+                        com.example.omrscanner.database.entities.AssessmentEntity assessment =
+                                repo.getAssessmentByIdSync(activityId);
+                        if (assessment != null) answerKeyId = assessment.answerKeyId;
+                    }
+                    if (answerKeyId != null) {
                         com.example.omrscanner.database.entities.AnswerKeyEntity key =
-                                repo.getAnswerKeyByIdSync(assessment.answerKeyId);
+                                repo.getAnswerKeyByIdSync(answerKeyId);
                         if (key != null && key.answers != null && !key.answers.isEmpty()) {
                             correctAnswers = key.answers.split(",");
                         }
@@ -1102,12 +1112,14 @@ public class ResultActivity extends AppCompatActivity {
     private void proceedToDuplicateCheckAndExport() {
         if (classId != null && activityId != null && scanResult.lnr != null) {
             new Thread(() -> {
-                boolean exists = DashboardActivity.isLrnExists(this, classId, activityId, scanResult.lnr);
+                boolean exists = isQuiz
+                        ? DashboardActivity.isQuizLrnExists(this, activityId, scanResult.lnr)
+                        : DashboardActivity.isLrnExists(this, classId, activityId, scanResult.lnr);
                 runOnUiThread(() -> {
                     if (exists) {
                         new com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_OMRScanner_Dialog)
                                 .setTitle("Duplicate LRN detected")
-                                .setMessage("A scan with LRN " + scanResult.lnr + " already exists in this assessment. Do you want to replace it?")
+                                .setMessage("A scan with LRN " + scanResult.lnr + " already exists in this " + (isQuiz ? "quiz" : "assessment") + ". Do you want to replace it?")
                                 .setPositiveButton("Replace", (dialog, which) -> proceedWithExport(true))
                                 .setNegativeButton("Cancel", null)
                                 .show();
@@ -1249,8 +1261,12 @@ public class ResultActivity extends AppCompatActivity {
                 }
             }
 
-            DashboardActivity.saveScanResult(this, classId, activityId, entry, replace);
-            Log.d(TAG, "Scan result saved to folder: classId=" + classId + ", activityId=" + activityId);
+            if (isQuiz) {
+                DashboardActivity.saveQuizScanResult(this, classId, activityId, entry, replace);
+            } else {
+                DashboardActivity.saveScanResult(this, classId, activityId, entry, replace);
+            }
+            Log.d(TAG, "Scan result saved to folder: classId=" + classId + ", activityId=" + activityId + ", isQuiz=" + isQuiz);
             return true;
 
         } catch (Exception e) {

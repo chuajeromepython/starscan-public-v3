@@ -499,7 +499,14 @@ public class ClassScreenRenderer {
      * @param onOpen   called when the card body is tapped
      */
     public View createActivityCard(AssessmentListRow row,
-            Runnable onEdit, Runnable onSelectAnswerKey, Runnable onDelete, Runnable onUpload, Runnable onOpen) {
+                                   Runnable onEdit, Runnable onSelectAnswerKey, Runnable onDelete, Runnable onUpload, Runnable onOpen) {
+        return createActivityCard(row, onEdit, onSelectAnswerKey, onDelete, onUpload, onOpen, true);
+    }
+
+    /** @param showUpload false hides the "Upload" menu item entirely — used for quizzes, which never sync. */
+    public View createActivityCard(AssessmentListRow row,
+                                   Runnable onEdit, Runnable onSelectAnswerKey, Runnable onDelete, Runnable onUpload, Runnable onOpen,
+                                   boolean showUpload) {
 
         FrameLayout card = new FrameLayout(activity);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
@@ -587,7 +594,7 @@ public class ClassScreenRenderer {
 
             popup.getMenu().add(0, 1, 0, editTitle).setIcon(editIcon);
             popup.getMenu().add(0, 2, 1, keyTitle).setIcon(keyIcon);
-            popup.getMenu().add(0, 3, 2, uploadTitle).setIcon(uploadIcon);
+            if (showUpload) popup.getMenu().add(0, 3, 2, uploadTitle).setIcon(uploadIcon);
             popup.getMenu().add(0, 4, 3, deleteTitle).setIcon(deleteIcon);
 
             try {
@@ -603,7 +610,7 @@ public class ClassScreenRenderer {
                 int id = item.getItemId();
                 if (id == 1) { onEdit.run(); return true; }
                 if (id == 2) { onSelectAnswerKey.run(); return true; }
-                if (id == 3) { onUpload.run(); return true; }
+                if (id == 3 && showUpload) { onUpload.run(); return true; }
                 if (id == 4) { onDelete.run(); return true; }
                 return false;
             });
@@ -618,6 +625,8 @@ public class ClassScreenRenderer {
                 ? row.examDate
                 : new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
                 .format(new java.util.Date(row.createdAt));
+        // "X of Y students scanned" — same format for quizzes and assessments.
+        // (showUpload only controls the Upload menu item, unrelated to this count.)
         meta.setText("\uD83D\uDC65 " + row.scanCount + " of " + row.syncedStudentCount + " student"
                 + (row.syncedStudentCount != 1 ? "s" : "") + " scanned · " + dateToShow);
         meta.setTextColor(Color.parseColor("#94A3B8"));
@@ -814,7 +823,9 @@ public class ClassScreenRenderer {
      * Creates a card for a single answer key, for the "Answer Keys" tab list.
      */
     public View createAnswerKeyCard(AnswerKeyEntity key, AnswerKeyLinkInfo link,
-                                    List<AnswerKeyLinkedAssessment> linkedAssessments, Runnable onView, Runnable onEdit, Runnable onDelete) {
+                                    List<AnswerKeyLinkedAssessment> linkedAssessments,
+                                    List<com.example.omrscanner.database.projections.AnswerKeyLinkedQuiz> linkedQuizzes,
+                                    Runnable onView, Runnable onEdit, Runnable onDelete) {
 
         FrameLayout card = new FrameLayout(activity);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
@@ -830,13 +841,18 @@ public class ClassScreenRenderer {
         cardBody.setLayoutParams(new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        boolean isLinkedForBorder = link != null && link.linkedAssessmentName != null;
+        boolean isLinkedToAssessment = link != null && link.linkedAssessmentName != null;
+        boolean isLinkedToQuiz = link != null && link.linkedQuizName != null;
 
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(Color.WHITE);
         bg.setCornerRadius(ui.dp(16));
-        if (isLinkedForBorder) {
-            // Green border to flag that this key is currently used by an assessment.
+        if (isLinkedToAssessment) {
+            // Blue border: this key is used by an assessment. Blue also wins when the key is
+            // linked to a quiz too -- the quiz link still shows in its own badge below.
+            bg.setStroke(ui.dp(2), Color.parseColor("#3B82F6"));
+        } else if (isLinkedToQuiz) {
+            // Green border: this key is used by a quiz (and no assessment).
             bg.setStroke(ui.dp(2), Color.parseColor("#22C55E"));
         } else {
             bg.setStroke(ui.dp(1), Color.parseColor("#E2E8F0"));
@@ -935,12 +951,11 @@ public class ClassScreenRenderer {
         linkBadgeRowLp.topMargin = ui.dp(8);
         linkBadgeRow.setLayoutParams(linkBadgeRowLp);
 
-        boolean isLinked = link != null && link.linkedAssessmentName != null;
         final int LINK_NAME_WRAP_THRESHOLD = 18; // chars, tuned for 11sp italic text
-        boolean longLinkName = isLinked
+        boolean longLinkName = isLinkedToAssessment
                 && link.linkedAssessmentName.length() > LINK_NAME_WRAP_THRESHOLD;
 
-        if (isLinked) {
+        if (isLinkedToAssessment) {
             String extra = link.linkedCount > 1 ? " (+" + (link.linkedCount - 1) + " more)" : "";
 
             TextView nameBadge = new TextView(activity);
@@ -997,7 +1012,7 @@ public class ClassScreenRenderer {
                 typeBadge.setLayoutParams(typeBadgeLp);
                 linkBadgeRow.addView(typeBadge);
             }
-        } else {
+        } else if (!isLinkedToQuiz) {
             TextView notLinkedBadge = new TextView(activity);
             notLinkedBadge.setText("◌ Not linked to an assessment");
             notLinkedBadge.setTextColor(Color.parseColor("#64748B"));
@@ -1012,6 +1027,54 @@ public class ClassScreenRenderer {
             linkBadgeRow.addView(notLinkedBadge);
         }
         cardBody.addView(linkBadgeRow);
+
+        // Quiz link status — rendered on its own row so it never has to compete
+        // for space with the assessment badge above (a key can be linked to both).
+        if (isLinkedToQuiz) {
+            LinearLayout quizBadgeRow = new LinearLayout(activity);
+            quizBadgeRow.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams quizBadgeRowLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            quizBadgeRowLp.topMargin = ui.dp(6);
+            quizBadgeRow.setLayoutParams(quizBadgeRowLp);
+
+            String quizExtra = link.linkedQuizCount > 1 ? " (+" + (link.linkedQuizCount - 1) + " more)" : "";
+
+            TextView quizBadge = new TextView(activity);
+            quizBadge.setText("📝 Linked to Quiz: " + link.linkedQuizName + quizExtra + "  ▾");
+            quizBadge.setTextColor(Color.parseColor("#0F766E"));
+            quizBadge.setTextSize(11);
+            quizBadge.setTypeface(null, Typeface.ITALIC);
+            GradientDrawable quizBadgeBg = new GradientDrawable();
+            quizBadgeBg.setCornerRadius(ui.dp(8));
+            quizBadgeBg.setColor(Color.parseColor("#F0FDFA"));
+            quizBadgeBg.setStroke(ui.dp(1), Color.parseColor("#99F6E4"));
+            quizBadge.setBackground(quizBadgeBg);
+            quizBadge.setPadding(ui.dp(8), ui.dp(3), ui.dp(8), ui.dp(3));
+            quizBadge.setClickable(true);
+            quizBadge.setFocusable(true);
+            quizBadge.setOnClickListener(v -> {
+                List<com.example.omrscanner.database.projections.AnswerKeyLinkedQuiz> rows = linkedQuizzes != null
+                        ? linkedQuizzes : new ArrayList<>();
+                String[] labels;
+                if (rows.isEmpty()) {
+                    labels = new String[]{ link.linkedQuizName };
+                } else {
+                    labels = new String[rows.size()];
+                    for (int i = 0; i < rows.size(); i++) {
+                        com.example.omrscanner.database.projections.AnswerKeyLinkedQuiz r = rows.get(i);
+                        labels[i] = r.name + (r.sheetType != null ? "  ·  " + r.sheetType : "");
+                    }
+                }
+                new com.google.android.material.dialog.MaterialAlertDialogBuilder(
+                        activity, R.style.ThemeOverlay_OMRScanner_Dialog)
+                        .setTitle("Linked Quizzes")
+                        .setItems(labels, null)
+                        .show();
+            });
+            quizBadgeRow.addView(quizBadge);
+            cardBody.addView(quizBadgeRow);
+        }
 
         // Linked assessment name was too long to share a row with the sheet-type
         // badge — render the sheet-type badge on its own row underneath instead.

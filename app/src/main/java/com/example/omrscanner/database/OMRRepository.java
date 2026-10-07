@@ -8,8 +8,15 @@ import com.example.omrscanner.database.entities.AnswerKeyEntity;
 import com.example.omrscanner.database.entities.AssessmentEntity;
 import com.example.omrscanner.database.entities.ClassEntity;
 import com.example.omrscanner.database.entities.ScanEntity;
+import com.example.omrscanner.database.entities.QuizEntity;
+import com.example.omrscanner.database.entities.QuizScanEntity;
+import com.example.omrscanner.database.entities.QuizScanAnswerEntity;
 import com.example.omrscanner.database.entities.StudentLrnEntity;
 import com.example.omrscanner.database.entities.TeacherEntity;
+import com.example.omrscanner.database.entities.EcdcDomainEntity;
+import com.example.omrscanner.database.entities.EcdcCompetencyEntity;
+import com.example.omrscanner.database.entities.EcdcResponseEntity;
+import com.example.omrscanner.database.entities.EcdcStudentDateEntity;
 import com.example.omrscanner.database.projections.AssessmentListRow;
 import com.example.omrscanner.database.projections.ClassListRow;
 import com.example.omrscanner.database.projections.ScanListRow;
@@ -156,9 +163,9 @@ public class OMRRepository {
     });
   }
 
-  public void countClasses(Callback<Integer> callback) {
+  public void countClasses(int teacherId, Callback<Integer> callback) {
     executor.execute(() -> {
-      int count = db.classDao().countAll();
+      int count = db.classDao().countByTeacher(teacherId);
       if (callback != null)
         callback.onResult(count);
     });
@@ -243,9 +250,9 @@ public class OMRRepository {
     });
   }
 
-  public void countAssessments(Callback<Integer> callback) {
+  public void countAssessments(int teacherId, Callback<Integer> callback) {
     executor.execute(() -> {
-      int count = db.assessmentDao().countAll();
+      int count = db.assessmentDao().countByTeacher(teacherId);
       if (callback != null)
         callback.onResult(count);
     });
@@ -298,32 +305,32 @@ public class OMRRepository {
   }
 
   /**
-   * Switches the active account to {@code user}. Before doing so, wipes all
-   * local data belonging to whichever account was previously active — this
-   * device may have just been handed to a different teacher via QR login,
-   * and the old account's classes/assessments/scans/answers must not be
-   * visible to (or synced under) the new one.
-   *
-   * Deleting the previous account's TeacherEntity is sufficient: classes,
-   * assessments, scans, answers, and student_lrn all cascade off it
-   * (directly or transitively) via onDelete = CASCADE foreign keys.
+   * Switches the active account to {@code user}. Local data belonging to
+   * other accounts is left untouched — every table is scoped by teacher_id,
+   * and every read path resolves "the current teacher" from the active
+   * user (see ensureTeacherId()), not from a single global teacher row.
    */
   public void insertUserAsActive(UserEntity user, Callback<Long> callback) {
     executor.execute(() -> {
+      // Every QR scan inserts a brand-new users row, so carry the photo over from
+      // this account's earlier row(s); otherwise signing out and back in loses it.
+      if (user.profilePhotoPath == null && user.userId != null) {
+        user.profilePhotoPath = db.userDao().getProfilePhotoPathForUserId(user.userId);
+      }
       long[] idHolder = new long[1];
       db.runInTransaction(() -> {
-        UserEntity previousUser = db.userDao().getActiveUser();
-        if (previousUser != null && previousUser.userId != null
-                && !previousUser.userId.equals(user.userId)) {
-          TeacherEntity previousTeacher = db.teacherDao().getByUserId(previousUser.userId);
-          if (previousTeacher != null) {
-            db.teacherDao().delete(previousTeacher);
-          }
-        }
         idHolder[0] = db.userDao().insertAsOnlyActive(user);
       });
       if (callback != null)
         callback.onResult(idHolder[0]);
+    });
+  }
+
+  public void setProfilePhotoPath(int userId, String path, Callback<Void> callback) {
+    executor.execute(() -> {
+      db.userDao().updateProfilePhotoPath(userId, path);
+      if (callback != null)
+        callback.onResult(null);
     });
   }
 
@@ -345,15 +352,70 @@ public class OMRRepository {
         });
     }
 
-    public void queryAllAssessments(String sheetTypeFilter, String assessmentTypeFilter, String classIdFilter,
+    public void queryAllAssessments(int teacherId, String sheetTypeFilter, String assessmentTypeFilter, String classIdFilter,
                                     String search, String sortKey, Callback<List<AssessmentListRow>> callback) {
         executor.execute(() -> {
-            List<AssessmentListRow> list = db.assessmentDao().queryAllAssessments(sheetTypeFilter,
+            List<AssessmentListRow> list = db.assessmentDao().queryAllAssessments(teacherId, sheetTypeFilter,
                     assessmentTypeFilter, classIdFilter, search, sortKey);
             if (callback != null)
                 callback.onResult(list);
         });
     }
+
+  // ═════════════════════════════════════════════════════════════════════════
+  // QUIZ  (local-only — never synced)
+  // ═════════════════════════════════════════════════════════════════════════
+
+  public void insertQuiz(com.example.omrscanner.database.entities.QuizEntity quiz, Callback<Void> callback) {
+    executor.execute(() -> {
+      db.quizDao().insert(quiz);
+      if (callback != null) callback.onResult(null);
+    });
+  }
+
+  public void updateQuiz(com.example.omrscanner.database.entities.QuizEntity quiz, Callback<Void> callback) {
+    executor.execute(() -> {
+      db.quizDao().update(quiz);
+      if (callback != null) callback.onResult(null);
+    });
+  }
+
+  public void deleteQuiz(com.example.omrscanner.database.entities.QuizEntity quiz, Callback<Void> callback) {
+    executor.execute(() -> {
+      db.quizDao().delete(quiz);
+      if (callback != null) callback.onResult(null);
+    });
+  }
+
+  public void getQuizById(String id, Callback<com.example.omrscanner.database.entities.QuizEntity> callback) {
+    executor.execute(() -> {
+      com.example.omrscanner.database.entities.QuizEntity result = db.quizDao().getById(id);
+      if (callback != null) callback.onResult(result);
+    });
+  }
+
+    public void queryAllQuizzes(int teacherId, String termFilter, String classIdFilter, String search, String sortKey,
+                                Callback<List<AssessmentListRow>> callback) {
+        executor.execute(() -> {
+            List<AssessmentListRow> list = db.quizDao().queryAllQuizzes(teacherId, termFilter, classIdFilter, search, sortKey);
+            if (callback != null) callback.onResult(list);
+        });
+    }
+
+  /** Quizzes have no scans, so linking is a plain column update — no grading pass. */
+  public void linkAnswerKeyToQuiz(String quizId, String answerKeyId, Callback<Void> callback) {
+    executor.execute(() -> {
+      db.quizDao().setAnswerKey(quizId, answerKeyId);
+      if (callback != null) callback.onResult(null);
+    });
+  }
+
+  public void unlinkAnswerKeyFromQuiz(String quizId, Callback<Void> callback) {
+    executor.execute(() -> {
+      db.quizDao().setAnswerKey(quizId, null);
+      if (callback != null) callback.onResult(null);
+    });
+  }
 
   // ═════════════════════════════════════════════════════════════════════════
   // SCAN
@@ -399,16 +461,16 @@ public class OMRRepository {
     });
   }
 
-  /** All scans across all classes, for the read-only Scans tab. */
-  public void queryAllScans(String classIdFilter, String assessmentIdFilter, String sheetTypeFilter,
-                            String needsCorrectionFilter, String search, Callback<List<ScanListRow>> callback) {
-    executor.execute(() -> {
-      List<ScanListRow> list = db.scanDao().queryAllScans(classIdFilter, assessmentIdFilter,
-              sheetTypeFilter, needsCorrectionFilter, search);
-      if (callback != null)
-        callback.onResult(list);
-    });
-  }
+    /** All scans for the given teacher's classes, for the read-only Scans tab. */
+    public void queryAllScans(int teacherId, String classIdFilter, String assessmentIdFilter, String sheetTypeFilter,
+                              String needsCorrectionFilter, String search, Callback<List<ScanListRow>> callback) {
+        executor.execute(() -> {
+            List<ScanListRow> list = db.scanDao().queryAllScans(teacherId, classIdFilter, assessmentIdFilter,
+                    sheetTypeFilter, needsCorrectionFilter, search);
+            if (callback != null)
+                callback.onResult(list);
+        });
+    }
 
   /** Called when the external scoring system sends back a score. */
   public void updateScanScore(int scanId, int score, Callback<Void> callback) {
@@ -428,9 +490,9 @@ public class OMRRepository {
     });
   }
 
-  public void countScans(Callback<Integer> callback) {
+  public void countScans(int teacherId, Callback<Integer> callback) {
     executor.execute(() -> {
-      int count = db.scanDao().countAll();
+      int count = db.scanDao().countByTeacher(teacherId);
       if (callback != null)
         callback.onResult(count);
     });
@@ -566,6 +628,18 @@ public class OMRRepository {
     return db.scanDao().getByAssessmentAndLrnExcluding(assessmentId, lrn, excludeScanId);
   }
 
+  public QuizScanEntity getConflictingQuizScanByLrnSync(String quizId, String lrn, int excludeScanId) {
+    if (quizId == null || lrn == null || lrn.isEmpty()) return null;
+    return db.quizScanDao().getByQuizAndLrnExcluding(quizId, lrn, excludeScanId);
+  }
+
+  public void deleteQuizScan(QuizScanEntity scan, Callback<Void> callback) {
+    executor.execute(() -> {
+      db.quizScanDao().delete(scan);
+      if (callback != null) callback.onResult(null);
+    });
+  }
+
   // ═════════════════════════════════════════════════════════════════════════
   // ANSWER KEY
   // ═════════════════════════════════════════════════════════════════════════
@@ -614,41 +688,50 @@ public class OMRRepository {
     });
   }
 
-  /** Load all answer keys, newest-first. */
-  public void getAllAnswerKeys(Callback<List<AnswerKeyEntity>> callback) {
-    executor.execute(() -> {
-      List<AnswerKeyEntity> list = db.answerKeyDao().getAll();
-      if (callback != null)
-        callback.onResult(list);
-    });
-  }
+    /** Load all of this teacher's answer keys, newest-first. */
+    public void getAllAnswerKeys(int teacherId, Callback<List<AnswerKeyEntity>> callback) {
+        executor.execute(() -> {
+            List<AnswerKeyEntity> list = db.answerKeyDao().getAll(teacherId);
+            if (callback != null)
+                callback.onResult(list);
+        });
+    }
 
-  /** Load link status (linked assessment name + sheet type, if any) for every answer key. */
-  public void getAnswerKeyLinkInfo(Callback<List<AnswerKeyLinkInfo>> callback) {
-    executor.execute(() -> {
-      List<AnswerKeyLinkInfo> list = db.answerKeyDao().getLinkInfo();
-      if (callback != null)
-        callback.onResult(list);
-    });
-  }
+    /** Load link status (linked assessment name + sheet type, if any) for every one of this teacher's answer keys. */
+    public void getAnswerKeyLinkInfo(int teacherId, Callback<List<AnswerKeyLinkInfo>> callback) {
+        executor.execute(() -> {
+            List<AnswerKeyLinkInfo> list = db.answerKeyDao().getLinkInfo(teacherId);
+            if (callback != null)
+                callback.onResult(list);
+        });
+    }
 
-  /** Load every assessment currently linked to any answer key (for the "Linked to" dropdown). */
-  public void getAnswerKeyLinkedAssessments(Callback<List<AnswerKeyLinkedAssessment>> callback) {
-    executor.execute(() -> {
-      List<AnswerKeyLinkedAssessment> list = db.answerKeyDao().getLinkedAssessments();
-      if (callback != null)
-        callback.onResult(list);
-    });
-  }
+    /** Load every assessment of this teacher's currently linked to any answer key (for the "Linked to" dropdown). */
+    public void getAnswerKeyLinkedAssessments(int teacherId, Callback<List<AnswerKeyLinkedAssessment>> callback) {
+        executor.execute(() -> {
+            List<AnswerKeyLinkedAssessment> list = db.answerKeyDao().getLinkedAssessments(teacherId);
+            if (callback != null)
+                callback.onResult(list);
+        });
+    }
 
-  /** Load answer keys for a specific sheet type (for contextual assignment UI). */
-  public void getAnswerKeysBySheetType(String sheetType, Callback<List<AnswerKeyEntity>> callback) {
-    executor.execute(() -> {
-      List<AnswerKeyEntity> list = db.answerKeyDao().getBySheetType(sheetType);
-      if (callback != null)
-        callback.onResult(list);
-    });
-  }
+    /** Load every quiz of this teacher's currently linked to any answer key (for the "Linked to Quiz" dropdown). */
+    public void getAnswerKeyLinkedQuizzes(int teacherId, Callback<List<com.example.omrscanner.database.projections.AnswerKeyLinkedQuiz>> callback) {
+        executor.execute(() -> {
+            List<com.example.omrscanner.database.projections.AnswerKeyLinkedQuiz> list = db.answerKeyDao().getLinkedQuizzes(teacherId);
+            if (callback != null)
+                callback.onResult(list);
+        });
+    }
+
+    /** Load this teacher's answer keys for a specific sheet type (for contextual assignment UI). */
+    public void getAnswerKeysBySheetType(int teacherId, String sheetType, Callback<List<AnswerKeyEntity>> callback) {
+        executor.execute(() -> {
+            List<AnswerKeyEntity> list = db.answerKeyDao().getBySheetType(teacherId, sheetType);
+            if (callback != null)
+                callback.onResult(list);
+        });
+    }
 
   /** Load a single answer key by its ID. */
   public void getAnswerKeyById(String id, Callback<AnswerKeyEntity> callback) {
@@ -673,6 +756,68 @@ public class OMRRepository {
 
   public List<ScanEntity> getScansByAssessmentSync(String assessmentId) {
     return db.scanDao().getByAssessment(assessmentId);
+  }
+
+  public QuizEntity getQuizByIdSync(String id) {
+    return db.quizDao().getById(id);
+  }
+
+  public void insertQuizScan(QuizScanEntity scan, Callback<Long> callback) {
+    executor.execute(() -> {
+      long id = db.quizScanDao().insert(scan);
+      if (callback != null) callback.onResult(id);
+    });
+  }
+
+  public void updateQuizScan(QuizScanEntity scan, Callback<Void> callback) {
+    executor.execute(() -> {
+      db.quizScanDao().update(scan);
+      if (callback != null) callback.onResult(null);
+    });
+  }
+
+  public void getScansByQuiz(String quizId, Callback<List<QuizScanEntity>> callback) {
+    executor.execute(() -> {
+      List<QuizScanEntity> list = db.quizScanDao().getByQuiz(quizId);
+      if (callback != null) callback.onResult(list);
+    });
+  }
+
+  public List<QuizScanEntity> getScansByQuizSync(String quizId) {
+    return db.quizScanDao().getByQuiz(quizId);
+  }
+
+  public QuizScanEntity getQuizScanByQuizAndLrnSync(String quizId, String lrn) {
+    return db.quizScanDao().getByQuizAndLrn(quizId, lrn);
+  }
+
+  public void insertQuizScanAnswersFromMap(int quizScanId, Map<Integer, String> answers,
+                                           Callback<Void> callback) {
+    executor.execute(() -> {
+      List<QuizScanAnswerEntity> entities = new java.util.ArrayList<>();
+      if (answers != null) {
+        for (Map.Entry<Integer, String> entry : answers.entrySet()) {
+          String val = entry.getValue() != null ? entry.getValue() : "";
+          entities.add(new QuizScanAnswerEntity(quizScanId, entry.getKey(), val));
+        }
+      }
+      db.quizScanAnswerDao().insertAll(entities);
+      if (callback != null) callback.onResult(null);
+    });
+  }
+
+  public void deleteQuizScanAnswersByQuizScan(int quizScanId, Callback<Void> callback) {
+    executor.execute(() -> {
+      db.quizScanAnswerDao().deleteByQuizScan(quizScanId);
+      if (callback != null) callback.onResult(null);
+    });
+  }
+
+  public void getQuizScanAnswers(int quizScanId, Callback<List<QuizScanAnswerEntity>> callback) {
+    executor.execute(() -> {
+      List<QuizScanAnswerEntity> list = db.quizScanAnswerDao().getByQuizScan(quizScanId);
+      if (callback != null) callback.onResult(list);
+    });
   }
 
   public List<AnswerEntity> getAnswersByScanSync(int scanId) {
@@ -735,6 +880,148 @@ public class OMRRepository {
       }
       if (callback != null)
         callback.onResult(null);
+    });
+  }
+
+  /**
+   * Replaces the ECDC reference data in ONE transaction: if any insert fails, the
+   * old domains/competencies are kept. Callback gets true on success, false on failure.
+   */
+  public void replaceEcdcDomains(List<EcdcDomainEntity> domains,
+                                 List<EcdcCompetencyEntity> competencies,
+                                 Callback<Boolean> callback) {
+    executor.execute(() -> {
+      boolean ok = true;
+      try {
+        db.runInTransaction(() -> {
+          db.ecdcCompetencyDao().deleteAll();
+          db.ecdcDomainDao().deleteAll();
+          db.ecdcDomainDao().insertAll(domains);
+          db.ecdcCompetencyDao().insertAll(competencies);
+        });
+      } catch (Exception e) {
+        ok = false;
+        Log.e("EcdcSync", "Failed to replace ECDC domains/competencies", e);
+      }
+      if (callback != null) callback.onResult(ok);
+    });
+  }
+
+  public void getEcdcDomains(Callback<List<EcdcDomainEntity>> callback) {
+    executor.execute(() -> {
+      List<EcdcDomainEntity> result = db.ecdcDomainDao().getAll();
+      if (callback != null) callback.onResult(result);
+    });
+  }
+
+  /** Every synced competency across all domains, ordered by id. */
+  public void getAllEcdcCompetencies(Callback<List<EcdcCompetencyEntity>> callback) {
+    executor.execute(() -> {
+      List<EcdcCompetencyEntity> result = db.ecdcCompetencyDao().getAll();
+      if (callback != null) callback.onResult(result);
+    });
+  }
+
+  public void getEcdcCompetenciesForDomain(int domainId, Callback<List<EcdcCompetencyEntity>> callback) {
+    executor.execute(() -> {
+      List<EcdcCompetencyEntity> result = db.ecdcCompetencyDao().getByDomain(domainId);
+      if (callback != null) callback.onResult(result);
+    });
+  }
+
+  // All saved ECDC marks for one class + period (every student), ordered by LRN then competency id.
+  public void getEcdcResponsesForClassPeriod(String classId, String period,
+                                             Callback<List<EcdcResponseEntity>> callback) {
+    executor.execute(() -> {
+      List<EcdcResponseEntity> result = db.ecdcResponseDao().getForClassPeriod(classId, period);
+      if (callback != null) callback.onResult(result);
+    });
+  }
+
+  // ECDC checklist marks (Present / Not present / Not tested) for one student + period.
+  public void getEcdcResponses(String classId, String lrn, String period,
+                               Callback<List<EcdcResponseEntity>> callback) {
+    executor.execute(() -> {
+      List<EcdcResponseEntity> result = db.ecdcResponseDao().getForStudentPeriod(classId, lrn, period);
+      if (callback != null) callback.onResult(result);
+    });
+  }
+
+  /**
+   * Upserts the given marks and deletes the marks for {@code clearedCompetencyIds}
+   * (competencies the teacher un-selected) in a single transaction. Either list may be
+   * empty/null. Callback receives true on success, false if the write failed.
+   */
+  public void saveEcdcResponses(String classId, String lrn, String period,
+                                List<EcdcResponseEntity> responses,
+                                List<Integer> clearedCompetencyIds,
+                                Callback<Boolean> callback) {
+    executor.execute(() -> {
+      boolean ok = true;
+      try {
+        db.runInTransaction(() -> {
+          if (clearedCompetencyIds != null && !clearedCompetencyIds.isEmpty()) {
+            db.ecdcResponseDao().deleteForCompetencies(classId, lrn, period, clearedCompetencyIds);
+          }
+          if (responses != null && !responses.isEmpty()) {
+            db.ecdcResponseDao().insertAll(responses);
+          }
+        });
+      } catch (Exception e) {
+        ok = false;
+        Log.e("EcdcResponses", "Failed to save ECDC responses", e);
+      }
+      if (callback != null) callback.onResult(ok);
+    });
+  }
+
+  // The assessment date picked on a student's ECDC card (null if none set yet).
+  public void getEcdcStudentDate(String classId, String lrn, String period,
+                                 Callback<Long> callback) {
+    executor.execute(() -> {
+      EcdcStudentDateEntity row = db.ecdcStudentDateDao().get(classId, lrn, period);
+      Long result = null;
+      if (row != null) result = Long.valueOf(row.dateEpoch);
+      if (callback != null) callback.onResult(result);
+    });
+  }
+
+  // lrn -> picked date for every student in a class + period (used by Mass Upload).
+  public void getEcdcStudentDatesForClassPeriod(String classId, String period,
+                                                Callback<java.util.Map<String, Long>> callback) {
+    executor.execute(() -> {
+      java.util.Map<String, Long> out = new java.util.HashMap<>();
+      for (EcdcStudentDateEntity row : db.ecdcStudentDateDao().getForClassPeriod(classId, period)) {
+        out.put(row.lrn, Long.valueOf(row.dateEpoch));
+      }
+      if (callback != null) callback.onResult(out);
+    });
+  }
+
+  public void setEcdcStudentDate(String classId, String lrn, String period, long dateEpoch,
+                                 Callback<Boolean> callback) {
+    executor.execute(() -> {
+      boolean ok = true;
+      try {
+        EcdcStudentDateEntity row = new EcdcStudentDateEntity();
+        row.classId = classId;
+        row.lrn = lrn;
+        row.period = period;
+        row.dateEpoch = dateEpoch;
+        db.ecdcStudentDateDao().upsert(row); // REPLACE on the unique (class, lrn, period) index
+      } catch (Exception e) {
+        ok = false;
+        Log.e("EcdcStudentDate", "Failed to save ECDC student date", e);
+      }
+      if (callback != null) callback.onResult(ok);
+    });
+  }
+
+  // ECDC "select a student" search: scoped to one class, matches LRN or name.
+  public void searchStudentsInClass(String classId, String query, Callback<List<StudentLrnEntity>> callback) {
+    executor.execute(() -> {
+      List<StudentLrnEntity> result = db.studentLrnDao().searchInClass(classId, query);
+      if (callback != null) callback.onResult(result);
     });
   }
 

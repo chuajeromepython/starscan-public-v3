@@ -51,4 +51,14 @@ public interface StudentLrnDao {
 
     @Query("SELECT COUNT(DISTINCT lrn) FROM student_lrn WHERE className = :className")
     int countByClass(String className);
+
+    // ECDC student search: matches LRN, first/last name, or "First Last" as
+    // typed, scoped to one class so results never leak across classes.
+    @Query("SELECT * FROM student_lrn WHERE className = :classId AND (" +
+            "lrn LIKE '%' || :query || '%' " +
+            "OR first_name LIKE '%' || :query || '%' " +
+            "OR last_name LIKE '%' || :query || '%' " +
+            "OR (first_name || ' ' || last_name) LIKE '%' || :query || '%') " +
+            "ORDER BY last_name ASC, first_name ASC")
+    List<StudentLrnEntity> searchInClass(String classId, String query);
 }

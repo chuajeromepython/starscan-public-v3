@@ -55,6 +55,11 @@ public interface AssessmentDao {
   @Query("SELECT COUNT(*) FROM assessments WHERE class_id = :classId")
   int countByClass(String classId);
 
+  @Query("SELECT COUNT(*) FROM assessments a "
+          + "JOIN classes c ON c.id = a.class_id "
+          + "WHERE c.teacher_id = :teacherId")
+  int countByTeacher(int teacherId);
+
   @Query("SELECT COUNT(*) FROM assessments")
   int countAll();
 
@@ -120,8 +125,9 @@ public interface AssessmentDao {
           + "FROM assessments a "
           + "LEFT JOIN scans s ON s.assessment_id = a.id "
           + "LEFT JOIN answer_keys ak ON ak.id = a.answer_key_id "
-          + "LEFT JOIN classes c ON c.id = a.class_id "
-          + "WHERE (:sheetTypeFilter IS NULL OR :sheetTypeFilter = '' OR a.sheet_type LIKE :sheetTypeFilter || '%') "
+          + "JOIN classes c ON c.id = a.class_id "
+          + "WHERE c.teacher_id = :teacherId "
+          + "AND (:sheetTypeFilter IS NULL OR :sheetTypeFilter = '' OR a.sheet_type LIKE :sheetTypeFilter || '%') "
           + "AND (:assessmentTypeFilter IS NULL OR :assessmentTypeFilter = '' OR a.assessment_type = :assessmentTypeFilter) "
           + "AND (:classIdFilter IS NULL OR :classIdFilter = '' OR a.class_id = :classIdFilter) "
           + "AND (:search IS NULL OR :search = '' "
@@ -137,6 +143,6 @@ public interface AssessmentDao {
           + "CASE WHEN :sortKey = 'EXAM_DATE_NEWEST' THEN a.exam_date_epoch END DESC, "
           + "CASE WHEN :sortKey = 'EXAM_DATE_OLDEST' THEN a.exam_date_epoch END ASC, "
           + "a.created_at DESC")
-  List<AssessmentListRow> queryAllAssessments(String sheetTypeFilter, String assessmentTypeFilter,
+  List<AssessmentListRow> queryAllAssessments(int teacherId, String sheetTypeFilter, String assessmentTypeFilter,
                                               String classIdFilter, String search, String sortKey);
 }

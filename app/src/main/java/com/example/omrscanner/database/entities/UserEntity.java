@@ -42,4 +42,8 @@ public class UserEntity {
 
     @ColumnInfo(name = "role")
     public String role = "Teacher"; // "Teacher" or "Student" — drives which dashboard opens
+
+    /** Path to the teacher's profile photo (app-private, local only, never uploaded). */
+    @ColumnInfo(name = "profile_photo_path")
+    public String profilePhotoPath;
 }

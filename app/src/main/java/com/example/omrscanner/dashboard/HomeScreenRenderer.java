@@ -206,8 +206,15 @@ public class HomeScreenRenderer {
      * @param onOpen     called when the card body is tapped
      */
     public View createClassCard(ClassListRow row,
-            String globalTeacherName,
-            Runnable onEdit, Runnable onDelete, Runnable onOpen) {
+                                String globalTeacherName,
+                                Runnable onEdit, Runnable onDelete, Runnable onOpen) {
+        return createClassCard(row, globalTeacherName, null, onEdit, onDelete, onOpen);
+    }
+
+    /** @param onMassUpload if non-null, adds a "Mass Upload" item to the card's 3-dots menu (ECDC tab only). */
+    public View createClassCard(ClassListRow row,
+                                String globalTeacherName, Runnable onMassUpload,
+                                Runnable onEdit, Runnable onDelete, Runnable onOpen) {
 
         LinearLayout card = new LinearLayout(activity);
         card.setOrientation(LinearLayout.HORIZONTAL);
@@ -298,7 +305,15 @@ public class HomeScreenRenderer {
             deleteTitle.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#1E293B")), 0, deleteTitle.length(), 0);
 
             popup.getMenu().add(0, 1, 0, editTitle).setIcon(editIcon);
-            popup.getMenu().add(0, 2, 1, deleteTitle).setIcon(deleteIcon);
+            if (onMassUpload != null) {
+                android.graphics.drawable.Drawable uploadIcon =
+                        androidx.core.content.ContextCompat.getDrawable(activity, R.drawable.ic_upload).mutate();
+                uploadIcon.setTint(Color.parseColor("#059669"));
+                android.text.SpannableString uploadTitle = new android.text.SpannableString("Mass Upload");
+                uploadTitle.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#1E293B")), 0, uploadTitle.length(), 0);
+                popup.getMenu().add(0, 3, 1, uploadTitle).setIcon(uploadIcon);
+            }
+            popup.getMenu().add(0, 2, 2, deleteTitle).setIcon(deleteIcon);
 
             try {
                 java.lang.reflect.Field field = popup.getClass().getDeclaredField("mPopup");
@@ -315,6 +330,9 @@ public class HomeScreenRenderer {
                     return true;
                 } else if (item.getItemId() == 2) {
                     onDelete.run();
+                    return true;
+                } else if (item.getItemId() == 3 && onMassUpload != null) {
+                    onMassUpload.run();
                     return true;
                 }
                 return false;
@@ -382,6 +400,93 @@ public class HomeScreenRenderer {
         arrowLp.gravity = Gravity.BOTTOM | Gravity.END;
         arrowLp.bottomMargin = ui.dp(10);
         arrowLp.rightMargin = ui.dp(14);
+        arrow.setLayoutParams(arrowLp);
+        cardBody.addView(arrow);
+
+        card.addView(cardBody);
+        card.setOnClickListener(v -> onOpen.run());
+        return card;
+    }
+
+    /**
+     * ECDC student search result card: name on top, LRN below — same card
+     * language (white bg, rounded corners, accent bar, trailing arrow) as
+     * createClassCard, just without the edit/delete menu.
+     */
+    public View createStudentResultCard(String displayName, String lrn, Runnable onOpen) {
+
+        LinearLayout card = new LinearLayout(activity);
+        card.setOrientation(LinearLayout.HORIZONTAL);
+        card.setClickable(true);
+        card.setFocusable(true);
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.WHITE);
+        bg.setCornerRadius(ui.dp(16));
+        bg.setStroke(ui.dp(1), Color.parseColor("#E2E8F0"));
+        card.setBackground(bg);
+        card.setElevation(ui.dp(2));
+        card.setClipToOutline(true);
+
+        android.content.res.TypedArray ta = activity.obtainStyledAttributes(
+                new int[]{android.R.attr.selectableItemBackground});
+        card.setForeground(ta.getDrawable(0));
+        ta.recycle();
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.bottomMargin = ui.dp(10);
+        card.setLayoutParams(lp);
+
+        int accentIndex = Math.abs((displayName != null ? displayName.hashCode() : 0))
+                % CLASS_CARD_ACCENTS.length;
+        View accentBar = new View(activity);
+        accentBar.setLayoutParams(new LinearLayout.LayoutParams(ui.dp(5), ViewGroup.LayoutParams.MATCH_PARENT));
+        GradientDrawable accentBg = new GradientDrawable();
+        accentBg.setColor(Color.parseColor(CLASS_CARD_ACCENTS[accentIndex]));
+        accentBar.setBackground(accentBg);
+        card.addView(accentBar);
+
+        FrameLayout cardBody = new FrameLayout(activity);
+        cardBody.setLayoutParams(new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        LinearLayout content = new LinearLayout(activity);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(ui.dp(14), ui.dp(12), ui.dp(14), ui.dp(12));
+        content.setLayoutParams(new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        TextView name = new TextView(activity);
+        name.setText(displayName != null ? displayName : "Unnamed student");
+        name.setTextColor(Color.parseColor("#1E293B"));
+        name.setTextSize(15);
+        name.setTypeface(null, Typeface.BOLD);
+        name.setMaxLines(1);
+        name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        content.addView(name);
+
+        TextView lrnLabel = new TextView(activity);
+        lrnLabel.setText("LRN: " + (lrn != null && !lrn.isEmpty() ? lrn : "—"));
+        lrnLabel.setTextColor(Color.parseColor("#64748B"));
+        lrnLabel.setTextSize(12);
+        LinearLayout.LayoutParams lrnLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lrnLp.topMargin = ui.dp(3);
+        lrnLabel.setLayoutParams(lrnLp);
+        content.addView(lrnLabel);
+
+        cardBody.addView(content);
+
+        TextView arrow = new TextView(activity);
+        arrow.setText("›");
+        arrow.setTextColor(Color.parseColor("#CBD5E1"));
+        arrow.setTextSize(20);
+        arrow.setGravity(Gravity.CENTER);
+        FrameLayout.LayoutParams arrowLp = new FrameLayout.LayoutParams(
+                ui.dp(32), ViewGroup.LayoutParams.MATCH_PARENT);
+        arrowLp.gravity = Gravity.CENTER_VERTICAL | Gravity.END;
+        arrowLp.rightMargin = ui.dp(10);
         arrow.setLayoutParams(arrowLp);
         cardBody.addView(arrow);
 

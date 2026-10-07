@@ -10,6 +10,11 @@ import com.example.omrscanner.database.entities.AnswerEntity;
 import com.example.omrscanner.database.entities.AnswerKeyEntity;
 import com.example.omrscanner.database.entities.AssessmentEntity;
 import com.example.omrscanner.database.entities.ClassEntity;
+import com.example.omrscanner.database.entities.EcdcResponseEntity;
+import com.example.omrscanner.database.entities.EcdcStudentDateEntity;
+import com.example.omrscanner.database.entities.QuizEntity;
+import com.example.omrscanner.database.entities.QuizScanAnswerEntity;
+import com.example.omrscanner.database.entities.QuizScanEntity;
 import com.example.omrscanner.database.entities.ScanEntity;
 
 import org.json.JSONArray;
@@ -45,6 +50,8 @@ import java.util.zip.ZipOutputStream;
  * has NO copy on the server and is otherwise lost on uninstall:
  *
  *   assessments, scans, answers, answer_keys  + scan images
+ *   quizzes, quiz_scans, quiz_scan_answers (quizzes are local-only, so this
+ *   backup is their ONLY copy anywhere — there is no server fallback for them)
  *
  * Classes, student_lrn, and the teacher/user profile are intentionally
  * excluded — they are fully re-derived from the system via QR scan + sync,
@@ -87,20 +94,27 @@ public class BackupManager {
     // ─────────────────────────────────────────────────────────────────
 
     public interface ExportCallback {
-        void onSuccess(int assessmentCount, int scanCount, int answerKeyCount);
+        void onSuccess(int assessmentCount, int scanCount, int answerKeyCount,
+                       int quizCount, int quizScanCount, int ecdcMarkCount);
         void onError(Exception e);
     }
 
     public interface RestoreCallback {
         /**
          * skippedAssessments = assessments whose class isn't synced locally (yet).
+         * skippedQuizzes = quizzes whose class isn't synced locally (yet) — same
+         * reason as skippedAssessments, but quizzes have no server copy at all,
+         * so a skipped quiz is gone for good, not just "re-syncable later."
          * failedExports = assessments whose Downloads/OMRScanner CSV/image
          * export could not be rebuilt after restore (e.g. storage permission
          * denied) — DB data for these is still restored fine, but the teacher
-         * will need to resolve storage access before uploading them.
+         * will need to resolve storage access before uploading them. Quizzes
+         * never touch Downloads/OMRScanner, so they have no equivalent step.
          */
         void onSuccess(int restoredAssessments, int restoredScans, int restoredAnswerKeys,
-                       int skippedAssessments, int failedExports);
+                       int restoredQuizzes, int restoredQuizScans,
+                       int skippedAssessments, int skippedQuizzes, int failedExports,
+                       int restoredEcdcMarks, int skippedEcdcMarks);
         void onError(Exception e);
     }
 
@@ -174,19 +188,86 @@ public class BackupManager {
                 }
                 manifest.put("answers", answersJson);
 
+                // ── Quizzes are local-only (no server copy), so this backup is
+                // their only safety net. Keyed by classroomId exactly like
+                // assessments, for the same reason: local class ids aren't
+                // stable across uninstall/reinstall.
+                Set<String> keptQuizIds = new HashSet<>();
+                JSONArray quizzesJson = new JSONArray();
+                int skippedQuizzesNoClassroom = 0;
+                for (QuizEntity q : db.quizDao().getAllSync()) {
+                    Integer classroomId = classIdToClassroomId.get(q.classId);
+                    if (classroomId == null) {
+                        skippedQuizzesNoClassroom++;
+                        continue;
+                    }
+                    quizzesJson.put(quizToJson(q, classroomId));
+                    keptQuizIds.add(q.id);
+                    if (q.answerKeyId != null) keptAnswerKeyIds.add(q.answerKeyId);
+                }
+                if (skippedQuizzesNoClassroom > 0) {
+                    Log.w(TAG, "Skipped " + skippedQuizzesNoClassroom + " quiz(zes) with no synced classroom_id");
+                }
+                manifest.put("quizzes", quizzesJson);
+
+                Set<Integer> keptQuizScanIds = new HashSet<>();
+                JSONArray quizScansJson = new JSONArray();
+                for (QuizScanEntity qs : db.quizScanDao().getAllSync()) {
+                    if (!keptQuizIds.contains(qs.quizId)) continue;
+                    quizScansJson.put(quizScanToJson(qs));
+                    keptQuizScanIds.add(qs.id);
+                }
+                manifest.put("quizScans", quizScansJson);
+
+                JSONArray quizScanAnswersJson = new JSONArray();
+                for (QuizScanAnswerEntity ans : db.quizScanAnswerDao().getAllSync()) {
+                    if (!keptQuizScanIds.contains(ans.quizScanId)) continue;
+                    quizScanAnswersJson.put(quizScanAnswerToJson(ans));
+                }
+                manifest.put("quizScanAnswers", quizScanAnswersJson);
+
+                // ── ECDC marks (Present / Not present / Not tested + P/O/R type).
+                // Keyed by classroomId exactly like assessments and quizzes, because
+                // local class ids aren't stable across uninstall/reinstall. Only the
+                // active teacher's classes are in classIdToClassroomId, so marks from
+                // another teacher on a shared device can never end up in this file.
+                JSONArray ecdcJson = new JSONArray();
+                for (EcdcResponseEntity r : db.ecdcResponseDao().getAllSync()) {
+                    Integer classroomId = classIdToClassroomId.get(r.classId);
+                    if (classroomId == null) continue;
+                    ecdcJson.put(ecdcResponseToJson(r, classroomId));
+                }
+                manifest.put("ecdcResponses", ecdcJson);
+
+                // Assessment dates picked on each ECDC student card (same classroomId keying).
+                JSONArray ecdcDatesJson = new JSONArray();
+                for (EcdcStudentDateEntity dateRow : db.ecdcStudentDateDao().getAllSync()) {
+                    Integer classroomId = classIdToClassroomId.get(dateRow.classId);
+                    if (classroomId == null) continue;
+                    JSONObject dateJson = new JSONObject();
+                    dateJson.put("classroomId", classroomId);
+                    dateJson.put("lrn", dateRow.lrn);
+                    dateJson.put("period", dateRow.period);
+                    dateJson.put("dateEpoch", dateRow.dateEpoch);
+                    ecdcDatesJson.put(dateJson);
+                }
+                manifest.put("ecdcStudentDates", ecdcDatesJson);
+
                 JSONArray keysJson = new JSONArray();
-                for (AnswerKeyEntity k : db.answerKeyDao().getAll()) {
-                    // answer_keys is a shared/global bank (no teacher_id column),
-                    // so scope the export to keys this teacher's kept assessments
-                    // actually reference, rather than dumping the whole bank.
+                for (AnswerKeyEntity k : db.answerKeyDao().getAll(teacherId)) {
+                    // answer_keys is now teacher-scoped at the DB level, but keep
+                    // this membership check too: it further narrows to only the
+                    // keys this teacher's *kept* assessments/quizzes reference,
+                    // rather than every key the teacher owns.
                     if (!keptAnswerKeyIds.contains(k.id)) continue;
                     keysJson.put(answerKeyToJson(k));
                 }
                 manifest.put("answerKeys", keysJson);
 
-                writeZip(destination, manifest);
+                writeZip(destination, manifest, activeUser != null ? activeUser.userId : null);
 
-                callback.onSuccess(assessmentsJson.length(), scansJson.length(), keysJson.length());
+                callback.onSuccess(assessmentsJson.length(), scansJson.length(), keysJson.length(),
+                        quizzesJson.length(), quizScansJson.length(), ecdcJson.length());
             } catch (Exception e) {
                 Log.e(TAG, "Export failed", e);
                 callback.onError(e);
@@ -194,7 +275,17 @@ public class BackupManager {
         });
     }
 
-    private void writeZip(Uri destination, JSONObject manifest) throws IOException {
+    /**
+     * Profile photos are saved as images/profile_<userId>.jpg. Only the signed-in
+     * teacher's own photo belongs in their backup, so another account's photo on a
+     * shared device is never written to (or restored from) the file.
+     */
+    private static boolean isOtherUsersProfilePhoto(String fileName, Integer activeUserId) {
+        if (!fileName.startsWith("profile_")) return false;
+        return activeUserId == null || !fileName.equals("profile_" + activeUserId + ".jpg");
+    }
+
+    private void writeZip(Uri destination, JSONObject manifest, Integer activeUserId) throws IOException {
         try (OutputStream rawOut = appContext.getContentResolver().openOutputStream(destination)) {
             if (rawOut == null) throw new IOException("Could not open destination for writing");
             try (ZipOutputStream zos = new ZipOutputStream(new BufferedOutputStream(rawOut))) {
@@ -208,6 +299,7 @@ public class BackupManager {
                     byte[] buf = new byte[8192];
                     for (File img : images) {
                         if (!img.isFile()) continue;
+                        if (isOtherUsersProfilePhoto(img.getName(), activeUserId)) continue;
                         zos.putNextEntry(new ZipEntry(ENTRY_IMAGES_PREFIX + img.getName()));
                         try (InputStream fis = new FileInputStream(img)) {
                             int read;
@@ -268,7 +360,7 @@ public class BackupManager {
                     }
                 }
 
-                JSONObject manifest = readZip(source);
+                JSONObject manifest = readZip(source, activeUser.userId);
 
                 int restoredAssessments = 0;
                 int skippedAssessments = 0;
@@ -335,9 +427,61 @@ public class BackupManager {
                 JSONArray keysJson = manifest.optJSONArray("answerKeys");
                 if (keysJson != null) {
                     for (int i = 0; i < keysJson.length(); i++) {
-                        db.answerKeyDao().insert(answerKeyFromJson(keysJson.getJSONObject(i)));
+                        db.answerKeyDao().insert(answerKeyFromJson(keysJson.getJSONObject(i), activeTeacher.id));
                         restoredAnswerKeys++;
                     }
+                }
+
+                // ── Quizzes (local-only — this backup is their only copy) ──
+                int restoredQuizzes = 0;
+                int skippedQuizzes = 0;
+                Set<String> restoredQuizIds = new HashSet<>();
+
+                JSONArray quizzesJson = manifest.optJSONArray("quizzes");
+                if (quizzesJson != null) {
+                    for (int i = 0; i < quizzesJson.length(); i++) {
+                        JSONObject o = quizzesJson.getJSONObject(i);
+                        int classroomId = o.optInt("classroomId", -1);
+                        String localClassId = classroomIdToLocalClassId.get(classroomId);
+                        if (localClassId == null) {
+                            skippedQuizzes++;
+                            continue;
+                        }
+                        QuizEntity q = quizFromJson(o, localClassId);
+                        db.quizDao().insert(q); // REPLACE on conflict
+                        restoredQuizIds.add(q.id);
+                        restoredQuizzes++;
+                    }
+                }
+
+                int restoredQuizScans = 0;
+                Set<Integer> restoredQuizScanIds = new HashSet<>();
+                JSONArray quizScansJson = manifest.optJSONArray("quizScans");
+                if (quizScansJson != null) {
+                    for (int i = 0; i < quizScansJson.length(); i++) {
+                        JSONObject o = quizScansJson.getJSONObject(i);
+                        String quizId = o.optString("quizId", null);
+                        if (quizId == null || !restoredQuizIds.contains(quizId)) continue;
+                        QuizScanEntity scan = quizScanFromJson(o);
+                        db.quizScanDao().insert(scan);
+                        restoredQuizScanIds.add(scan.id);
+                        restoredQuizScans++;
+                    }
+                }
+
+                // Same reasoning as the "answers" block above — only keep answers
+                // whose parent quiz scan actually got restored, to avoid a
+                // foreign key constraint failure aborting the whole restore.
+                JSONArray quizScanAnswersJson = manifest.optJSONArray("quizScanAnswers");
+                if (quizScanAnswersJson != null) {
+                    List<QuizScanAnswerEntity> batch = new ArrayList<>();
+                    for (int i = 0; i < quizScanAnswersJson.length(); i++) {
+                        JSONObject o = quizScanAnswersJson.getJSONObject(i);
+                        int quizScanId = o.optInt("quizScanId", -1);
+                        if (!restoredQuizScanIds.contains(quizScanId)) continue;
+                        batch.add(quizScanAnswerFromJson(o));
+                    }
+                    if (!batch.isEmpty()) db.quizScanAnswerDao().insertAll(batch);
                 }
 
                 // ── Rebuild Downloads/OMRScanner from what we just restored ──
@@ -363,8 +507,55 @@ public class BackupManager {
                     }
                 }
 
+                // ── ECDC marks ──
+                // Same remap as assessments/quizzes: classroomId -> the CURRENT local
+                // class id of the signed-in teacher. Marks for a class that isn't synced
+                // yet are skipped (sync the class, then restore again). No parent rows are
+                // needed (ecdc_responses has no foreign keys), and the unique
+                // (class_id, lrn, period, competency_id) index makes REPLACE overwrite
+                // the matching mark instead of duplicating it.
+                int restoredEcdcMarks = 0;
+                int skippedEcdcMarks = 0;
+                JSONArray ecdcJson = manifest.optJSONArray("ecdcResponses");
+                if (ecdcJson != null) {
+                    List<EcdcResponseEntity> ecdcBatch = new ArrayList<>();
+                    for (int i = 0; i < ecdcJson.length(); i++) {
+                        JSONObject o = ecdcJson.getJSONObject(i);
+                        String localClassId = classroomIdToLocalClassId.get(o.optInt("classroomId", -1));
+                        if (localClassId == null) {
+                            skippedEcdcMarks++;
+                            continue;
+                        }
+                        ecdcBatch.add(ecdcResponseFromJson(o, localClassId));
+                    }
+                    if (!ecdcBatch.isEmpty()) {
+                        db.ecdcResponseDao().insertAll(ecdcBatch);
+                        restoredEcdcMarks = ecdcBatch.size();
+                    }
+                }
+
+                JSONArray ecdcDatesJson = manifest.optJSONArray("ecdcStudentDates");
+                if (ecdcDatesJson != null) {
+                    List<EcdcStudentDateEntity> dateBatch = new ArrayList<>();
+                    for (int k = 0; k < ecdcDatesJson.length(); k++) {
+                        JSONObject dateJson = ecdcDatesJson.getJSONObject(k);
+                        String dateClassId = classroomIdToLocalClassId.get(dateJson.optInt("classroomId", -1));
+                        if (dateClassId == null) continue;
+                        EcdcStudentDateEntity row = new EcdcStudentDateEntity();
+                        row.classId = dateClassId;
+                        row.lrn = dateJson.getString("lrn");
+                        row.period = dateJson.getString("period");
+                        row.dateEpoch = dateJson.getLong("dateEpoch");
+                        dateBatch.add(row);
+                    }
+                    if (!dateBatch.isEmpty()) {
+                        db.ecdcStudentDateDao().insertAll(dateBatch);
+                    }
+                }
+
                 callback.onSuccess(restoredAssessments, restoredScans, restoredAnswerKeys,
-                        skippedAssessments, failedExports);
+                        restoredQuizzes, restoredQuizScans, skippedAssessments, skippedQuizzes, failedExports,
+                        restoredEcdcMarks, skippedEcdcMarks);
             } catch (Exception e) {
                 Log.e(TAG, "Restore failed", e);
                 callback.onError(e);
@@ -372,7 +563,7 @@ public class BackupManager {
         });
     }
 
-    private JSONObject readZip(Uri source) throws IOException, JSONException {
+    private JSONObject readZip(Uri source, Integer activeUserId) throws IOException, JSONException {
         File imagesDir = new File(appContext.getFilesDir(), "images");
         //noinspection ResultOfMethodCallIgnored
         imagesDir.mkdirs();
@@ -393,6 +584,7 @@ public class BackupManager {
                     } else if (!entry.isDirectory() && name.startsWith(ENTRY_IMAGES_PREFIX)) {
                         String fileName = name.substring(ENTRY_IMAGES_PREFIX.length());
                         if (fileName.isEmpty() || fileName.contains("..")) continue; // zip-slip guard
+                        if (isOtherUsersProfilePhoto(fileName, activeUserId)) continue;
                         File outFile = new File(imagesDir, fileName);
                         try (OutputStream fos = new FileOutputStream(outFile)) {
                             int read;
@@ -497,6 +689,111 @@ public class BackupManager {
         return a;
     }
 
+    private JSONObject quizToJson(QuizEntity q, int classroomId) throws JSONException {
+        JSONObject o = new JSONObject();
+        o.put("id", q.id);
+        o.put("classroomId", classroomId);
+        o.put("name", q.name);
+        o.put("term", q.term);
+        o.put("sheetType", q.sheetType);
+        o.put("examDate", q.examDate);
+        o.put("examDateEpoch", q.examDateEpoch);
+        o.put("createdAt", q.createdAt);
+        o.put("updatedAt", q.updatedAt);
+        o.put("answerKeyId", q.answerKeyId == null ? JSONObject.NULL : q.answerKeyId);
+        return o;
+    }
+
+    private QuizEntity quizFromJson(JSONObject o, String localClassId) throws JSONException {
+        QuizEntity q = new QuizEntity();
+        q.id = o.getString("id");
+        q.classId = localClassId;
+        q.name = o.optString("name", null);
+        q.term = o.optString("term", null);
+        q.sheetType = o.optString("sheetType", "ZPH40");
+        q.examDate = o.optString("examDate", null);
+        q.examDateEpoch = o.optLong("examDateEpoch", 0);
+        q.createdAt = o.optLong("createdAt", System.currentTimeMillis());
+        q.updatedAt = o.optLong("updatedAt", System.currentTimeMillis());
+        q.answerKeyId = o.isNull("answerKeyId") ? null : o.optString("answerKeyId", null);
+        return q;
+    }
+
+    private JSONObject quizScanToJson(QuizScanEntity s) throws JSONException {
+        JSONObject o = new JSONObject();
+        o.put("id", s.id); // preserved as-is; restore writes it back explicitly (not autoGenerated)
+        o.put("quizId", s.quizId);
+        o.put("studentLrn", s.studentLrn);
+        o.put("detectedBubbles", s.detectedBubbles);
+        o.put("score", s.score == null ? JSONObject.NULL : s.score);
+        o.put("numItems", s.numItems);
+        o.put("imagePath", s.imagePath);
+        o.put("overlayImagePath", s.overlayImagePath);
+        o.put("keyReferenceImagePath", s.keyReferenceImagePath == null ? JSONObject.NULL : s.keyReferenceImagePath);
+        o.put("timestamp", s.timestamp);
+        o.put("updatedAt", s.updatedAt);
+        return o;
+    }
+
+    private QuizScanEntity quizScanFromJson(JSONObject o) throws JSONException {
+        QuizScanEntity s = new QuizScanEntity();
+        s.id = o.optInt("id", 0); // explicit id -> Room/SQLite keeps it (not treated as "generate new")
+        s.quizId = o.getString("quizId");
+        s.studentLrn = o.optString("studentLrn", null);
+        s.detectedBubbles = o.optInt("detectedBubbles", 0);
+        s.score = o.isNull("score") ? null : o.optInt("score");
+        s.numItems = o.optInt("numItems", 0);
+        s.imagePath = o.optString("imagePath", null);
+        s.overlayImagePath = o.optString("overlayImagePath", null);
+        s.keyReferenceImagePath = o.isNull("keyReferenceImagePath") ? null : o.optString("keyReferenceImagePath", null);
+        s.timestamp = o.optLong("timestamp", System.currentTimeMillis());
+        s.updatedAt = o.optLong("updatedAt", System.currentTimeMillis());
+        return s;
+    }
+
+    private JSONObject quizScanAnswerToJson(QuizScanAnswerEntity a) throws JSONException {
+        JSONObject o = new JSONObject();
+        o.put("id", a.id);
+        o.put("quizScanId", a.quizScanId);
+        o.put("itemNumber", a.itemNumber);
+        o.put("answer", a.answer);
+        return o;
+    }
+
+    private QuizScanAnswerEntity quizScanAnswerFromJson(JSONObject o) throws JSONException {
+        QuizScanAnswerEntity a = new QuizScanAnswerEntity();
+        a.id = o.optInt("id", 0);
+        a.quizScanId = o.getInt("quizScanId");
+        a.itemNumber = o.getInt("itemNumber");
+        a.answer = o.optString("answer", "");
+        return a;
+    }
+
+    private JSONObject ecdcResponseToJson(EcdcResponseEntity r, int classroomId) throws JSONException {
+        JSONObject o = new JSONObject();
+        o.put("classroomId", classroomId);
+        o.put("lrn", r.lrn);
+        o.put("period", r.period);
+        o.put("competencyId", r.competencyId);
+        o.put("status", r.status);
+        o.put("presentType", r.presentType == null ? JSONObject.NULL : r.presentType);
+        o.put("updatedAt", r.updatedAt);
+        return o;
+    }
+
+    private EcdcResponseEntity ecdcResponseFromJson(JSONObject o, String localClassId) throws JSONException {
+        EcdcResponseEntity r = new EcdcResponseEntity();
+        // id stays 0 -> autogenerated. The unique index decides what gets replaced.
+        r.classId = localClassId;
+        r.lrn = o.getString("lrn");
+        r.period = o.getString("period");
+        r.competencyId = o.getInt("competencyId");
+        r.status = o.optString("status", EcdcResponseEntity.STATUS_NOT_TESTED);
+        r.presentType = o.isNull("presentType") ? null : o.optString("presentType", null);
+        r.updatedAt = o.optLong("updatedAt", System.currentTimeMillis());
+        return r;
+    }
+
     private JSONObject answerKeyToJson(AnswerKeyEntity k) throws JSONException {
         JSONObject o = new JSONObject();
         o.put("id", k.id);
@@ -509,9 +806,14 @@ public class BackupManager {
         return o;
     }
 
-    private AnswerKeyEntity answerKeyFromJson(JSONObject o) throws JSONException {
+    private AnswerKeyEntity answerKeyFromJson(JSONObject o, int restoringTeacherId) throws JSONException {
         AnswerKeyEntity k = new AnswerKeyEntity();
         k.id = o.getString("id");
+        // Re-parented to whoever is running the restore, same as classId is
+        // remapped via classroomId above — never trust an id carried in the
+        // backup file itself, since it could be stale or (on a shared device)
+        // belong to a previous teacher entirely.
+        k.teacherId = restoringTeacherId;
         k.name = o.optString("name", null);
         k.schoolYear = o.optString("schoolYear", null);
         k.sheetType = o.optString("sheetType", null);
