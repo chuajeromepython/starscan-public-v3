@@ -1457,6 +1457,18 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             ui.showErrorDialog("Choose a period", "Pick Beginning, Middle or End first, then tap Upload.");
             return;
         }
+        // The upload reads what's in the database, not what's on screen. If the teacher has
+        // unsaved marks, offer to save first instead of silently uploading the old data.
+        if (hasEcdUnsavedChanges()) {
+            new com.google.android.material.dialog.MaterialAlertDialogBuilder(
+                    this, R.style.ThemeOverlay_OMRScanner_Dialog)
+                    .setTitle("Unsaved changes")
+                    .setMessage("You have marks that haven't been saved. Save them first so they're included in the upload.")
+                    .setPositiveButton("Save & upload", (d, w) -> saveEcdcDraft(this::onEcdcUploadClicked))
+                    .setNegativeButton("Cancel", null)
+                    .show();
+            return;
+        }
         List<DashboardUiHelper.IncompleteDomain> incompleteDomains = incompleteEcdDomains();
         if (!incompleteDomains.isEmpty()) {
             ui.showIncompleteDomainsDialog("Complete all domains first",
@@ -1710,14 +1722,49 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             }
             final int userId = user.userId;
             repo.getEcdcDomains(domains -> repo.getAllEcdcCompetencies(competencies ->
-                    repo.getEcdcResponsesForClassPeriod(classId, period, responses ->
+                    repo.getEcdcResponsesForClassPeriod(classId, period, allResponses ->
                             repo.getStudentsByClass(classId, roster -> {
-                                if (responses == null || responses.isEmpty()) {
+                                if (allResponses == null || allResponses.isEmpty()) {
                                     runOnUiThread(() -> ui.showErrorDialog("Nothing to upload",
                                             "No saved ECDC marks for " + EcdcScreenRenderer.periodLabel(period)
                                                     + " in this class yet."));
                                     return;
                                 }
+
+                                // Marks saved under an LRN that is no longer on this class's roster
+                                // (e.g. the student was transferred and the class re-synced) can't be
+                                // uploaded with this class. Skip them instead of blocking everyone else.
+                                // If the roster is empty (students not synced), don't filter at all:
+                                // an empty roster would otherwise make every student look "removed".
+                                final List<com.example.omrscanner.database.entities.EcdcResponseEntity> responses;
+                                final java.util.Set<String> skippedLrns = new java.util.LinkedHashSet<>();
+                                if (roster == null || roster.isEmpty()) {
+                                    responses = allResponses;
+                                } else {
+                                    java.util.Set<String> rosterLrns = new java.util.HashSet<>();
+                                    for (com.example.omrscanner.database.entities.StudentLrnEntity s : roster) {
+                                        rosterLrns.add(s.lrn);
+                                    }
+                                    responses = new ArrayList<>();
+                                    for (com.example.omrscanner.database.entities.EcdcResponseEntity r : allResponses) {
+                                        if (rosterLrns.contains(r.lrn)) {
+                                            responses.add(r);
+                                        } else {
+                                            skippedLrns.add(r.lrn);
+                                        }
+                                    }
+                                }
+                                if (responses.isEmpty()) {
+                                    final int skippedCount = skippedLrns.size();
+                                    runOnUiThread(() -> ui.showErrorDialog("Nothing to upload",
+                                            "The only saved marks for " + EcdcScreenRenderer.periodLabel(period)
+                                                    + " belong to " + skippedCount
+                                                    + (skippedCount == 1 ? " student" : " students")
+                                                    + " who are no longer on this class's roster. "
+                                                    + "Re-sync the class students if that's unexpected."));
+                                    return;
+                                }
+
                                 // Guard: every student in the class must have every domain fully marked
                                 // for this period, or the whole mass upload is blocked.
                                 List<DashboardUiHelper.IncompleteStudent> incompleteStudents =
@@ -1793,7 +1840,10 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                             com.example.omrscanner.dashboard.EcdcUploadPayloadBuilder.logPayload(payload.toString());
                                             final int studentCount = payload.getJSONArray("students").length();
                                             uploadEcdcPayload(user.serverIp, payload, "ECDC results for " + studentCount
-                                                    + " student" + (studentCount == 1 ? "" : "s"));
+                                                    + " student" + (studentCount == 1 ? "" : "s")
+                                                    + (skippedLrns.isEmpty() ? ""
+                                                    : " (skipping " + skippedLrns.size()
+                                                    + " not on roster)"));
                                         } catch (org.json.JSONException e) {
                                             android.util.Log.e("OMR_ECDC_UPLOAD", "Could not build mass upload JSON: " + e.getMessage(), e);
                                             ui.showErrorDialog("Upload failed",
@@ -6261,7 +6311,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                             com.example.omrscanner.database.entities.EcdcCompetencyEntity competencyEntity =
                                     new com.example.omrscanner.database.entities.EcdcCompetencyEntity();
                             competencyEntity.id = c.optInt("id");
-                            competencyEntity.domainId = c.optInt("domain_id");
+                            // The competency is nested under its domain, so use the parent's id
+                            // instead of trusting a "domain_id" field that may be missing (-> 0).
+                            competencyEntity.domainId = domainEntity.id;
                             competencyEntity.competency = c.optString("competency", null);
                             competencyEntities.add(competencyEntity);
                         }
@@ -6271,10 +6323,12 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                 final int finalCompetencyCount = competencyEntities.size();
                 com.example.omrscanner.database.OMRRepository repo =
                         new com.example.omrscanner.database.OMRRepository(context);
-                repo.replaceEcdcDomains(domainEntities, competencyEntities, ignored ->
+                repo.replaceEcdcDomains(domainEntities, competencyEntities, ok ->
                         mainHandler.post(() -> android.widget.Toast.makeText(context,
-                                "Synced " + domainCount + " domains (" + finalCompetencyCount + " competencies)",
-                                android.widget.Toast.LENGTH_SHORT).show()));
+                                Boolean.TRUE.equals(ok)
+                                        ? "Synced " + domainCount + " domains (" + finalCompetencyCount + " competencies)"
+                                        : "Sync failed: could not save ECCD data. Your previous data was kept.",
+                                android.widget.Toast.LENGTH_LONG).show()));
 
             } catch (Exception e) {
                 android.util.Log.e("OMR_ECDC_SYNC", "Sync failed: " + e.getClass().getSimpleName() + ": " + e.getMessage(), e);

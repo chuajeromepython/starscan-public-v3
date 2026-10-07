@@ -883,19 +883,27 @@ public class OMRRepository {
     });
   }
 
+  /**
+   * Replaces the ECDC reference data in ONE transaction: if any insert fails, the
+   * old domains/competencies are kept. Callback gets true on success, false on failure.
+   */
   public void replaceEcdcDomains(List<EcdcDomainEntity> domains,
                                  List<EcdcCompetencyEntity> competencies,
-                                 Callback<Void> callback) {
+                                 Callback<Boolean> callback) {
     executor.execute(() -> {
+      boolean ok = true;
       try {
-        db.ecdcCompetencyDao().deleteAll();
-        db.ecdcDomainDao().deleteAll();
-        db.ecdcDomainDao().insertAll(domains);
-        db.ecdcCompetencyDao().insertAll(competencies);
+        db.runInTransaction(() -> {
+          db.ecdcCompetencyDao().deleteAll();
+          db.ecdcDomainDao().deleteAll();
+          db.ecdcDomainDao().insertAll(domains);
+          db.ecdcCompetencyDao().insertAll(competencies);
+        });
       } catch (Exception e) {
+        ok = false;
         Log.e("EcdcSync", "Failed to replace ECDC domains/competencies", e);
       }
-      if (callback != null) callback.onResult(null);
+      if (callback != null) callback.onResult(ok);
     });
   }
 
