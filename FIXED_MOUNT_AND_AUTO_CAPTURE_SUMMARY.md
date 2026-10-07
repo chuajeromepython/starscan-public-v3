@@ -1,207 +1,125 @@
-# OMR Scanner Update Summary
+# Fixed-Mount Support and Auto-Capture: Status and History
 
-## What stayed from the earlier improvement
+> **Read this first.** This file started as a change summary for two features: immediate auto-capture, and fixed-mount distance compensation. The code for both still exists, but **most of it is no longer what the app runs by default**. Guide-square mode and ArUco mode were added afterward and now sit in front of it. This version records what is true today, keeps the history, and explains how to bring the old behavior back.
+>
+> Audited against `main` at commit `c699946` by reading the code. Nothing here was run on a device. See also [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md#camera-modes).
 
-The earlier performance improvement is still intact.
+---
 
-- Auto-capture now triggers immediately on the first frame where all 4 anchors are validly detected.
-- The old multi-frame confirmation delay is gone.
-- The old frame-skipping delay is gone.
-- The live camera path no longer uses the expensive `NV21 -> JPEG -> Bitmap` conversion before running anchor detection.
-- The visual overlay smoothing still exists, but it is no longer part of the capture decision.
+## Status at a glance
 
-In simple terms:
+| Claim from the original summary | Today |
+| --- | --- |
+| The dialog offers "Handheld Scan" and "Fixed Mount Scan" | The dialog offers **"Fixed Mount"** and **"Handheld"**, but they mean something different now (see below). |
+| Fixed Mount adds distance compensation (tolerant profile, far fallback, zoom stepping) | **Not reachable from the UI.** The UI never sends `fixedMountMode = true`. The code is intact. |
+| Capture triggers on the first frame with 4 valid anchors | **Only true on the legacy whole-frame path, which is switched off.** Both live modes now require sustained locking first. |
+| No frame skipping | Mostly true. One exception: the handheld recovery pass runs on every second frame after 3 misses (legacy path only). |
+| No `NV21 -> JPEG -> Bitmap` conversion on the live path | **Still true.** Live detection reads the Y plane directly (`AnchorDetector.toGrayMat`). |
+| Overlay smoothing does not affect capture | Still true. |
+| Upscaling happens only in the fixed-mount far pass | Mostly true. The handheld **recovery** profile also upscales (up to 1.25x). |
 
-1. The camera analyzes the latest frame.
-2. If the 4 corner anchors are found and validated, the app captures immediately.
-3. The app no longer waits for a “stay steady” countdown before snapping.
+---
 
-## What was added for fixed-mount use
+## How the camera modes map today
 
-The new work adds support for an elevated fixed-mount setup where the phone stays in one place and users slide sheets underneath it.
+`DashboardActivity.showCameraModeDialog` always calls `launchCamera(false, tiltAgnostic)`, so `fixedMountMode` is always `false`.
 
-This was added without removing the normal handheld behavior.
+| Dialog label | Flags | Live path in `CameraActivity` | When it captures |
+| --- | --- | --- | --- |
+| "Fixed Mount" | `fixedMount=false`, `tiltAgnostic=false` | `analyzeFrameGuideSquareMode` | When all four on-screen guide squares are locked. Each needs 8 consecutive hits and survives a 1 s dropout. Capture is blocked unless the phone is tilted to the one supported orientation. |
+| "Handheld" | `fixedMount=false`, `tiltAgnostic=true` | `analyzeFrameArucoIdentityMode` | When all four ArUco markers (IDs 0 to 3) are locked per marker (8 hits, 1 s grace), then 5 consecutive full detections. |
+| *(not offered)* | `fixedMount=false`, guide squares off | `analyzeFrameWholeFrameLegacy` | **First valid 4-anchor frame** (`REQUIRED_CONSECUTIVE_DETECTIONS = 1`). This is the behavior the original summary describes. |
+| *(not offered)* | `fixedMount=true`, guide squares off | `analyzeFrameWholeFrameLegacy` | Same, with the fixed-mount profiles and zoom stepping. |
 
-### New camera modes
+The legacy path is chosen only when `GUIDE_SQUARE_MODE_ENABLED` is `false` and `tiltAgnosticMode` is `false`. It is currently `true`.
 
-The app now offers two camera modes when opening the camera:
+---
 
-- `Handheld Scan`
-- `Fixed Mount Scan`
+## History: what the original change did
 
-### Handheld Scan
+Two pieces of work, in order:
 
-This keeps the fast close-up behavior.
+1. **Immediate auto-capture.** Removed the multi-frame "stay steady" countdown and the analyze-every-third-frame skipping, and removed the per-frame `NV21 -> JPEG -> Bitmap` conversion. The analyzer now reads the Y plane straight from `ImageProxy`. Overlay smoothing stayed, but only for display.
+2. **Fixed-mount support**, added on top, for an elevated phone with sheets slid underneath. Smaller 30- and 40-item sheets occupy only a small part of the frame in that setup, so the corner anchors look tiny.
 
-- Best for normal use where the user holds the phone and can move closer to the sheet.
-- Immediate auto-capture is still active.
-- Detection remains optimized for sheets that occupy a larger part of the frame.
+The first item survived all later changes. The second is dormant. Guide-square and ArUco modes replaced the whole-frame approach as the default after both were written.
 
-### Fixed Mount Scan
+---
 
-This adds distance compensation for elevated mounting setups.
+## The fixed-mount mechanism (still in the code)
 
-- Best for installations where the phone is mounted above a desk or tray.
-- Helps when smaller sheets, such as 30-item or 40-item forms, occupy only a small part of the camera frame.
-- Immediate auto-capture is still active once anchors are found.
+Everything below only runs when `EXTRA_FIXED_MOUNT_MODE` is `true` **and** the legacy whole-frame path is active.
 
-## What fixed-mount compensation does
+### Detection profiles (`omr/AnchorDetector`)
 
-When `Fixed Mount Scan` is used, the app now does the following:
+`detectAnchors(imageProxy, FIXED_MOUNT)` tries the base profile first, then the far profile if the base pass misses.
 
-### 1. Uses more tolerant anchor thresholds
+| Profile | Analysis size | Min anchor area ratio | Solidity (min) | Darkness mean (max) | Fill ratio (min) | Upscale |
+| --- | --- | --- | --- | --- | --- | --- |
+| `LIVE_HANDHELD` | 960 px | 0.0003 | 0.65 | 150 | 0.45 | no |
+| `LIVE_HANDHELD_RECOVERY` | 1280 px | 0.00012 | 0.62 | 155 | 0.42 | up to 1.25x |
+| `LIVE_FIXED_BASE` | 960 px | 0.00005 | 0.72 | 140 | 0.50 | no |
+| `LIVE_FIXED_FAR` | 1440 px | 0.00003 | 0.78 | 125 | 0.55 | up to 1.5x |
 
-The detector now accepts smaller anchor candidates than before.
+(A `STILL` profile exists for still images. Values were read from the profile constants and may drift, so check the file before relying on them.)
 
-This helps when:
+### How the fixed-mount profiles stay safe
 
-- the camera is mounted higher above the paper
-- the paper occupies only a small portion of the frame
-- the 4 black corner anchors appear much smaller in the live preview
+Smaller anchors are accepted, so the other checks get stricter to reject text and dark blobs: higher solidity, darker mean, higher fill ratio, duplicate-corner rejection, and a corner-layout sanity check. The fixed profiles also validate corner spacing against the detected sheet span (`minCornerSpanWidthRatio` and `minCornerSpanHeightRatio`, 0.08 each) rather than the whole frame, so a small but valid sheet near the centre is not rejected.
 
-### 2. Relaxes corner spacing validation for distant sheets
+### Zoom stepping (`camera/CameraActivity`)
 
-Previously, anchors could fail if the whole sheet looked too small inside the full camera frame.
+After repeated misses the camera zoom steps up through a fixed ladder, then wraps around:
 
-Now, in fixed-mount mode:
+| Constant | Value |
+| --- | --- |
+| `FIXED_MOUNT_ZOOM_STEPS` | 1.0, 1.25, 1.5, 1.75 (clamped to the device's zoom range) |
+| `FIXED_MOUNT_MISS_THRESHOLD` | 6 misses |
+| `FIXED_MOUNT_ZOOM_COOLDOWN_MS` | 250 ms |
 
-- corner validation considers the detected sheet span itself, not only the full frame size
-- small but valid sheets are less likely to be rejected just because they are clustered near the center
+Zoom does not change every frame, and once anchors are found capture is immediate on this path.
 
-### 3. Adds a far-distance fallback pass
+### Where the delay comes from
 
-If the first fixed-mount detection pass fails, the detector runs one more fallback pass using a more distance-tolerant profile.
+In fixed-mount mode, capture is not delayed after a valid detection. Any slowness comes before detection succeeds: the base pass missing, the far pass running, the zoom ladder stepping, or the 1440 px analysis image costing more CPU. That is the performance trade-off, and handheld detection stays the lighter path.
 
-This helps when:
+### The handheld recovery pass
 
-- the sheet is especially small in the frame
-- anchors are near the lower limit of visibility
+On the legacy path without fixed-mount, after 3 misses (`HANDHELD_RECOVERY_MISS_THRESHOLD`) the analyzer also runs the recovery profile on every second frame (`HANDHELD_RECOVERY_FRAME_INTERVAL`). This is the one place frames are deliberately skipped.
 
-### 4. Allows limited scale-up for distant small sheets
+---
 
-The detector can now conditionally enlarge the grayscale analysis image during the far-distance fallback pass.
+## Do the fixed-mount parts also apply in guide-square or ArUco mode?
 
-Important:
+Partly, and only if someone passes `fixedMountMode = true`:
 
-- it does **not** upscale every frame
-- it only happens in the fixed-mount far fallback path
-- this avoids wasting CPU on handheld scans and normal frames
+- **Guide-square mode:** the per-square detector (`detectAnchorInRegion`) switches to `LIVE_FIXED_BASE_PROFILE`. The far profile and zoom stepping are **not** used, because that path never calls `onDetectionMiss()`.
+- **ArUco mode:** the flag changes nothing in detection. Zoom stepping can run because `onDetectionMiss()` is called on misses, but `initializeFixedMountZoomRatios` only builds a ladder when `fixedMountMode` is true.
 
-### 5. Adds bounded camera zoom stepping
+**(verify)** These two bullets come from reading the call sites. Test on a device before relying on them.
 
-In fixed-mount mode, if the app keeps missing anchors for several frames, it can step the camera zoom upward in a controlled way.
+---
 
-Current zoom ladder:
+## Re-enabling the original fixed-mount behavior
 
-- `1.0x`
-- `1.25x`
-- `1.5x`
-- `1.75x`
+To get what the old summary describes:
 
-This helps make the sheet larger in the frame without requiring the user to physically move the phone.
+1. In `CameraActivity`, set `GUIDE_SQUARE_MODE_ENABLED = false` so non-ArUco scans use the whole-frame detector.
+2. In `DashboardActivity`, make a camera-mode option call `launchCamera(true, false)` so `EXTRA_FIXED_MOUNT_MODE` is `true`. `PREF_FIXED_MOUNT_MODE` is still defined there, unused.
+3. Rename the dialog options so the labels match the behavior.
+4. Test with the phone mounted at its real height, on real ZPH40 and ZPH60 sheets, in the lighting the installation will have.
 
-Important:
+Note the interactions with later work: turning guide squares off removes the on-screen guide boxes, but the tilt gate stays, because `takePhoto()` blocks capture whenever the scan is not in ArUco mode and the phone is not tilted to the supported orientation. That would be awkward for a fixed mount, so decide whether to relax it. The template orientation logic for non-ArUco captures assumes the tilt-right placement (`REQUIRED_PORTRAIT_ROTATION`). Check orientation on real captures after the change.
 
-- zoom only advances after repeated misses
-- zoom does not keep changing every frame
-- once anchors are found, capture still happens immediately
+## Removing the dormant code instead
 
-## How false positives are controlled
+If the team decides fixed mount is not coming back, these can go together: the `LIVE_FIXED_BASE` and `LIVE_FIXED_FAR` profiles and the `FIXED_MOUNT` branch in `AnchorDetector`, the zoom ladder and miss counters in `CameraActivity`, `EXTRA_FIXED_MOUNT_MODE` and its pass-through in `ResultActivity` and `PreviewActivity`, and `PREF_FIXED_MOUNT_MODE`. Keep immediate Y-plane analysis, which everything else depends on.
 
-Because fixed-mount mode allows smaller anchor candidates, the detector also became stricter in other ways to avoid random false detections.
+---
 
-The app now also checks:
+## Summary
 
-- solidity of the candidate region
-- darkness of the candidate region
-- fill ratio inside the thresholded candidate box
-- duplicate-corner rejection
-- corner layout sanity
-
-This means the detector is more tolerant of small distant anchors, but still tries to reject text, noise, and random dark blobs.
-
-## What happens now in each mode
-
-### Handheld mode flow
-
-1. Analyze live frame.
-2. Run the normal fast live detector.
-3. If 4 anchors are valid, capture immediately.
-
-### Fixed-mount mode flow
-
-1. Analyze live frame.
-2. Run the fixed-mount base detector profile.
-3. If that fails, run the fixed-mount far-distance fallback profile.
-4. If repeated misses continue, step camera zoom upward.
-5. As soon as 4 anchors are valid, capture immediately.
-
-## Important clarification about speed in fixed-mount mode
-
-Fixed-mount mode is still fast in terms of auto-capture.
-
-The capture itself is **not** delayed once the anchors are detected.
-
-That means:
-
-- if the anchors are already detectable at the current zoom and analysis scale, the app captures immediately
-- the app does **not** wait for extra stable frames before snapping
-- the app does **not** add a separate confirmation delay after valid detection
-
-What can make fixed-mount mode feel slower is the time spent trying to make the anchors detectable in the first place.
-
-That extra time can come from:
-
-- the first fixed-mount detection pass missing the sheet
-- the far-distance fallback detection pass running after a miss
-- the camera stepping through zoom levels so the sheet appears larger in frame
-
-So the delay, when it happens, is in the **detection recovery stage**, not in the **capture trigger stage**.
-
-In short:
-
-- **anchor found = capture immediately**
-- **anchor too small or not yet detectable = fallback and zoom logic may add time before detection succeeds**
-
-## Performance tradeoff
-
-### What remains fast
-
-- Handheld mode remains the fast path.
-- Immediate auto-capture remains intact.
-- The old heavy bitmap conversion remains removed.
-
-### What becomes slightly heavier
-
-Fixed-mount mode is more expensive than handheld mode because it may:
-
-- run a second detection pass after a miss
-- conditionally upscale the analysis image
-- occasionally adjust camera zoom
-
-This is intentional and limited only to the fixed-mount use case.
-
-## Can the fixed-mount feature be reverted later?
-
-Yes.
-
-The earlier immediate auto-capture optimization is separate enough that the fixed-mount additions can be removed later if needed while keeping:
-
-- immediate auto-capture
-- no stability countdown
-- no frame skipping
-- no live `NV21 -> JPEG -> Bitmap` conversion
-
-In other words:
-
-- the **fast auto-capture improvement** can remain
-- the **fixed-mount support** can still be rolled back later if testing shows it needs adjustment
-
-## Overall result
-
-The app now supports both use cases:
-
-- fast handheld scanning with immediate auto-capture
-- elevated fixed-mount scanning with distance compensation for smaller sheets
-
-The earlier improvement was not replaced. It is still active, and the fixed-mount work was added on top of it.
+- The fast Y-plane analysis path is current and should stay.
+- "Immediate capture on the first valid frame" is true only on the disabled legacy path. Today's modes lock corners over several frames first.
+- Fixed-mount distance compensation exists in the code but is unreachable from the UI, and the dialog's "Fixed Mount" label now launches guide-square mode.
+- Pick a direction: restore it properly (steps above) or delete it (list above). The current state, with dormant code and a misleading label, is the worst of both.
