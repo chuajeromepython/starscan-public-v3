@@ -3,8 +3,6 @@
 STARS is an Android app for teachers. It scans printed OMR (Optical Mark Recognition) answer sheets with the phone camera, grades them, and syncs classes and results with the **STARS** web system. It also includes an **ECDC** (Early Childhood Development Checklist) module for Kinder classes.
 
 > The app label is **STARS**; the code, package (`com.example.omrscanner`) and Gradle project are still named **OMRScanner**.
->
-> This README describes the `feature/with-por` branch. It was written by reading the code, and the app was not built or run to produce it. Anything marked **(verify)** should be checked before you rely on it.
 
 ---
 
