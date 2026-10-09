@@ -526,7 +526,8 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                                   int restoredAnswerKeys, int restoredQuizzes,
                                                   int restoredQuizScans, int skippedAssessments,
                                                   int skippedQuizzes, int failedExports,
-                                                  int restoredEcdcMarks, int skippedEcdcMarks) {
+                                                  int restoredEcdcMarks, int skippedEcdcMarks,
+                                                  int keptNewerEcdcMarks, int skippedEcdcDates) {
                                 runOnUiThread(() -> {
                                     ui.showToast("Restore complete ✓  (" + restoredAssessments
                                             + " assessment(s), " + restoredScans + " scan(s), "
@@ -546,11 +547,18 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                                         + "bring them back — sync the class first, then restore "
                                                         + "this backup again.");
                                     }
-                                    if (skippedEcdcMarks > 0) {
-                                        ui.showErrorDialog("Some ECDC marks were skipped",
-                                                skippedEcdcMarks + " ECDC mark(s) were skipped because their "
+                                    if (skippedEcdcMarks > 0 || skippedEcdcDates > 0) {
+                                        ui.showErrorDialog("Some ECDC data was skipped",
+                                                skippedEcdcMarks + " ECDC mark(s) and " + skippedEcdcDates
+                                                        + " assessment date(s) were skipped because their "
                                                         + "class isn't synced to your account yet. Sync the "
                                                         + "class first, then restore this backup again.");
+                                    }
+                                    if (keptNewerEcdcMarks > 0) {
+                                        ui.showErrorDialog("Newer ECDC marks kept",
+                                                keptNewerEcdcMarks + " ECDC mark(s) in the backup were older "
+                                                        + "than the ones already on this device, so the "
+                                                        + "newer marks on the device were kept.");
                                     }
                                     if (failedExports > 0) {
                                         ui.showErrorDialog("Some assessments couldn't be prepared for upload",

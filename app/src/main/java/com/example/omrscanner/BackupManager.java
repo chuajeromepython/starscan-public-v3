@@ -114,7 +114,8 @@ public class BackupManager {
         void onSuccess(int restoredAssessments, int restoredScans, int restoredAnswerKeys,
                        int restoredQuizzes, int restoredQuizScans,
                        int skippedAssessments, int skippedQuizzes, int failedExports,
-                       int restoredEcdcMarks, int skippedEcdcMarks);
+                       int restoredEcdcMarks, int skippedEcdcMarks,
+                       int keptNewerEcdcMarks, int skippedEcdcDates);
         void onError(Exception e);
     }
 
@@ -322,6 +323,7 @@ public class BackupManager {
      * @param source a Uri obtained from ACTION_OPEN_DOCUMENT pointing at a
      *               previously exported backup zip.
      */
+    @SuppressWarnings("deprecation") // Room 2.6 deprecates begin/endTransaction but still supports them
     public void restoreBackup(Uri source, RestoreCallback callback) {
         executor.execute(() -> {
             try {
@@ -364,10 +366,23 @@ public class BackupManager {
 
                 int restoredAssessments = 0;
                 int skippedAssessments = 0;
+                int restoredScans = 0;
+                int restoredAnswerKeys = 0;
+                int restoredQuizzes = 0;
+                int skippedQuizzes = 0;
+                int restoredQuizScans = 0;
+                int restoredEcdcMarks = 0;
+                int skippedEcdcMarks = 0;
+                int keptNewerEcdcMarks = 0;
+                int skippedEcdcDates = 0;
                 Set<String> restoredAssessmentIds = new HashSet<>();
                 // assessmentId -> classId, so we can rebuild the Downloads/OMRScanner
                 // export for every assessment actually restored (see below).
                 Map<String, String> restoredAssessmentClassIds = new HashMap<>();
+
+                // All DB writes below commit together or roll back together.
+                db.beginTransaction();
+                try {
 
                 JSONArray assessmentsJson = manifest.optJSONArray("assessments");
                 if (assessmentsJson != null) {
@@ -390,7 +405,6 @@ public class BackupManager {
                     }
                 }
 
-                int restoredScans = 0;
                 Set<Integer> restoredScanIds = new HashSet<>();
                 JSONArray scansJson = manifest.optJSONArray("scans");
                 if (scansJson != null) {
@@ -423,7 +437,6 @@ public class BackupManager {
                     if (!batch.isEmpty()) db.answerDao().insertAll(batch);
                 }
 
-                int restoredAnswerKeys = 0;
                 JSONArray keysJson = manifest.optJSONArray("answerKeys");
                 if (keysJson != null) {
                     for (int i = 0; i < keysJson.length(); i++) {
@@ -433,8 +446,6 @@ public class BackupManager {
                 }
 
                 // ── Quizzes (local-only — this backup is their only copy) ──
-                int restoredQuizzes = 0;
-                int skippedQuizzes = 0;
                 Set<String> restoredQuizIds = new HashSet<>();
 
                 JSONArray quizzesJson = manifest.optJSONArray("quizzes");
@@ -454,7 +465,6 @@ public class BackupManager {
                     }
                 }
 
-                int restoredQuizScans = 0;
                 Set<Integer> restoredQuizScanIds = new HashSet<>();
                 JSONArray quizScansJson = manifest.optJSONArray("quizScans");
                 if (quizScansJson != null) {
@@ -484,6 +494,78 @@ public class BackupManager {
                     if (!batch.isEmpty()) db.quizScanAnswerDao().insertAll(batch);
                 }
 
+                // ── ECDC marks ──
+                // Same remap as assessments/quizzes: classroomId -> the CURRENT local
+                // class id of the signed-in teacher. Marks for a class that isn't synced
+                // yet are skipped (sync the class, then restore again). No parent rows are
+                // needed (ecdc_responses has no foreign keys), and the unique
+                // (class_id, lrn, period, competency_id) index makes REPLACE overwrite
+                // the matching mark instead of duplicating it.
+
+                    // Newest-wins: never let an older backup mark overwrite a newer local one.
+                    Map<String, Long> localEcdcUpdatedAt = new HashMap<>();
+                    for (EcdcResponseEntity existing : db.ecdcResponseDao().getAllSync()) {
+                        localEcdcUpdatedAt.put(ecdcMarkKey(existing.classId, existing.lrn,
+                                existing.period, existing.competencyId), existing.updatedAt);
+                    }
+                    JSONArray ecdcJson = manifest.optJSONArray("ecdcResponses");
+                    if (ecdcJson != null) {
+                    List<EcdcResponseEntity> ecdcBatch = new ArrayList<>();
+                    for (int i = 0; i < ecdcJson.length(); i++) {
+                        JSONObject o = ecdcJson.getJSONObject(i);
+                        String localClassId = classroomIdToLocalClassId.get(o.optInt("classroomId", -1));
+                        if (localClassId == null) {
+                            skippedEcdcMarks++;
+                            continue;
+                        }
+                        EcdcResponseEntity candidate = ecdcResponseFromJson(o, localClassId);
+                        Long localUpdated = localEcdcUpdatedAt.get(ecdcMarkKey(candidate.classId,
+                                candidate.lrn, candidate.period, candidate.competencyId));
+                        if (localUpdated != null && localUpdated >= candidate.updatedAt) {
+                            if (localUpdated > candidate.updatedAt) keptNewerEcdcMarks++;
+                            continue; // local copy is as new or newer, so keep it
+                        }
+                        ecdcBatch.add(candidate);
+                    }
+                    if (!ecdcBatch.isEmpty()) {
+                        db.ecdcResponseDao().insertAll(ecdcBatch);
+                        restoredEcdcMarks = ecdcBatch.size();
+                    }
+                }
+
+                    // Dates have no timestamp, so fill in missing ones and never overwrite.
+                    Set<String> localDateKeys = new HashSet<>();
+                    for (EcdcStudentDateEntity existing : db.ecdcStudentDateDao().getAllSync()) {
+                        localDateKeys.add(existing.classId + "|" + existing.lrn + "|" + existing.period);
+                    }
+                    JSONArray ecdcDatesJson = manifest.optJSONArray("ecdcStudentDates");
+                if (ecdcDatesJson != null) {
+                    List<EcdcStudentDateEntity> dateBatch = new ArrayList<>();
+                    for (int k = 0; k < ecdcDatesJson.length(); k++) {
+                        JSONObject dateJson = ecdcDatesJson.getJSONObject(k);
+                        String dateClassId = classroomIdToLocalClassId.get(dateJson.optInt("classroomId", -1));
+                        if (dateClassId == null) {
+                            skippedEcdcDates++;
+                            continue;
+                        }
+                        EcdcStudentDateEntity row = new EcdcStudentDateEntity();
+                        row.classId = dateClassId;
+                        row.lrn = dateJson.getString("lrn");
+                        row.period = dateJson.getString("period");
+                        row.dateEpoch = dateJson.getLong("dateEpoch");
+                        if (localDateKeys.contains(row.classId + "|" + row.lrn + "|" + row.period)) continue;
+                        dateBatch.add(row);
+                    }
+                    if (!dateBatch.isEmpty()) {
+                        db.ecdcStudentDateDao().insertAll(dateBatch);
+                    }
+                }
+
+                    db.setTransactionSuccessful();
+                } finally {
+                    db.endTransaction();
+                }
+
                 // ── Rebuild Downloads/OMRScanner from what we just restored ──
                 //
                 // Restoring only touches the Room DB + the private overlay
@@ -507,60 +589,18 @@ public class BackupManager {
                     }
                 }
 
-                // ── ECDC marks ──
-                // Same remap as assessments/quizzes: classroomId -> the CURRENT local
-                // class id of the signed-in teacher. Marks for a class that isn't synced
-                // yet are skipped (sync the class, then restore again). No parent rows are
-                // needed (ecdc_responses has no foreign keys), and the unique
-                // (class_id, lrn, period, competency_id) index makes REPLACE overwrite
-                // the matching mark instead of duplicating it.
-                int restoredEcdcMarks = 0;
-                int skippedEcdcMarks = 0;
-                JSONArray ecdcJson = manifest.optJSONArray("ecdcResponses");
-                if (ecdcJson != null) {
-                    List<EcdcResponseEntity> ecdcBatch = new ArrayList<>();
-                    for (int i = 0; i < ecdcJson.length(); i++) {
-                        JSONObject o = ecdcJson.getJSONObject(i);
-                        String localClassId = classroomIdToLocalClassId.get(o.optInt("classroomId", -1));
-                        if (localClassId == null) {
-                            skippedEcdcMarks++;
-                            continue;
-                        }
-                        ecdcBatch.add(ecdcResponseFromJson(o, localClassId));
-                    }
-                    if (!ecdcBatch.isEmpty()) {
-                        db.ecdcResponseDao().insertAll(ecdcBatch);
-                        restoredEcdcMarks = ecdcBatch.size();
-                    }
-                }
-
-                JSONArray ecdcDatesJson = manifest.optJSONArray("ecdcStudentDates");
-                if (ecdcDatesJson != null) {
-                    List<EcdcStudentDateEntity> dateBatch = new ArrayList<>();
-                    for (int k = 0; k < ecdcDatesJson.length(); k++) {
-                        JSONObject dateJson = ecdcDatesJson.getJSONObject(k);
-                        String dateClassId = classroomIdToLocalClassId.get(dateJson.optInt("classroomId", -1));
-                        if (dateClassId == null) continue;
-                        EcdcStudentDateEntity row = new EcdcStudentDateEntity();
-                        row.classId = dateClassId;
-                        row.lrn = dateJson.getString("lrn");
-                        row.period = dateJson.getString("period");
-                        row.dateEpoch = dateJson.getLong("dateEpoch");
-                        dateBatch.add(row);
-                    }
-                    if (!dateBatch.isEmpty()) {
-                        db.ecdcStudentDateDao().insertAll(dateBatch);
-                    }
-                }
-
                 callback.onSuccess(restoredAssessments, restoredScans, restoredAnswerKeys,
                         restoredQuizzes, restoredQuizScans, skippedAssessments, skippedQuizzes, failedExports,
-                        restoredEcdcMarks, skippedEcdcMarks);
+                        restoredEcdcMarks, skippedEcdcMarks, keptNewerEcdcMarks, skippedEcdcDates);
             } catch (Exception e) {
                 Log.e(TAG, "Restore failed", e);
                 callback.onError(e);
             }
         });
+    }
+
+    private static String ecdcMarkKey(String classId, String lrn, String period, int competencyId) {
+        return classId + "|" + lrn + "|" + period + "|" + competencyId;
     }
 
     private JSONObject readZip(Uri source, Integer activeUserId) throws IOException, JSONException {
