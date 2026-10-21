@@ -5402,10 +5402,74 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
                                         activityOpenedFromQuizzesTab = true;
                                         showScreen(SCREEN_ACTIVITY);
                                     }),
-                                    false));
+                                    false,
+                                    () -> exportQuizToExcel(row.id)));
                         }
                     }));
         })));
+    }
+
+    /** Builds the quiz's Excel file off the UI thread, shows an "Exported" toast, then offers to share it. */
+    private void exportQuizToExcel(String quizId) {
+        final android.widget.Toast exportingToast = android.widget.Toast.makeText(
+                this, "Exporting\u2026", android.widget.Toast.LENGTH_SHORT);
+        exportingToast.show();
+        final long startMs = android.os.SystemClock.uptimeMillis();
+
+        new Thread(() -> {
+            try {
+                java.io.File file = com.example.omrscanner.utils.QuizExcelExporter.export(DashboardActivity.this, quizId);
+                // Keep "Exporting…" visible for 1.5s in total (shorter if the export itself took a while).
+                long wait = Math.max(0, 1500 - (android.os.SystemClock.uptimeMillis() - startMs));
+                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                    // Cancel "Exporting…" so "Exported" appears right away instead of queuing behind it.
+                    exportingToast.cancel();
+
+                    if (file == null) {
+                        ui.showToast("No scanned students to export yet.");
+                        return;
+                    }
+
+                    android.widget.Toast.makeText(this, "Exported \u2713", android.widget.Toast.LENGTH_SHORT).show();
+
+                    // Toast.LENGTH_SHORT is ~2s. Wait for it to finish, then show the dialog.
+                    new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                        if (isFinishing() || isDestroyed()) return;
+                        java.io.File classDir = file.getParentFile() != null ? file.getParentFile().getParentFile() : null;
+                        String where = "Downloads/OMRScanner/" + (classDir != null ? classDir.getName() : "") + "/Quizzes/";
+                        new com.google.android.material.dialog.MaterialAlertDialogBuilder(
+                                DashboardActivity.this, R.style.ThemeOverlay_OMRScanner_Dialog)
+                                .setTitle("Export complete")
+                                .setMessage("Saved to " + where + "\n\n" + file.getName())
+                                .setPositiveButton("Share", (d, w) -> shareExcelFile(file))
+                                .setNegativeButton("Done", null)
+                                .show();
+                    }, 2000);
+                }, wait);
+            } catch (Exception e) {
+                Log.e("QuizExport", "Quiz export failed", e);
+                runOnUiThread(() -> {
+                    exportingToast.cancel();
+                    ui.showErrorDialog("Export failed",
+                            e.getMessage() != null ? e.getMessage() : "Could not create the Excel file.");
+                });
+            }
+        }).start();
+    }
+
+    private void shareExcelFile(java.io.File file) {
+        try {
+            android.net.Uri uri = androidx.core.content.FileProvider.getUriForFile(
+                    this, getApplicationContext().getPackageName() + ".fileprovider", file);
+            Intent send = new Intent(Intent.ACTION_SEND);
+            send.setType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            send.putExtra(Intent.EXTRA_STREAM, uri);
+            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(Intent.createChooser(send, "Share quiz results"));
+        } catch (Exception e) {
+            Log.e("QuizExport", "Share failed", e);
+            ui.showToast("Couldn't open the share sheet. The file is in Downloads.");
+        }
     }
 
     /** Fetches the full QuizEntity by id (async) and hands (ActivityFolder, classId) to the consumer. */

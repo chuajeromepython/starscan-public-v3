@@ -507,6 +507,13 @@ public class ClassScreenRenderer {
     public View createActivityCard(AssessmentListRow row,
                                    Runnable onEdit, Runnable onSelectAnswerKey, Runnable onDelete, Runnable onUpload, Runnable onOpen,
                                    boolean showUpload) {
+        return createActivityCard(row, onEdit, onSelectAnswerKey, onDelete, onUpload, onOpen, showUpload, null);
+    }
+
+    /** @param onExport non-null adds an "Export to Excel" menu item (used by quizzes only). */
+    public View createActivityCard(AssessmentListRow row,
+                                   Runnable onEdit, Runnable onSelectAnswerKey, Runnable onDelete, Runnable onUpload, Runnable onOpen,
+                                   boolean showUpload, Runnable onExport) {
 
         FrameLayout card = new FrameLayout(activity);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
@@ -595,7 +602,15 @@ public class ClassScreenRenderer {
             popup.getMenu().add(0, 1, 0, editTitle).setIcon(editIcon);
             popup.getMenu().add(0, 2, 1, keyTitle).setIcon(keyIcon);
             if (showUpload) popup.getMenu().add(0, 3, 2, uploadTitle).setIcon(uploadIcon);
-            popup.getMenu().add(0, 4, 3, deleteTitle).setIcon(deleteIcon);
+            if (onExport != null) {
+                android.graphics.drawable.Drawable exportIcon =
+                        androidx.core.content.ContextCompat.getDrawable(activity, R.drawable.ic_file_spreadsheet).mutate();
+                exportIcon.setTint(Color.parseColor("#059669"));
+                android.text.SpannableString exportTitle = new android.text.SpannableString("Export to Excel");
+                exportTitle.setSpan(new android.text.style.ForegroundColorSpan(Color.parseColor("#1E293B")), 0, exportTitle.length(), 0);
+                popup.getMenu().add(0, 5, 3, exportTitle).setIcon(exportIcon);
+            }
+            popup.getMenu().add(0, 4, 4, deleteTitle).setIcon(deleteIcon);
 
             try {
                 java.lang.reflect.Field field = popup.getClass().getDeclaredField("mPopup");
@@ -611,6 +626,7 @@ public class ClassScreenRenderer {
                 if (id == 1) { onEdit.run(); return true; }
                 if (id == 2) { onSelectAnswerKey.run(); return true; }
                 if (id == 3 && showUpload) { onUpload.run(); return true; }
+                if (id == 5 && onExport != null) { onExport.run(); return true; }
                 if (id == 4) { onDelete.run(); return true; }
                 return false;
             });
