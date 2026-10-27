@@ -1474,7 +1474,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             return;
         }
         if (selectedEcdPeriod == null) {
-            ui.showErrorDialog("Choose a period", "Pick Beginning, Middle or End first, then tap Upload.");
+            ui.showErrorDialog("Choose a period", "Pick the Beginning, Middle, or End of the School Year first, then tap Upload.");
             return;
         }
         // The upload reads what's in the database, not what's on screen. If the teacher has
@@ -3165,7 +3165,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         addFaqCategory(body, "ECDC CHECKLIST");
         addFaqItem(body,
                 "What is the ECDCs tab?",
-                "ECDC stands for Early Childhood Development Checklist. Open a class, choose a student, then mark each competency, grouped by domain. Pick a period first: Beginning, Middle, or End of School Year.");
+                "ECDC stands for Early Childhood Development Checklist. Open a class, choose a student, then mark each competency, grouped by domain. Pick a period first: Beginning, Middle, or End of the School Year.");
         addFaqItem(body,
                 "What do Present, Not present, and Not tested mean?",
                 "Each competency needs one of the three choices. Not tested items are skipped on the server instead of being saved as answers. Tap the Save button to keep your marks. If you leave with unsaved changes, the app asks first.");
@@ -4529,9 +4529,9 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         }
 
         classRenderer.buildGroupBySwitcher(ecdPeriodSwitcher, new String[][]{
-                {"Beginning", ECD_PERIOD_BOSY},
-                {"Middle", ECD_PERIOD_MOSY},
-                {"End", ECD_PERIOD_EOSY},
+                {"Beginning of the School Year", ECD_PERIOD_BOSY},
+                {"Middle of the School Year", ECD_PERIOD_MOSY},
+                {"End of the School Year", ECD_PERIOD_EOSY},
         }, selectedEcdPeriod, key -> {
             selectedEcdPeriod = key;
             setupEcdClassStudentSearch();

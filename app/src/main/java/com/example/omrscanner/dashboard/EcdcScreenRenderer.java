@@ -136,9 +136,9 @@ public class EcdcScreenRenderer {
 
     /** Full wording of a period key, for the student header. */
     public static String periodLabel(String periodKey) {
-        if ("BOSY".equals(periodKey)) return "Beginning of School Year";
-        if ("MOSY".equals(periodKey)) return "Middle of School Year";
-        if ("EOSY".equals(periodKey)) return "End of School Year";
+        if ("BOSY".equals(periodKey)) return "Beginning of the School Year";
+        if ("MOSY".equals(periodKey)) return "Middle of the School Year";
+        if ("EOSY".equals(periodKey)) return "End of the School Year";
         return periodKey != null ? periodKey : "";
     }
 

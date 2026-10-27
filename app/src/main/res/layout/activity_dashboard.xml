@@ -2896,12 +2896,19 @@
                             android:textSize="10sp"
                             android:textStyle="bold" />
 
-                        <LinearLayout
-                            android:id="@+id/ecdPeriodSwitcher"
-                            android:layout_width="wrap_content"
+                        <!-- Full period names are long, so the pills scroll sideways on narrow screens. -->
+                        <HorizontalScrollView
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginBottom="16dp"
-                            android:orientation="horizontal" />
+                            android:overScrollMode="never"
+                            android:scrollbars="none">
+                            <LinearLayout
+                                android:id="@+id/ecdPeriodSwitcher"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:orientation="horizontal" />
+                        </HorizontalScrollView>
 
                         <!-- Step 2: search for a student, revealed once a period is picked. -->
                         <LinearLayout
