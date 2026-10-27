@@ -840,6 +840,11 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         userDetailMemberSince = findViewById(R.id.userDetailMemberSince);
         userDetailLastUpdated = findViewById(R.id.userDetailLastUpdated);
 
+        // Eye toggles: User ID / School / Server are masked by default.
+        setupRevealToggle(userDetailUserId, R.id.userDetailUserIdToggle, "user ID");
+        setupRevealToggle(userDetailSchool, R.id.userDetailSchoolToggle, "school");
+        setupRevealToggle(userDetailServerIp, R.id.userDetailServerToggle, "server");
+
         homeEmpty = findViewById(R.id.homeEmpty);
         homeClassList = findViewById(R.id.homeClassList);
         homeClassSearchInput = findViewById(R.id.homeClassSearchInput);
@@ -3848,6 +3853,26 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     }
 
     /** Populates the User tab with the currently active user's info, activity stats, and account details. */
+    /**
+     * Masks a TextView's text (dots) and lets an eye icon reveal/hide it.
+     * Uses a TransformationMethod, so every existing setText(...) keeps working
+     * and the real value is never altered.
+     */
+    private void setupRevealToggle(TextView valueView, int toggleId, String label) {
+        ImageView toggle = findViewById(toggleId);
+        if (valueView == null || toggle == null) return;
+        final boolean[] revealed = {false};
+        valueView.setTransformationMethod(android.text.method.PasswordTransformationMethod.getInstance());
+        toggle.setOnClickListener(v -> {
+            revealed[0] = !revealed[0];
+            valueView.setTransformationMethod(revealed[0]
+                    ? null
+                    : android.text.method.PasswordTransformationMethod.getInstance());
+            toggle.setImageResource(revealed[0] ? R.drawable.ic_eye_outline : R.drawable.ic_eye_off_outline);
+            toggle.setContentDescription((revealed[0] ? "Hide " : "Show ") + label);
+        });
+    }
+
     private void refreshUserScreen() {
         String displayName = globalTeacherName != null ? globalTeacherName.trim() : "";
         userNameText.setText(!displayName.isEmpty() ? displayName : "Scan your QR code to set your name");

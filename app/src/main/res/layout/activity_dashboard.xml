@@ -4931,6 +4931,7 @@
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:orientation="horizontal"
+                                    android:gravity="center_vertical"
                                     android:paddingVertical="8dp">
                                     <TextView
                                         android:layout_width="0dp"
@@ -4951,6 +4952,18 @@
                                         android:textSize="13sp"
                                         android:textStyle="bold"
                                         android:fontFamily="@font/poppins_medium" />
+                                    <ImageView
+                                        android:id="@+id/userDetailUserIdToggle"
+                                        android:layout_width="28dp"
+                                        android:layout_height="28dp"
+                                        android:layout_marginStart="8dp"
+                                        android:padding="4dp"
+                                        android:src="@drawable/ic_eye_off_outline"
+                                        android:contentDescription="Show user ID"
+                                        android:clickable="true"
+                                        android:focusable="true"
+                                        android:background="?attr/selectableItemBackgroundBorderless"
+                                        app:tint="#94A3B8" />
                                 </LinearLayout>
 
                                 <View
@@ -4962,6 +4975,7 @@
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:orientation="horizontal"
+                                    android:gravity="center_vertical"
                                     android:paddingVertical="8dp">
                                     <TextView
                                         android:layout_width="0dp"
@@ -4982,6 +4996,18 @@
                                         android:textSize="13sp"
                                         android:textStyle="bold"
                                         android:fontFamily="@font/poppins_medium" />
+                                    <ImageView
+                                        android:id="@+id/userDetailSchoolToggle"
+                                        android:layout_width="28dp"
+                                        android:layout_height="28dp"
+                                        android:layout_marginStart="8dp"
+                                        android:padding="4dp"
+                                        android:src="@drawable/ic_eye_off_outline"
+                                        android:contentDescription="Show school"
+                                        android:clickable="true"
+                                        android:focusable="true"
+                                        android:background="?attr/selectableItemBackgroundBorderless"
+                                        app:tint="#94A3B8" />
                                 </LinearLayout>
 
                                 <View
@@ -4993,6 +5019,7 @@
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:orientation="horizontal"
+                                    android:gravity="center_vertical"
                                     android:paddingVertical="8dp">
                                     <TextView
                                         android:layout_width="0dp"
@@ -5013,6 +5040,18 @@
                                         android:textSize="13sp"
                                         android:textStyle="bold"
                                         android:fontFamily="@font/poppins_medium" />
+                                    <ImageView
+                                        android:id="@+id/userDetailServerToggle"
+                                        android:layout_width="28dp"
+                                        android:layout_height="28dp"
+                                        android:layout_marginStart="8dp"
+                                        android:padding="4dp"
+                                        android:src="@drawable/ic_eye_off_outline"
+                                        android:contentDescription="Show server"
+                                        android:clickable="true"
+                                        android:focusable="true"
+                                        android:background="?attr/selectableItemBackgroundBorderless"
+                                        app:tint="#94A3B8" />
                                 </LinearLayout>
 
                                 <View
