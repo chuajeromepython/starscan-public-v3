@@ -82,6 +82,21 @@ public class ResultActivity extends AppCompatActivity {
     private MaterialButton btnFixNow;
     private LinearLayout reviewAnswersChip;
     private boolean correctionDeferred = false;
+    private final java.util.Set<Integer> confirmedBlanks = new java.util.HashSet<>();
+
+    private int unresolvedBlankCount() {
+        int n = 0;
+        for (java.util.Map.Entry<Integer, String> e : scanResult.answers.entrySet()) {
+            String v = e.getValue();
+            if ((v == null || v.isEmpty()) && !confirmedBlanks.contains(e.getKey())) n++;
+        }
+        return n;
+    }
+
+    private boolean hasFlaggedAnswers() {
+        scanResult.refreshMultiLetterFlags();
+        return scanResult.hasMultiLetterAnswers() || unresolvedBlankCount() > 0;
+    }
     private boolean fixModeActive = false;
 
     private Bitmap alignedBitmap;
@@ -951,7 +966,7 @@ public class ResultActivity extends AppCompatActivity {
         // above already computes the correct state — it stays disabled until the
         // teacher also resolves any flagged multi-shaded answer(s), either by
         // fixing them (FIX NOW) or explicitly deferring (CORRECT LATER).
-        if (scanResult != null && scanResult.hasMultiLetterAnswers() && !correctionDeferred) {
+        if (scanResult != null && hasFlaggedAnswers() && !correctionDeferred) {
             Toast.makeText(this, "LRN verified ✓ — choose FIX NOW or CORRECT LATER for the flagged answer(s) above before saving.",
                     Toast.LENGTH_LONG).show();
         } else {
@@ -1322,7 +1337,8 @@ public class ResultActivity extends AppCompatActivity {
     private View createAnswerReviewRow(int qNum) {
         scanResult.refreshMultiLetterFlags();
         String currentVal = scanResult.answers.getOrDefault(qNum, "");
-        boolean flagged = currentVal != null && currentVal.length() > 1;
+        boolean isBlankFlag = currentVal == null || currentVal.isEmpty();
+        boolean flagged = isBlankFlag || currentVal.length() > 1;
 
         android.widget.LinearLayout wrapper = new android.widget.LinearLayout(this);
         wrapper.setOrientation(android.widget.LinearLayout.VERTICAL);
@@ -1367,7 +1383,7 @@ public class ResultActivity extends AppCompatActivity {
 
         if (flagged) {
             TextView tvWarn = new TextView(this);
-            tvWarn.setText("⚠ multiple marks");
+            tvWarn.setText(isBlankFlag ? "⚠ no answer detected" : "⚠ multiple marks");
             tvWarn.setTextColor(0xFFB45309);
             tvWarn.setTextSize(11);
             tvWarn.setTypeface(null, android.graphics.Typeface.BOLD);
@@ -1407,10 +1423,19 @@ public class ResultActivity extends AppCompatActivity {
 
                 btn.setOnClickListener(v -> {
                     scanResult.answers.put(qNum, optVal);
+                    if (optVal.isEmpty()) confirmedBlanks.add(qNum);
                     renderAnswersReviewList();
                 });
 
                 pickerRow.addView(btn);
+            }
+            if (isBlankFlag) {
+                TextView tvNote = new TextView(this);
+                tvNote.setText("Leave as \"-\" if there is no answer on the physical sheet. "
+                        + "Otherwise, select the real answer.");
+                tvNote.setTextColor(0xFFB45309);
+                tvNote.setTextSize(11);
+                wrapper.addView(tvNote);
             }
             wrapper.addView(pickerRow);
         } else if (flagged) {
@@ -1430,7 +1455,7 @@ public class ResultActivity extends AppCompatActivity {
 
     private void updateAnswersStatusUi() {
         scanResult.refreshMultiLetterFlags();
-        int flaggedCount = scanResult.multiLetterAnswerPositions.size();
+        int flaggedCount = scanResult.multiLetterAnswerPositions.size() + unresolvedBlankCount();
 
         if (flaggedCount == 0) {
             correctionDeferred = false;
@@ -1497,7 +1522,7 @@ public class ResultActivity extends AppCompatActivity {
             btnExport.setEnabled(false);
             return;
         }
-        boolean answersOk = !scanResult.hasMultiLetterAnswers() || correctionDeferred;
+        boolean answersOk = !hasFlaggedAnswers() || correctionDeferred;
         btnExport.setEnabled(isLrnConfirmed && answersOk);
     }
 
