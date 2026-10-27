@@ -323,7 +323,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
 
     private LinearLayout homeEmpty, homeClassList;
     private LinearLayout ecdAllList, ecdAllEmpty;
-    private TextView ecdSummaryCount, ecdSummaryTypes, ecdAllCount;
+    private TextView ecdSummaryCount, ecdAllCount;
     private TextView ecdClassTeacherLabel;
     private TextView ecdClassStudentCount;
     private EditText ecdSearchInput;
@@ -871,7 +871,6 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         ecdAllList = findViewById(R.id.ecdAllList);
         ecdAllEmpty = findViewById(R.id.ecdAllEmpty);
         ecdSummaryCount = findViewById(R.id.ecdSummaryCount);
-        ecdSummaryTypes = findViewById(R.id.ecdSummaryTypes);
         ecdAllCount = findViewById(R.id.ecdAllCount);
         ecdSearchInput = findViewById(R.id.ecdSearchInput);
         ecdClassSortPicker = findViewById(R.id.ecdClassSortPicker);
