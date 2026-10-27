@@ -93,7 +93,7 @@ public class ScanDetailActivity extends AppCompatActivity {
     private TextView tvScore, tvDate, tvAnswerCount, tvScoreBadge;
     private LinearLayout answersContainer;
     private TextView btnEditToggle, topBarTitle, topBarBadge;
-    private MaterialButton btnSaveChanges;
+    private MaterialButton btnSaveChanges, btnDeleteScan;
     private ImageButton btnBack;
 
     // Answer-key reference toggle (works in both edit mode and read-only Scans tab)
@@ -154,12 +154,14 @@ public class ScanDetailActivity extends AppCompatActivity {
         topBarTitle = findViewById(R.id.topBarTitle);
         topBarBadge = findViewById(R.id.topBarBadge);
         btnSaveChanges = findViewById(R.id.btnSaveChanges);
+        btnDeleteScan = findViewById(R.id.btnDeleteScan);
         btnBack = findViewById(R.id.btnBack);
         keyReferenceRow = findViewById(R.id.keyReferenceRow);
         btnToggleKeyReferenceDetail = findViewById(R.id.btnToggleKeyReferenceDetail);
 
         btnBack.setOnClickListener(v -> finish());
         btnEditToggle.setOnClickListener(v -> toggleEditMode());
+        btnDeleteScan.setOnClickListener(v -> confirmDeleteScan());
         btnSaveChanges.setOnClickListener(v -> saveChanges());
         btnToggleKeyReferenceDetail.setOnClickListener(v -> toggleKeyReferenceDetailView());
     }
@@ -406,6 +408,7 @@ public class ScanDetailActivity extends AppCompatActivity {
         }
         if (!readOnly) {
             btnEditToggle.setVisibility(View.VISIBLE);
+            btnDeleteScan.setVisibility(View.VISIBLE);
         }
         tvDate.setText(currentScan.getFormattedDate());
         if (currentScan.needsAnswerCorrection() && !readOnly) {
@@ -739,7 +742,8 @@ public class ScanDetailActivity extends AppCompatActivity {
 
             btn.setOnClickListener(v -> {
                 editedAnswers.put(qNum, optVal);
-                renderAnswers();
+                updateScoreDisplay();
+                renderAnswersKeepScroll();
             });
 
             row.addView(btn);
@@ -789,6 +793,7 @@ public class ScanDetailActivity extends AppCompatActivity {
 
         btnSaveChanges.setVisibility(isEditing ? View.VISIBLE : View.GONE);
 
+        updateScoreDisplay();
         renderAnswers();
     }
 
@@ -914,8 +919,120 @@ public class ScanDetailActivity extends AppCompatActivity {
      * - Gold + "SCORE X/N" when graded by an answer key
      * - Green + "X/N" when raw detected-bubble count only
      */
+    // ──────────────────────────────────────────────────────────
+    // DELETE
+    // ──────────────────────────────────────────────────────────
+    private void confirmDeleteScan() {
+        if (readOnly) return;
+        if (isQuiz ? currentQuizScanEntity == null : currentScanEntity == null) return;
+
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Delete this scan?")
+                .setMessage("This permanently removes the scan and its answers. "
+                        + "This cannot be undone.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Delete", (d, w) -> performDeleteScan())
+                .show();
+    }
+
+    private void performDeleteScan() {
+        btnDeleteScan.setEnabled(false);
+
+        // Collect image paths first so the files can be removed after the DB row
+        String[] paths = isQuiz
+                ? new String[]{currentQuizScanEntity.imagePath,
+                currentQuizScanEntity.overlayImagePath,
+                currentQuizScanEntity.keyReferenceImagePath}
+                : new String[]{currentScanEntity.imagePath,
+                currentScanEntity.overlayImagePath,
+                currentScanEntity.keyReferenceImagePath};
+
+        Runnable onDone = () -> {
+            for (String p : paths) {
+                if (p != null && !p.isEmpty()) {
+                    try { new File(p).delete(); } catch (Exception ignored) { }
+                }
+            }
+            runOnUiThread(() -> {
+                Toast.makeText(this, "Scan deleted", Toast.LENGTH_SHORT).show();
+                finish(); // dashboard reloads from the DB in onResume
+            });
+        };
+
+        // Answers are removed automatically (ON DELETE CASCADE)
+        if (isQuiz) {
+            repo.deleteQuizScan(currentQuizScanEntity, ignored -> onDone.run());
+        } else {
+            repo.deleteScan(currentScanEntity, ignored -> onDone.run());
+        }
+    }
+
+    /** Re-renders the answers without losing the user's scroll position. */
+    private void renderAnswersKeepScroll() {
+        android.widget.ScrollView sv = findViewById(R.id.detailScrollView);
+        final int y = sv != null ? sv.getScrollY() : 0;
+
+        // Release focus from the LRN box so Android stops scrolling back to it
+        // every time the answer list is rebuilt.
+        boolean releasedLrnFocus = false;
+        if (etLrn.hasFocus()) {
+            releasedLrnFocus = true;
+            etLrn.setFocusableInTouchMode(false); // stops it grabbing focus back
+            etLrn.clearFocus();
+            android.view.inputmethod.InputMethodManager imm =
+                    (android.view.inputmethod.InputMethodManager)
+                            getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+            if (imm != null) imm.hideSoftInputFromWindow(etLrn.getWindowToken(), 0);
+        }
+
+        renderAnswers();
+
+        final boolean restoreLrn = releasedLrnFocus;
+        if (sv != null) {
+            sv.post(() -> {
+                sv.scrollTo(0, y);
+                // Tapping the LRN box still works afterwards
+                if (restoreLrn) etLrn.setFocusableInTouchMode(true);
+            });
+        } else if (restoreLrn) {
+            etLrn.post(() -> etLrn.setFocusableInTouchMode(true));
+        }
+    }
+
     private void updateScoreDisplay() {
-        // kept for compatibility; populateUI now calls tvScore directly
+        if (currentScan == null) return;
+
+        // While editing, read from the in-progress answers; otherwise the saved ones
+        Map<Integer, String> src = isEditing ? editedAnswers : currentScan.getAnswers();
+        int total = currentScan.getNumItems();
+
+        // DETECTED count (same rule as ScanEntry.getAnsweredCount)
+        int answered = 0;
+        if (src != null) {
+            for (String v : src.values()) {
+                if (v != null && !v.isEmpty() && !v.equals("?")) answered++;
+            }
+        }
+        tvScore.setText(answered + "/" + total);
+        tvScore.setTextColor(Color.parseColor("#059669"));
+
+        // Graded score (same rule as performSave)
+        if (currentAnswerKey != null && correctAnswers != null && src != null) {
+            int score = 0;
+            for (int i = 0; i < correctAnswers.length; i++) {
+                String keyAns = correctAnswers[i].trim();
+                if (keyAns.isEmpty() || keyAns.equals("?")) continue;
+                String studentAns = src.containsKey(i + 1) ? src.get(i + 1) : "";
+                if (keyAns.equals(studentAns)) score++;
+            }
+            tvScoreBadge.setText("Score: " + score + "/" + total);
+            android.graphics.drawable.GradientDrawable scoreBg = new android.graphics.drawable.GradientDrawable();
+            scoreBg.setColor(Color.parseColor("#FEF9C3"));
+            scoreBg.setCornerRadius(dp(20));
+            tvScoreBadge.setBackground(scoreBg);
+            tvScoreBadge.setTextColor(Color.parseColor("#92400E"));
+            tvScoreBadge.setVisibility(View.VISIBLE);
+        }
     }
 
     private void showError(String msg) {

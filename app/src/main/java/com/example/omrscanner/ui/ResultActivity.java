@@ -1466,9 +1466,11 @@ public class ResultActivity extends AppCompatActivity {
         int multiCount = scanResult.multiLetterAnswerPositions.size();
         int blankCount = unresolvedBlankCount();
         int flaggedCount = multiCount + blankCount;
-        String breakdown = (multiCount > 0 ? multiCount + " with multiple marks" : "")
+        String breakdown = (multiCount > 0
+                ? multiCount + (multiCount == 1 ? " item" : " items") + " with multiple marks" : "")
                 + (multiCount > 0 && blankCount > 0 ? " and " : "")
-                + (blankCount > 0 ? blankCount + " with no answer detected" : "");
+                + (blankCount > 0
+                ? blankCount + (blankCount == 1 ? " item" : " items") + " with no answer detected" : "");
 
         if (flaggedCount == 0) {
             correctionDeferred = false;
@@ -1481,7 +1483,7 @@ public class ResultActivity extends AppCompatActivity {
         } else if (correctionDeferred) {
             tvAnswersStatus.setText("⚠ " + flaggedCount + (flaggedCount == 1 ? " item" : " items") + " flagged");
             tvAnswersStatus.setTextColor(0xFFDC2626);
-            tvAnswersHelper.setText("⚠ " + breakdown + " still need correction. "
+            tvAnswersHelper.setText("⚠ " + breakdown + (flaggedCount == 1 ? " still needs" : " still need") + " correction. "
                     + "This scan will be saved with a yellow border in the scan list and excluded from "
                     + "upload until you correct it there.");
             tvAnswersHelper.setTextColor(0xFFB45309);

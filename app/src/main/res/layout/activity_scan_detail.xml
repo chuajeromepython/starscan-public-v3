@@ -78,12 +78,30 @@
                     android:textSize="12sp" android:layout_marginTop="2dp" />
             </LinearLayout>
 
-            <com.google.android.material.button.MaterialButton android:id="@+id/btnEditToggle"
-                style="@style/Widget.Material3.Button.UnelevatedButton"
-                android:layout_width="wrap_content" android:layout_height="36dp"
-                android:text="EDIT" android:textAllCaps="true" android:textColor="#0038A8"
-                android:textSize="13sp" android:textStyle="bold"
-                app:backgroundTint="#FFFFFF" app:cornerRadius="18dp" />
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="104dp"
+                android:orientation="vertical">
+
+                <com.google.android.material.button.MaterialButton android:id="@+id/btnEditToggle"
+                    style="@style/Widget.Material3.Button.UnelevatedButton"
+                    android:layout_width="match_parent" android:layout_height="36dp"
+                    android:paddingStart="12dp" android:paddingEnd="12dp"
+                    android:text="EDIT" android:textAllCaps="true" android:textColor="#0038A8"
+                    android:textSize="13sp" android:textStyle="bold"
+                    app:backgroundTint="#FFFFFF" app:cornerRadius="18dp" />
+
+                <com.google.android.material.button.MaterialButton android:id="@+id/btnDeleteScan"
+                    style="@style/Widget.Material3.Button.UnelevatedButton"
+                    android:layout_width="match_parent" android:layout_height="36dp"
+                    android:layout_marginTop="8dp"
+                    android:paddingStart="12dp" android:paddingEnd="12dp"
+                    android:text="DELETE" android:textAllCaps="true" android:textColor="#F43F5E"
+                    android:textSize="13sp" android:textStyle="bold"
+                    android:visibility="gone"
+                    app:backgroundTint="#FFFFFF" app:cornerRadius="18dp" />
+            </LinearLayout>
         </LinearLayout>
     </FrameLayout>
 
@@ -208,6 +226,7 @@
                  the sticky image. Metadata + Answers scroll here.
             ════════════════════════════════════════════════════ -->
             <ScrollView
+                android:id="@+id/detailScrollView"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
                 android:layout_weight="1"
