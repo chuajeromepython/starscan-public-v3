@@ -144,6 +144,14 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     private String globalTeacherName = "";
 
     private String activeUserFirstName = "";
+
+    // Greeting: "Welcome, X" for an account the app hasn't greeted before,
+    // "Welcome back, X" once it has. Seen user IDs are persisted; the resolved
+    // answer is static so it survives rotation (Activity recreation) in one app run.
+    private static final String GREETING_PREFS = "omr_greeting_prefs";
+    private static final String KEY_SEEN_USER_IDS = "seen_user_ids";
+    private static String sGreetingUserId = null;
+    private static boolean sGreetingReturning = false;
     private String activeUserLastName = ""; // TEMP: see loadClassesFromDb() comment re: advisor vs. syncing teacher
     /**
      * Cached list of all answer keys — refreshed on load and after CRUD operations.
@@ -5845,6 +5853,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
             if (!activeUserFirstName.isEmpty()) {
                 globalTeacherName = activeUserFirstName
                         + (!activeUserLastName.isEmpty() ? " " + activeUserLastName : "");
+                resolveGreetingFor(user.userId != null ? String.valueOf(user.userId) : null);
             }
 
             runOnUiThread(this::refreshTeacherNameHeader);
@@ -5990,13 +5999,35 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
         });
     }
 
+    /**
+     * Decides (once per user per app run) whether this account has been seen before,
+     * then records it so the NEXT launch greets with "Welcome back".
+     */
+    private void resolveGreetingFor(String userKey) {
+        if (userKey == null || userKey.isEmpty()) return;
+        if (userKey.equals(sGreetingUserId)) return; // already decided this run
+        android.content.SharedPreferences prefs = getSharedPreferences(GREETING_PREFS, MODE_PRIVATE);
+        java.util.Set<String> seen = new java.util.HashSet<>(
+                prefs.getStringSet(KEY_SEEN_USER_IDS, new java.util.HashSet<>()));
+        sGreetingReturning = seen.contains(userKey);
+        sGreetingUserId = userKey;
+        if (!sGreetingReturning) {
+            seen.add(userKey);
+            prefs.edit().putStringSet(KEY_SEEN_USER_IDS, seen).apply();
+        }
+    }
+
+    private String buildGreeting(String name) {
+        return (sGreetingReturning ? "Welcome back, " : "Welcome, ") + name + " \uD83D\uDC4B";
+    }
+
     private void refreshTeacherNameHeader() {
         loadProfilePhoto();
         String displayName = (activeUserFirstName != null && !activeUserFirstName.isEmpty())
                 ? activeUserFirstName
                 : globalTeacherName;
         if (displayName != null && !displayName.isEmpty()) {
-            tvTeacherName.setText("Welcome, " + displayName + " \uD83D\uDC4B");
+            tvTeacherName.setText(buildGreeting(displayName));
             tvTeacherName.setTextColor(Color.parseColor("#FFFFFF"));
             tvTeacherName.setTypeface(null, Typeface.BOLD);
         } else {
@@ -6452,7 +6483,7 @@ public class DashboardActivity extends AppCompatActivity implements DashboardDia
     @Override
     public void setGlobalTeacherName(String n) {
         globalTeacherName = n;
-        tvTeacherName.setText("Welcome, " + n);
+        tvTeacherName.setText(buildGreeting(n));
         tvTeacherName.setTextColor(Color.parseColor("#FFFFFF"));
         tvTeacherName.setTypeface(null, Typeface.BOLD);
         if (SCREEN_CLASS.equals(currentScreen) && selectedClass != null)
