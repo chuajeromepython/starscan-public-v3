@@ -1222,6 +1222,14 @@ public class ResultActivity extends AppCompatActivity {
             Map<Integer, String> answersMap = new LinkedHashMap<>();
             if (scanResult.answers != null) {
                 answersMap.putAll(scanResult.answers);
+                // Unreviewed blanks (CORRECT LATER) are saved as "?" so the cards can flag them.
+                // Confirmed blanks ("—") stay empty, exactly as before.
+                for (java.util.Map.Entry<Integer, String> e : answersMap.entrySet()) {
+                    String v = e.getValue();
+                    if ((v == null || v.isEmpty()) && !confirmedBlanks.contains(e.getKey())) {
+                        e.setValue("?");
+                    }
+                }
             }
 
             ScanEntry entry = new ScanEntry(
@@ -1337,8 +1345,8 @@ public class ResultActivity extends AppCompatActivity {
     private View createAnswerReviewRow(int qNum) {
         scanResult.refreshMultiLetterFlags();
         String currentVal = scanResult.answers.getOrDefault(qNum, "");
-        boolean isBlankFlag = currentVal == null || currentVal.isEmpty();
-        boolean flagged = isBlankFlag || currentVal.length() > 1;
+        boolean isBlankFlag = (currentVal == null || currentVal.isEmpty()) && !confirmedBlanks.contains(qNum);
+        boolean flagged = isBlankFlag || (currentVal != null && currentVal.length() > 1);
 
         android.widget.LinearLayout wrapper = new android.widget.LinearLayout(this);
         wrapper.setOrientation(android.widget.LinearLayout.VERTICAL);
@@ -1431,7 +1439,7 @@ public class ResultActivity extends AppCompatActivity {
             }
             if (isBlankFlag) {
                 TextView tvNote = new TextView(this);
-                tvNote.setText("Leave as \"-\" if there is no answer on the physical sheet. "
+                tvNote.setText("Leave as \"—\" if there is no answer on the physical sheet. "
                         + "Otherwise, select the real answer.");
                 tvNote.setTextColor(0xFFB45309);
                 tvNote.setTextSize(11);
@@ -1455,7 +1463,12 @@ public class ResultActivity extends AppCompatActivity {
 
     private void updateAnswersStatusUi() {
         scanResult.refreshMultiLetterFlags();
-        int flaggedCount = scanResult.multiLetterAnswerPositions.size() + unresolvedBlankCount();
+        int multiCount = scanResult.multiLetterAnswerPositions.size();
+        int blankCount = unresolvedBlankCount();
+        int flaggedCount = multiCount + blankCount;
+        String breakdown = (multiCount > 0 ? multiCount + " with multiple marks" : "")
+                + (multiCount > 0 && blankCount > 0 ? " and " : "")
+                + (blankCount > 0 ? blankCount + " with no answer detected" : "");
 
         if (flaggedCount == 0) {
             correctionDeferred = false;
@@ -1468,7 +1481,7 @@ public class ResultActivity extends AppCompatActivity {
         } else if (correctionDeferred) {
             tvAnswersStatus.setText("⚠ " + flaggedCount + (flaggedCount == 1 ? " item" : " items") + " flagged");
             tvAnswersStatus.setTextColor(0xFFDC2626);
-            tvAnswersHelper.setText("⚠ " + flaggedCount + " question(s) still have multiple marks. "
+            tvAnswersHelper.setText("⚠ " + breakdown + " still need correction. "
                     + "This scan will be saved with a yellow border in the scan list and excluded from "
                     + "upload until you correct it there.");
             tvAnswersHelper.setTextColor(0xFFB45309);
@@ -1476,15 +1489,15 @@ public class ResultActivity extends AppCompatActivity {
         } else if (fixModeActive) {
             tvAnswersStatus.setText("⚠ " + flaggedCount + (flaggedCount == 1 ? " item" : " items") + " flagged");
             tvAnswersStatus.setTextColor(0xFFDC2626);
-            tvAnswersHelper.setText(flaggedCount + " question(s) have more than one bubble marked "
-                    + "(highlighted below). Tap the correct letter for each one.");
+            tvAnswersHelper.setText(breakdown + " (highlighted below). "
+                    + "Tap the correct answer for each one. Leave \"—\" only if the physical sheet has no answer.");
             tvAnswersHelper.setTextColor(0xFFDC2626);
             answersActionRow.setVisibility(View.GONE);
         } else {
             tvAnswersStatus.setText("⚠ " + flaggedCount + (flaggedCount == 1 ? " item" : " items") + " flagged");
             tvAnswersStatus.setTextColor(0xFFDC2626);
-            tvAnswersHelper.setText(flaggedCount + " question(s) have more than one bubble marked "
-                    + "(highlighted below). Tap \"Fix now\" to correct them, or \"Correct later\" to save as-is.");
+            tvAnswersHelper.setText(breakdown + " (highlighted below). "
+                    + "Tap \"Fix now\" to correct them, or \"Correct later\" to save as-is.");
             tvAnswersHelper.setTextColor(0xFFDC2626);
             answersActionRow.setVisibility(View.VISIBLE);
         }

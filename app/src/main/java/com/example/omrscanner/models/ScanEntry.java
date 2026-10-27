@@ -43,7 +43,7 @@ public class ScanEntry {
     public static boolean hasMultiLetterAnswer(Map<Integer, String> answers) {
         if (answers == null) return false;
         for (String v : answers.values()) {
-            if (v != null && v.length() > 1) return true;
+            if (v != null && (v.length() > 1 || v.equals("?"))) return true;
         }
         return false;
     }
@@ -109,7 +109,7 @@ public class ScanEntry {
         int count = 0;
         if (answers != null) {
             for (String v : answers.values()) {
-                if (v != null && !v.isEmpty()) {
+                if (v != null && !v.isEmpty() && !v.equals("?")) {
                     count++;
                 }
             }

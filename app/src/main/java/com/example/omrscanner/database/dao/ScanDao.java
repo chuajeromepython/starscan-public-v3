@@ -110,7 +110,7 @@ public interface ScanDao {
           "s.score AS score, " +
           "s.detected_bubbles AS detectedBubbles, s.num_items AS numItems, " +
           "s.timestamp AS timestamp, (a.answer_key_id IS NOT NULL) AS isGraded, " +
-          "EXISTS(SELECT 1 FROM answers ans WHERE ans.scan_id = s.id AND LENGTH(ans.answer) > 1) AS needsCorrection " +
+          "EXISTS(SELECT 1 FROM answers ans WHERE ans.scan_id = s.id AND (LENGTH(ans.answer) > 1 OR ans.answer = '?')) AS needsCorrection " +
           "FROM scans s " +
           "JOIN assessments a ON a.id = s.assessment_id " +
           "JOIN classes c ON c.id = a.class_id " +
@@ -120,8 +120,8 @@ public interface ScanDao {
           "AND (:assessmentIdFilter IS NULL OR :assessmentIdFilter = '' OR a.id = :assessmentIdFilter) " +
           "AND (:sheetTypeFilter IS NULL OR :sheetTypeFilter = '' OR a.sheet_type = :sheetTypeFilter) " +
           "AND (:needsCorrectionFilter IS NULL OR :needsCorrectionFilter = '' " +
-          "     OR (:needsCorrectionFilter = 'YES' AND EXISTS(SELECT 1 FROM answers ans2 WHERE ans2.scan_id = s.id AND LENGTH(ans2.answer) > 1)) " +
-          "     OR (:needsCorrectionFilter = 'NO' AND NOT EXISTS(SELECT 1 FROM answers ans2 WHERE ans2.scan_id = s.id AND LENGTH(ans2.answer) > 1))) " +
+          "     OR (:needsCorrectionFilter = 'YES' AND EXISTS(SELECT 1 FROM answers ans2 WHERE ans2.scan_id = s.id AND (LENGTH(ans2.answer) > 1 OR ans2.answer = '?'))) " +
+          "     OR (:needsCorrectionFilter = 'NO' AND NOT EXISTS(SELECT 1 FROM answers ans2 WHERE ans2.scan_id = s.id AND (LENGTH(ans2.answer) > 1 OR ans2.answer = '?')))) " +
           "AND (:search IS NULL OR :search = '' " +
           "     OR s.student_lrn LIKE '%' || :search || '%' " +
           "     OR a.name LIKE '%' || :search || '%' " +

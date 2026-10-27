@@ -410,7 +410,7 @@ public class ScanDetailActivity extends AppCompatActivity {
         tvDate.setText(currentScan.getFormattedDate());
         if (currentScan.needsAnswerCorrection() && !readOnly) {
             Toast.makeText(this,
-                    "⚠ This scan has question(s) with multiple marks — please correct and save.",
+                    "⚠ This scan has question(s) with multiple marks or no answer detected — please correct and save.",
                     Toast.LENGTH_LONG).show();
             if (!isEditing) {
                 toggleEditMode(); // jump straight into correction mode
@@ -589,9 +589,10 @@ public class ScanDetailActivity extends AppCompatActivity {
 
         // Answer letter — #1E293B bold 14sp (dash if empty)
 
-        boolean flagged = answer != null && answer.length() > 1;
+        boolean flagged = answer != null && (answer.length() > 1 || answer.equals("?"));
         TextView tvAns = new TextView(this);
-        tvAns.setText(answer.isEmpty() ? "—" : (flagged ? answer + " ⚠" : answer));
+        String shownAnswer = answer.equals("?") ? "—" : answer;
+        tvAns.setText(shownAnswer.isEmpty() ? "—" : (flagged ? shownAnswer + " ⚠" : shownAnswer));
         tvAns.setTextColor(Color.parseColor(flagged ? "#DC2626" : (answer.isEmpty() ? COLOR_MUTED : COLOR_DARK)));
         tvAns.setTextSize(14);
         tvAns.setTypeface(ResourcesCompat.getFont(this, R.font.poppins_black), Typeface.BOLD);
@@ -666,7 +667,8 @@ public class ScanDetailActivity extends AppCompatActivity {
         // Zebra stripe
         boolean isOdd = (qNum % 2 != 0);
         String currentValForFlag = editedAnswers.getOrDefault(qNum, "");
-        boolean stillFlagged = currentValForFlag != null && currentValForFlag.length() > 1;
+        boolean stillFlagged = currentValForFlag != null
+                && (currentValForFlag.length() > 1 || currentValForFlag.equals("?"));
         wrapper.setBackgroundColor(Color.parseColor(
                 stillFlagged ? "#FFFBEB" : (isOdd ? COLOR_STRIPE_ODD : COLOR_WHITE)));
 
@@ -687,12 +689,6 @@ public class ScanDetailActivity extends AppCompatActivity {
         tvQ.setLayoutParams(qParams);
         row.addView(tvQ);
 
-        // Spacer
-        View spacer = new View(this);
-        spacer.setLayoutParams(new LinearLayout.LayoutParams(0,
-                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        row.addView(spacer);
-
         // Option buttons: A B C D Blank
         String currentVal = editedAnswers.getOrDefault(qNum, "");
         String[] options = { "A", "B", "C", "D", "" };
@@ -700,7 +696,9 @@ public class ScanDetailActivity extends AppCompatActivity {
 
         if (stillFlagged) {
             TextView tvCurrentlyMarked = new TextView(this);
-            tvCurrentlyMarked.setText("Currently marked: " + currentVal + " — tap one to resolve");
+            tvCurrentlyMarked.setText(currentVal.equals("?")
+                    ? "Leave as \"—\" if there is no answer on the physical sheet. Otherwise, select the real answer."
+                    : "Currently marked: " + currentVal + " — tap one to resolve");
             tvCurrentlyMarked.setTextColor(Color.parseColor("#B45309"));
             tvCurrentlyMarked.setTextSize(10);
             LinearLayout.LayoutParams noteLp = new LinearLayout.LayoutParams(
@@ -721,8 +719,8 @@ public class ScanDetailActivity extends AppCompatActivity {
             btn.setTextSize(12);
             btn.setTypeface(ResourcesCompat.getFont(this, R.font.poppins_bold));
 
-            int btnW = labels[j].equals("—") ? dp(44) : dp(36);
-            LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(btnW, dp(36));
+            LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(
+                    0, dp(36), labels[j].equals("—") ? 1.2f : 1f);
             if (j > 0)
                 btnParams.leftMargin = dp(6);
             btn.setLayoutParams(btnParams);

@@ -51,7 +51,7 @@ public interface QuizDao {
             + "(SELECT COUNT(DISTINCT sl.lrn) FROM student_lrn sl WHERE sl.className = q.class_id) AS syncedStudentCount, "
             + "(SELECT COUNT(DISTINCT ans.quiz_scan_id) FROM quiz_scan_answers ans "
             + "  JOIN quiz_scans qs2 ON qs2.id = ans.quiz_scan_id "
-            + "  WHERE qs2.quiz_id = q.id AND LENGTH(ans.answer) > 1) AS needsCorrectionCount "
+            + "  WHERE qs2.quiz_id = q.id AND (LENGTH(ans.answer) > 1 OR ans.answer = '?')) AS needsCorrectionCount "
             + "FROM quizzes q "
             + "LEFT JOIN quiz_scans qs ON qs.quiz_id = q.id "
             + "LEFT JOIN answer_keys ak ON ak.id = q.answer_key_id "
