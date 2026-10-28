@@ -83,6 +83,8 @@ public class ResultActivity extends AppCompatActivity {
     private LinearLayout reviewAnswersChip;
     private boolean correctionDeferred = false;
     private final java.util.Set<Integer> confirmedBlanks = new java.util.HashSet<>();
+    /** Detected-bubble count captured at scan time, before any FIX NOW edits. Blanks ("—") are not counted. */
+    private int originalDetectedCount = -1;
 
     private int unresolvedBlankCount() {
         int n = 0;
@@ -628,6 +630,7 @@ public class ResultActivity extends AppCompatActivity {
                     showLoading(false);
 
                     if (scanResult != null && scanResult.overlayBitmap != null) {
+                        originalDetectedCount = scanResult.getAnsweredCount();
                         // Reset the toggle for this new scan, then render whichever
                         // image that implies (plain scan result by default).
                         showingKeyReference = false;
@@ -1240,6 +1243,7 @@ public class ResultActivity extends AppCompatActivity {
             );
             entry.setImagePath(originalImagePath);
             entry.setCsvPath(csvFilePath);
+            if (originalDetectedCount >= 0) entry.setScore(originalDetectedCount); // frozen "detected" stat
             // NOTE: do NOT call entry.setScore() here — score must stay null (ungraded)
             //       until an answer key is assigned in DashboardActivity.saveScanResult().
 

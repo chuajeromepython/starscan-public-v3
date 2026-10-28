@@ -843,10 +843,9 @@ public class ScanDetailActivity extends AppCompatActivity {
         // 2. Commit edited answers
         currentScan.setAnswers(new LinkedHashMap<>(editedAnswers));
 
-        // 3. Recalculate detected answer count
-        currentScan.setScore(currentScan.getAnsweredCount());
-        if (isQuiz) currentQuizScanEntity.detectedBubbles = currentScan.getAnsweredCount();
-        else currentScanEntity.detectedBubbles = currentScan.getAnsweredCount();
+        // 3. Detected count is frozen at first scan — never recalculated on edit
+        currentScan.setScore(isQuiz ? currentQuizScanEntity.detectedBubbles
+                : currentScanEntity.detectedBubbles);
 
         // 4. Re-grade against the answer key if one exists, instead of
         //    wiping the score/graded state on every save.
@@ -926,13 +925,55 @@ public class ScanDetailActivity extends AppCompatActivity {
         if (readOnly) return;
         if (isQuiz ? currentQuizScanEntity == null : currentScanEntity == null) return;
 
-        new androidx.appcompat.app.AlertDialog.Builder(this)
-                .setTitle("Delete this scan?")
-                .setMessage("This permanently removes the scan and its answers. "
-                        + "This cannot be undone.")
-                .setNegativeButton("Cancel", null)
-                .setPositiveButton("Delete", (d, w) -> performDeleteScan())
-                .show();
+        com.example.omrscanner.dashboard.DashboardUiHelper ui =
+                new com.example.omrscanner.dashboard.DashboardUiHelper(this);
+
+        android.app.Dialog dialog = new android.app.Dialog(this);
+        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+        dialog.setCancelable(true);
+
+        LinearLayout root = ui.buildSheet();
+
+        TextView title = new TextView(this);
+        title.setText("Delete this scan?");
+        title.setTextSize(18);
+        title.setTypeface(null, Typeface.BOLD);
+        title.setTextColor(Color.parseColor("#CE1126"));
+        root.addView(title);
+
+        TextView msg = new TextView(this);
+        msg.setText("This permanently removes the scan and its answers. "
+                + "This cannot be undone.");
+        msg.setTextColor(Color.parseColor("#64748B"));
+        msg.setTextSize(14);
+        msg.setPadding(0, ui.dp(12), 0, ui.dp(24));
+        root.addView(msg);
+
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+
+        TextView btnCancel = ui.createDialogButton("Cancel", false);
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+        actions.addView(btnCancel);
+        actions.addView(ui.spacer(ui.dp(10)));
+
+        TextView btnDelete = ui.createDialogButton("Delete", true);
+        android.graphics.drawable.GradientDrawable delBg = new android.graphics.drawable.GradientDrawable();
+        delBg.setColor(Color.parseColor("#CE1126"));
+        delBg.setCornerRadius(ui.dp(12));
+        btnDelete.setBackground(delBg);
+        btnDelete.setTextColor(Color.WHITE);
+        btnDelete.setOnClickListener(v -> {
+            dialog.dismiss();
+            performDeleteScan();
+        });
+        actions.addView(btnDelete);
+
+        root.addView(actions);
+
+        dialog.setContentView(root);
+        ui.configureBottomDialog(dialog);
+        dialog.show();
     }
 
     private void performDeleteScan() {
@@ -1006,13 +1047,9 @@ public class ScanDetailActivity extends AppCompatActivity {
         Map<Integer, String> src = isEditing ? editedAnswers : currentScan.getAnswers();
         int total = currentScan.getNumItems();
 
-        // DETECTED count (same rule as ScanEntry.getAnsweredCount)
-        int answered = 0;
-        if (src != null) {
-            for (String v : src.values()) {
-                if (v != null && !v.isEmpty() && !v.equals("?")) answered++;
-            }
-        }
+        // DETECTED count is frozen from the first scan — never recomputed
+        int answered = isQuiz ? currentQuizScanEntity.detectedBubbles
+                : currentScanEntity.detectedBubbles;
         tvScore.setText(answered + "/" + total);
         tvScore.setTextColor(Color.parseColor("#059669"));
 

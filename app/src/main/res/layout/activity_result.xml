@@ -509,6 +509,11 @@
                             android:layout_marginEnd="8dp"
                             android:text="CORRECT LATER"
                             android:textAllCaps="true"
+                            android:maxLines="1"
+                            android:singleLine="true"
+                            android:ellipsize="none"
+                            android:paddingStart="8dp"
+                            android:paddingEnd="8dp"
                             android:textSize="12sp"
                             android:textStyle="bold"
                             app:cornerRadius="10dp" />
